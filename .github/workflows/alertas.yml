@@ -1,0 +1,30 @@
+name: Alertas
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  discord:
+    name: Avisar no Discord
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Enviar o alerta para o webhook do Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          REPO: ${{ github.repository }}
+          AUTOR: ${{ github.actor }}
+          MENSAGEM: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+        run: |
+          jq -n \
+            --arg repo "$REPO" \
+            --arg autor "$AUTOR" \
+            --arg mensagem "$MENSAGEM" \
+            --arg url "$COMMIT_URL" \
+            '{content: "🚀 Novo merge na main de **\($repo)**\n**Autor:** \($autor)\n**Commit:** \($mensagem)\n\($url)"}' \
+          | curl --silent --show-error --fail \
+              --request POST "$WEBHOOK" \
+              --header "Content-Type: application/json" \
+              --data @-
