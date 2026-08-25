@@ -1,0 +1,31 @@
+tipo(escopo): descrição no imperativo, até 50 caracteres
+
+O que foi alterado:
+-
+
+Motivo:
+-
+
+Refs:
+
+# ----------------------------------------------------------------------
+# Linhas iniciadas por '#' são removidas automaticamente ao salvar.
+#
+# TÍTULO (linha 1)  ->  tipo(escopo): descrição
+#   tipos: feat | fix | docs | test | refactor | chore | ci | sec
+#   modo imperativo ("adiciona", não "adicionado"), sem ponto final
+#   máximo de 50 caracteres; deixe a linha 2 em branco
+#
+# CORPO  ->  quebre as linhas em 72 caracteres
+#   "O que foi alterado": mudanças objetivas, uma por linha
+#   "Motivo": o problema, requisito ou decisão que originou a mudança
+#
+# REFS  ->  issue, fase do roadmap ou disciplina
+#   ex.: Refs: #12 | Fase 2.6
+#
+# USO DE IA
+#   A declaração padrão (Res. 274/2024-CONSUN, item 2, inciso IX) é feita
+#   no pull request, não no commit.
+#   NUNCA listar ferramenta de IA como coautora (item 2, inciso IV):
+#   nenhum trailer "Co-Authored-By" apontando para IA.
+# ----------------------------------------------------------------------
