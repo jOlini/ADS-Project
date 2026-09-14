@@ -1,0 +1,11 @@
+node_modules
+
+# Resultado de build local
+dist
+dist-ssr
+.vite
+
+# Arquivos locais e de ambiente
+*.local
+.env
+.env.*
