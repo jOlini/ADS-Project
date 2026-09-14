@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import './App.css';
+import { validarCredenciais } from './validacao';
 
-const EMAIL_CORRETO = 'joaopedroolini22@gmail.com';
-const SENHA_CORRETA = '123456';
+// Credencial fixa exigida pelo enunciado da Somativa 1 de Tecnologias Para Desenvolvimento Web. Os valores são fictícios de propósito.
+const CREDENCIAL = {
+  email: 'usuario@pessoalfinance.com',
+  senha: 'financeiro123',
+};
 
 function App() {
   const [email, setEmail] = useState('');
@@ -10,11 +14,7 @@ function App() {
   const [mensagem, setMensagem] = useState('');
 
   function acessar() {
-    if (email === EMAIL_CORRETO && senha === SENHA_CORRETA) {
-      setMensagem('Acessado com sucesso!');
-    } else {
-      setMensagem('Usuário ou senha incorretos!');
-    }
+    setMensagem(validarCredenciais(email, senha, CREDENCIAL));
   }
 
   return (
