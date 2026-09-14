@@ -29,8 +29,10 @@ jobs:
       - name: Instalar as dependências
         run: npm ci
 
+      # --run força o modo de execução única. Sem ele o Vitest entra em modo
+      # observador e o job ficaria pendurado até estourar o tempo limite.
       - name: Rodar os testes unitários
-        run: npm test -- --run --passWithNoTests
+        run: npm test -- --run
 
       - name: Gerar o build de produção
         run: npm run build
