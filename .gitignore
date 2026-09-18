@@ -1,6 +1,10 @@
 # --- Documentos internos de acompanhamento ---
 base_docs/
 
+# --- Instruções locais do Claude Code (mantidas só na máquina / no Second Brain) ---
+CLAUDE.md
+.claude/
+
 # --- Java / Spring Boot ---
 target/
 build/
