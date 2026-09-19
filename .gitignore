@@ -5,6 +5,9 @@ base_docs/
 CLAUDE.md
 .claude/
 
+# --- subir-app.py (PID e log do Vite em segundo plano) ---
+.subir-app/
+
 # --- Python / FastAPI ---
 .venv/
 __pycache__/
