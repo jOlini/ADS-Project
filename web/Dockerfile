@@ -18,7 +18,13 @@ COPY . .
 # GitHub Pages. Dentro do container o nginx serve a partir da raiz,
 # então sobrescreve o base aqui. Sem isso o index.html procuraria
 # os assets em /ADS-Project/assets/... e a página abriria em branco.
-RUN npm run build -- --base=/
+#
+# A configuração do Firebase (web/.env) entra como secret de build:
+#   docker build --secret id=env,src=web/.env -t pessoal-finance-web web
+# O arquivo fica montado só durante este RUN e não é gravado em nenhuma
+# camada da imagem (o .dockerignore também barra o .env do contexto).
+# Sem o --secret, o build funciona e as páginas avisam que falta o Firebase.
+RUN --mount=type=secret,id=env,target=/app/.env npm run build -- --base=/
 
 # Execução
 # Só os arquivos estáticos e um servidor web. Sem Node, sem npm, sem dependências de desenvolvimento.
@@ -26,6 +32,10 @@ RUN npm run build -- --base=/
 FROM nginx:alpine AS producao
 
 COPY --from=build /app/dist /usr/share/nginx/html
+
+# Fallback de SPA: rotas do React Router (/cadastro, /principal) respondem
+# com o index.html em vez de 404 ao recarregar a página.
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
