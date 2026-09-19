@@ -1,5 +1,6 @@
 # Back-end completo para desenvolvimento e demonstração: MongoDB + API.
-# Antes: copiar api/.env.example para api/.env e trocar os valores.
+# Antes: copiar api/.env.example para api/.env e trocar os valores
+# (o "python subir-app.py up" cria o api/.env sozinho na primeira vez).
 # Subir: docker compose up --build   ·   API em http://localhost:8081
 
 services:
@@ -9,6 +10,12 @@ services:
       - dados-mongo:/data/db
     # Sem "ports": o banco só é alcançável pela rede interna do compose,
     # nunca pela máquina host nem pela rede local.
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   api:
     build: ./api
@@ -19,8 +26,16 @@ services:
       MONGODB_URI: mongodb://mongo:27017/pessoal-finance
     ports:
       - "8081:8081"
+    # A API só sobe depois que o MongoDB responde ao ping.
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/openapi.json', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
 volumes:
   dados-mongo:
