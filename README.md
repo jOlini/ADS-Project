@@ -70,6 +70,7 @@ alcance a área administrativa.
 | Persistência da API | MongoDB 7 (pymongo) |
 | Painel administrativo | HTML, CSS e JavaScript puros, servidos pela própria API |
 | Área do cliente | React 19 · Vite · React Router · Firebase Authentication · Cloud Firestore |
+| Interface | Glassmorphism com gradientes, fonte Inter auto-hospedada (SIL OFL), toasts próprios, animações que respeitam "reduzir movimento" |
 | Testes | pytest (API) · Vitest (front-end) |
 | CI/CD | GitHub Actions · GitHub Pages · alertas no Discord |
 | Containers | Docker · Docker Compose |
@@ -256,10 +257,18 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0 e análise de seguran
 
 ## Roadmap
 
+O objetivo é um sistema financeiro completo para pessoa física e para empresa, sobre a mesma base.
+
 - **0.1** Identidade e acesso — cadastro, login, perfis, administração de usuários
-- **0.2** Lançamentos — receitas, despesas, contas e categorias
-- **0.3** Dashboard — saldo, totais do mês, receita × despesa
+- **0.2** Núcleo financeiro — espaços (pessoal e empresa), contas, categorias e lançamentos em partidas dobradas
+- **0.3** Dashboard — saldo, totais do mês, receita × despesa, contas a vencer
 - **0.4** Comprovantes — anexo de arquivo ao lançamento
+- **0.5** Planejamento pessoal — orçamentos por categoria, metas e recorrências
+- **0.6** Cartão de crédito — faturas e parcelamentos
+- **0.7** Empresa — multiempresa, papéis por empresa, clientes, fornecedores, contas a pagar e a receber
+- **0.8** Gestão empresarial — conciliação bancária, DRE gerencial, fluxo de caixa projetado, fechamento de mês
+- **0.9** Integrações — importação de NF-e (XML), Pix e boletos via parceiro, exportação para a contabilidade
+- **1.0** Produção — LGPD completa, MFA, auditoria, backups e app instalável (PWA)
 
 ---
 
