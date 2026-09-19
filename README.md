@@ -89,6 +89,7 @@ web/                  área do cliente (React + Firebase)
   firestore.rules     regras de segurança do Firestore
 .github/workflows/    ci-tests.yml, cd.yml e alertas.yml
 docker-compose.yml    MongoDB + API para rodar localmente
+subir-app.py          sobe tudo com um comando (venv, dependências, Docker, Vite e links)
 DOCS_API.md           documentação técnica da API
 ```
 
@@ -119,6 +120,26 @@ Nenhum segredo é versionado: os arquivos `.env` estão no `.gitignore`.
 ---
 
 ## Como executar
+
+**Tudo com um comando (recomendado):**
+
+```bash
+python subir-app.py up
+```
+
+O script usa só a biblioteca padrão do Python (3.11+) e faz, em ordem: cria o `api/.env` se ele faltar
+(com `JWT_SECRET` e `ADMIN_SENHA` aleatórios), instala as dependências da API no `api/.venv` (nunca no
+Python da máquina), roda o `npm ci` do front-end quando o `package-lock.json` muda, abre o Docker Desktop se
+estiver fechado, sobe MongoDB + API no Docker esperando os healthchecks, sobe o Vite em segundo plano e
+imprime os links importantes. Rodar de novo com tudo no ar só confere o estado. Outros comandos:
+
+| Comando | O que faz |
+|---|---|
+| `python subir-app.py status` | Mostra o que está no ar e os links, sem subir nada |
+| `python subir-app.py testes` | Roda o pytest da API, o lint e o Vitest do front-end, como o CI |
+| `python subir-app.py down` | Para o Vite e os containers (`--apagar-dados` também apaga o banco) |
+
+Os passos abaixo fazem o mesmo à mão.
 
 **API + MongoDB (Docker Compose):**
 
@@ -177,7 +198,7 @@ na imagem.
 
 ## Como testar
 
-**Testes automatizados:**
+**Testes automatizados:** `python subir-app.py testes` roda tudo; separadamente:
 
 ```bash
 cd api
