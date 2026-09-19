@@ -1,10 +1,15 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import './index.css';
+import AppRoutes from './routes';
 
+// basename: no GitHub Pages o app vive em /ADS-Project/ (base do Vite) e,
+// no container, na raiz. O BASE_URL já vem certo nos dois casos.
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
+      <AppRoutes />
+    </BrowserRouter>
   </StrictMode>,
-)
+);

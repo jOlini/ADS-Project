@@ -1,111 +1,224 @@
+/* Estilo do front-end. Mesmas cores do painel administrativo (api/painel/painel.css). */
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --fundo: #f4f6f8;
+  --superficie: #ffffff;
+  --texto: #1f2933;
+  --texto-suave: #5f6b7a;
+  --borda: #d9e0e7;
+  --destaque: #0f766e;
+  --destaque-hover: #115e59;
+  --sucesso: #15803d;
+  --erro: #b91c1c;
+  --raio: 10px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
   color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
+  color: var(--texto);
+  background: var(--fundo);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    --fundo: #111418;
+    --superficie: #1a1f25;
+    --texto: #e6e9ed;
+    --texto-suave: #9aa5b1;
+    --borda: #2c343d;
+    --destaque: #2dd4bf;
+    --destaque-hover: #5eead4;
+    --sucesso: #4ade80;
+    --erro: #f87171;
   }
+}
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
 }
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
-
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
 h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
+  margin: 0 0 16px;
+  font-size: 1.6rem;
+  line-height: 1.2;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+a {
+  color: var(--destaque);
 }
 
 code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+/* Cabeçalho e navegação */
+
+.topo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borda);
+}
+
+.marca {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-weight: 700;
+  color: var(--texto);
+  text-decoration: none;
+}
+
+.topo nav {
+  display: flex;
+  gap: 4px;
+}
+
+.topo nav a {
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: var(--texto-suave);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* O NavLink marca a rota atual com a classe "active". */
+.topo nav a.active {
+  color: var(--destaque);
+  background: color-mix(in srgb, var(--destaque) 12%, transparent);
+}
+
+.conteudo {
+  padding: 40px 16px;
+  display: grid;
+  justify-items: center;
+}
+
+/* Cartão e formulário */
+
+.cartao {
+  width: min(420px, 100%);
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  padding: 24px;
+}
+
+form {
+  display: grid;
+  gap: 14px;
+}
+
+.campo {
+  display: grid;
+  gap: 4px;
+}
+
+.campo label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.campo input {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  background: var(--superficie);
+  color: var(--texto);
+}
+
+.campo input[aria-invalid='true'] {
+  border-color: var(--erro);
+}
+
+.erro-do-campo {
+  color: var(--erro);
+  font-size: 0.85rem;
+}
+
+input:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--destaque);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 16px;
+  border: 1px solid var(--destaque);
+  border-radius: 8px;
+  background: var(--destaque);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--destaque-hover);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+button.secundario {
+  background: transparent;
+  color: var(--destaque);
+}
+
+/* Mensagens */
+
+.mensagem {
+  min-height: 1.5em;
+  margin: 0;
+}
+
+.mensagem.erro {
+  color: var(--erro);
+  font-weight: 600;
+}
+
+.mensagem.sucesso {
+  margin-bottom: 12px;
+  color: var(--sucesso);
+  font-weight: 600;
+}
+
+.discreto {
+  color: var(--texto-suave);
+}
+
+.rodape-do-cartao {
+  margin: 16px 0 0;
+  text-align: center;
+  color: var(--texto-suave);
+}
+
+/* Página principal */
+
+.dados-pessoais {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 10px 16px;
+  margin: 0 0 20px;
+}
+
+.dados-pessoais dt {
+  color: var(--texto-suave);
+}
+
+.dados-pessoais dd {
+  margin: 0;
+  font-weight: 600;
 }
