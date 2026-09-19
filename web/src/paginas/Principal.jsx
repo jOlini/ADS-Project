@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AvisoFirebase from '../componentes/AvisoFirebase';
+import { useToast } from '../componentes/toast/useToast';
 import { firebaseConfigurado } from '../firebase';
 import { formatarData } from '../regras/datas';
 import { mensagemDeErro } from '../regras/erros';
@@ -10,6 +11,7 @@ import { buscarDadosPessoais, observarSessao, sair } from '../servicos/contas';
 // do usuário logado. Sem sessão, volta para o login.
 export default function Principal() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [estado, setEstado] = useState({ carregando: true, dados: null, erro: '' });
 
   useEffect(() => {
@@ -39,6 +41,7 @@ export default function Principal() {
 
   async function sairDaConta() {
     await sair();
+    toast.info('Até a próxima!', { titulo: 'Você saiu da conta' });
     navigate('/login', { replace: true });
   }
 
@@ -47,23 +50,45 @@ export default function Principal() {
   }
 
   if (estado.carregando) {
-    return <p className="discreto">Carregando seus dados…</p>;
+    return (
+      <section className="cartao estreito carregando" aria-busy="true">
+        <span className="esqueleto circulo" />
+        <span className="esqueleto linha larga" />
+        <span className="esqueleto linha" />
+        <span className="esqueleto linha" />
+      </section>
+    );
   }
 
   const { dados } = estado;
+  const iniciais = dados ? `${dados.nome[0] ?? ''}${dados.sobrenome[0] ?? ''}`.toUpperCase() : '?';
 
   return (
     <section className="cartao estreito">
-      <h1>{dados ? `Olá, ${dados.nome}!` : 'Página principal'}</h1>
+      <header className="perfil">
+        <span className="avatar" aria-hidden="true">
+          {iniciais}
+        </span>
+        <div>
+          <span className="rotulo">Página principal</span>
+          <h1>{dados ? `Olá, ${dados.nome}!` : 'Olá!'}</h1>
+        </div>
+      </header>
 
       {dados && (
         <dl className="dados-pessoais">
-          <dt>Nome</dt>
-          <dd>{dados.nome}</dd>
-          <dt>Sobrenome</dt>
-          <dd>{dados.sobrenome}</dd>
-          <dt>Data de nascimento</dt>
-          <dd>{formatarData(dados.dataNascimento)}</dd>
+          <div>
+            <dt>Nome</dt>
+            <dd>{dados.nome}</dd>
+          </div>
+          <div>
+            <dt>Sobrenome</dt>
+            <dd>{dados.sobrenome}</dd>
+          </div>
+          <div>
+            <dt>Data de nascimento</dt>
+            <dd>{formatarData(dados.dataNascimento)}</dd>
+          </div>
         </dl>
       )}
 

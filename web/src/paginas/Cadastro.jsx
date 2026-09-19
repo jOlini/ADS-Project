@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AvisoFirebase from '../componentes/AvisoFirebase';
 import Campo from '../componentes/Campo';
+import { useToast } from '../componentes/toast/useToast';
 import { firebaseConfigurado } from '../firebase';
 import { validarCadastro } from '../regras/cadastro';
 import { mensagemDeErro } from '../regras/erros';
@@ -13,6 +14,7 @@ const FORMULARIO_VAZIO = { email: '', senha: '', nome: '', sobrenome: '', dataNa
 // nome, sobrenome, data de nascimento e uid no Firestore.
 export default function Cadastro() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [dados, setDados] = useState(FORMULARIO_VAZIO);
   const [erros, setErros] = useState({});
   const [mensagem, setMensagem] = useState('');
@@ -36,9 +38,14 @@ export default function Cadastro() {
     setEnviando(true);
     try {
       await cadastrar(dados);
-      navigate('/login', { state: { aviso: 'Cadastro concluído! Entre com seu e-mail e senha.' } });
+      toast.sucesso('Entre com seu e-mail e senha para acessar a página principal.', {
+        titulo: 'Cadastro concluído',
+      });
+      navigate('/login');
     } catch (erro) {
-      setMensagem(mensagemDeErro(erro.code));
+      const texto = mensagemDeErro(erro.code);
+      setMensagem(texto);
+      toast.erro(texto, { titulo: 'Cadastro não concluído' });
       setEnviando(false);
     }
   }
@@ -49,21 +56,27 @@ export default function Cadastro() {
 
   return (
     <section className="cartao estreito">
-      <h1>Cadastro</h1>
+      <header className="cabecalho-do-cartao">
+        <span className="rotulo">Área do cliente</span>
+        <h1>Criar conta</h1>
+        <p className="discreto">Seus dados ficam no Firebase, protegidos pelas regras do Firestore.</p>
+      </header>
 
       <form onSubmit={cadastrarUsuario} noValidate>
         <Campo rotulo="E-mail" type="email" name="email" autoComplete="email"
           value={dados.email} onChange={alterar} erro={erros.email} />
         <Campo rotulo="Senha" type="password" name="senha" autoComplete="new-password"
           value={dados.senha} onChange={alterar} erro={erros.senha} />
-        <Campo rotulo="Nome" name="nome" autoComplete="given-name"
-          value={dados.nome} onChange={alterar} erro={erros.nome} />
-        <Campo rotulo="Sobrenome" name="sobrenome" autoComplete="family-name"
-          value={dados.sobrenome} onChange={alterar} erro={erros.sobrenome} />
+        <div className="duas-colunas">
+          <Campo rotulo="Nome" name="nome" autoComplete="given-name"
+            value={dados.nome} onChange={alterar} erro={erros.nome} />
+          <Campo rotulo="Sobrenome" name="sobrenome" autoComplete="family-name"
+            value={dados.sobrenome} onChange={alterar} erro={erros.sobrenome} />
+        </div>
         <Campo rotulo="Data de nascimento" type="date" name="dataNascimento" autoComplete="bday"
           value={dados.dataNascimento} onChange={alterar} erro={erros.dataNascimento} />
 
-        <button type="submit" disabled={enviando}>
+        <button type="submit" disabled={enviando} aria-busy={enviando}>
           {enviando ? 'Cadastrando…' : 'Cadastrar'}
         </button>
 
