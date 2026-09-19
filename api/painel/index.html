@@ -3,21 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#4f46e5" />
     <title>Administração · Pessoal Finance</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <!-- Sem script nem estilo embutido no HTML: a Content-Security-Policy da
-         API só permite arquivos da própria origem (ver app/seguranca.py). -->
+         API só permite arquivos da própria origem (ver app/seguranca.py).
+         A fonte Inter também vem daqui (fontes/), não do Google Fonts. -->
+    <link rel="preload" href="fontes/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="painel.css" />
     <script type="module" src="painel.js"></script>
   </head>
   <body>
     <header class="topo">
       <span class="marca">
-        <img src="favicon.svg" alt="" width="28" height="28" />
-        Pessoal Finance · Administração
+        <img src="favicon.svg" alt="" width="32" height="32" />
+        <span>Pessoal <strong>Finance</strong> <small>Administração</small></span>
       </span>
       <div id="sessao" class="sessao" hidden>
-        <span id="sessao-usuario"></span>
+        <span id="sessao-avatar" class="avatar" aria-hidden="true"></span>
+        <span class="sessao-texto">
+          <strong id="sessao-nome"></strong>
+          <small id="sessao-validade"></small>
+        </span>
+        <span id="sessao-perfil" class="selo"></span>
         <button id="botao-sair" type="button" class="secundario">Sair</button>
       </div>
     </header>
@@ -25,8 +33,11 @@
     <main class="conteudo">
       <!-- Tela 1: login na API -->
       <section id="tela-login" class="cartao estreito">
-        <h1>Login</h1>
-        <p class="discreto">Autentica em <code>POST /auth/login</code> e recebe um token JWT.</p>
+        <header class="cabecalho-do-cartao">
+          <span class="rotulo">Back-office</span>
+          <h1>Entrar</h1>
+          <p class="discreto">Autentica em <code>POST /auth/login</code> e recebe um token JWT.</p>
+        </header>
         <form id="form-login" novalidate>
           <label>E-mail <input type="email" name="email" autocomplete="username" /></label>
           <label>Senha <input type="password" name="senha" autocomplete="current-password" /></label>
@@ -36,19 +47,21 @@
       </section>
 
       <!-- Tela 2: gestão de usuários -->
-      <section id="tela-usuarios" hidden>
+      <section id="tela-usuarios" class="tela" hidden>
         <p class="aviso">
           Os botões aparecem para todos os perfis de propósito: quem decide é a API (RBAC). Tente uma ação que o
-          seu perfil não tem e veja o <strong>403</strong> em "Respostas da API".
+          seu perfil não tem e veja o <strong>403</strong> no aviso e em "Respostas da API".
         </p>
 
         <div class="grade">
           <section class="cartao">
-            <h2>Usuários</h2>
-            <div class="acoes">
-              <button id="botao-listar" type="button">Listar todos</button>
-              <button id="botao-meus-dados" type="button" class="secundario">Meus dados</button>
-            </div>
+            <header class="cabecalho-da-secao">
+              <h2>Usuários</h2>
+              <div class="acoes">
+                <button id="botao-listar" type="button">Listar todos</button>
+                <button id="botao-meus-dados" type="button" class="secundario">Meus dados</button>
+              </div>
+            </header>
             <form id="form-consulta" class="consulta">
               <input name="id" placeholder="ID do usuário" aria-label="ID do usuário" />
               <button type="submit" class="secundario">Consultar por ID</button>
@@ -62,13 +75,13 @@
                     <th>E-mail</th>
                     <th>Perfil</th>
                     <th>ID</th>
-                    <th>Ações</th>
+                    <th><span class="apenas-leitor">Ações</span></th>
                   </tr>
                 </thead>
                 <tbody id="tabela-usuarios"></tbody>
               </table>
             </div>
-            <p id="tabela-vazia" class="discreto">Nenhum usuário carregado.</p>
+            <p id="tabela-vazia" class="vazio">Nenhum usuário carregado.</p>
           </section>
 
           <section class="cartao">
@@ -109,9 +122,21 @@
 
       <section class="cartao respostas" aria-live="polite">
         <h2>Respostas da API</h2>
-        <p id="sem-respostas" class="discreto">Nenhuma requisição feita ainda.</p>
+        <p id="sem-respostas" class="vazio">Nenhuma requisição feita ainda.</p>
         <ol id="lista-respostas"></ol>
       </section>
     </main>
+
+    <!-- Confirmação de exclusão (substitui o window.confirm). -->
+    <dialog id="dialogo-confirmacao" class="dialogo" aria-labelledby="dialogo-titulo">
+      <form method="dialog">
+        <h2 id="dialogo-titulo"></h2>
+        <p id="dialogo-mensagem" class="discreto"></p>
+        <div class="acoes">
+          <button value="cancelar" class="secundario">Cancelar</button>
+          <button value="confirmar" class="perigo" id="dialogo-confirmar">Confirmar</button>
+        </div>
+      </form>
+    </dialog>
   </body>
 </html>

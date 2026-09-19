@@ -7,8 +7,10 @@ export default function Layout() {
     <>
       <header className="topo">
         <NavLink to="/login" className="marca">
-          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width="28" height="28" />
-          Pessoal Finance
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width="32" height="32" />
+          <span>
+            Pessoal <strong>Finance</strong>
+          </span>
         </NavLink>
 
         <nav aria-label="Navegação principal">

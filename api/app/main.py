@@ -5,6 +5,7 @@ Execução: uvicorn app.main:criar_app --factory --port 8081
 """
 
 import logging
+import mimetypes
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -23,6 +24,10 @@ from app.servicos import criar_administrador_inicial
 
 # Front-end de demonstração (HTML, CSS e JS puros), servido pela própria API.
 PASTA_DO_PAINEL = Path(__file__).resolve().parent.parent / "painel"
+
+# A imagem python:slim não traz a tabela de tipos do sistema: sem isto, a
+# fonte do painel sairia como application/octet-stream.
+mimetypes.add_type("font/woff2", ".woff2")
 
 log = logging.getLogger("uvicorn.error")
 

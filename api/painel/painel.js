@@ -5,8 +5,11 @@
 // textContent, nunca por innerHTML: um nome como "<img onerror=...>" aparece
 // como texto e não executa (proteção contra XSS).
 
+import { toast } from './toasts.js';
+
 const CHAVE_DA_SESSAO = 'pessoal-finance.sessao-admin';
 const MAXIMO_DE_RESPOSTAS = 15;
+const PERFIS = ['ADMINISTRADOR', 'OPERADOR', 'CLIENTE'];
 
 const TEXTO_DO_STATUS = {
   0: 'sem resposta',
@@ -18,6 +21,16 @@ const TEXTO_DO_STATUS = {
   403: 'Forbidden',
   404: 'Not Found',
   409: 'Conflict',
+};
+
+// Toast que aparece quando uma chamada falha: [tipo, título].
+const AVISO_DO_STATUS = {
+  0: ['erro', 'API fora do ar'],
+  400: ['aviso', 'Dados inválidos'],
+  401: ['erro', 'Não autenticado'],
+  403: ['aviso', 'Acesso negado pelo RBAC'],
+  404: ['aviso', 'Não encontrado'],
+  409: ['aviso', 'Conflito'],
 };
 
 const $ = (seletor) => document.querySelector(seletor);
@@ -54,9 +67,10 @@ function encerrarSessao() {
 }
 
 // ---------------------------------------------------------------------------
-// Chamada à API. Toda resposta vai para o painel "Respostas da API".
+// Chamada à API. Toda resposta vai para o painel "Respostas da API"; as
+// falhas também viram toast (menos no login, que mostra o erro no formulário).
 
-async function chamarApi(metodo, caminho, corpo) {
+async function chamarApi(metodo, caminho, corpo, { avisarFalha = true } = {}) {
   const cabecalhos = {};
   if (sessao) {
     cabecalhos.Authorization = `Bearer ${sessao.token}`;
@@ -79,6 +93,11 @@ async function chamarApi(metodo, caminho, corpo) {
   }
 
   mostrarResposta(registro);
+
+  if (!registro.ok && avisarFalha) {
+    const [tipo, titulo] = AVISO_DO_STATUS[registro.status] ?? ['erro', 'Erro na API'];
+    toast.mostrar({ tipo, titulo: `${registro.status || ''} ${titulo}`.trim(), mensagem: descreverErro(registro.corpo) });
+  }
 
   // Token vencido ou usuário excluído: volta para o login.
   if (registro.status === 401 && sessao) {
@@ -121,6 +140,19 @@ function escreverMensagem(seletor, texto, tipo = '') {
   elemento.className = `mensagem ${tipo}`.trim();
 }
 
+function iniciais(nome) {
+  const partes = nome.trim().split(/\s+/);
+  return `${partes[0]?.[0] ?? ''}${partes.length > 1 ? partes.at(-1)[0] : ''}`.toUpperCase();
+}
+
+// Selo colorido do perfil. A classe só recebe valores conhecidos.
+function criarSelo(perfil) {
+  const selo = document.createElement('span');
+  selo.className = PERFIS.includes(perfil) ? `selo selo-${perfil.toLowerCase()}` : 'selo';
+  selo.textContent = perfil;
+  return selo;
+}
+
 function mostrarTela() {
   const logado = Boolean(sessao);
   $('#tela-login').hidden = logado;
@@ -128,8 +160,12 @@ function mostrarTela() {
   $('#sessao').hidden = !logado;
 
   if (logado) {
+    const { nome, perfil } = sessao.usuario;
     const expira = new Date(sessao.expira_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    $('#sessao-usuario').textContent = `${sessao.usuario.nome} · ${sessao.usuario.perfil} · token válido até ${expira}`;
+    $('#sessao-avatar').textContent = iniciais(nome);
+    $('#sessao-nome').textContent = nome;
+    $('#sessao-validade').textContent = `token válido até ${expira}`;
+    $('#sessao-perfil').replaceWith(Object.assign(criarSelo(perfil), { id: 'sessao-perfil' }));
     $('#payload-token').textContent = JSON.stringify(lerPayloadJwt(sessao.token), null, 2);
   }
 }
@@ -142,7 +178,8 @@ function mostrarResposta(registro) {
   const cabecalho = document.createElement('header');
   const rota = document.createElement('code');
   rota.textContent = `#${numeroDaResposta}  ${registro.metodo} ${registro.caminho}`;
-  const status = document.createElement('strong');
+  const status = document.createElement('span');
+  status.className = 'status';
   status.textContent = `${registro.status || ''} ${TEXTO_DO_STATUS[registro.status] ?? ''}`.trim();
   cabecalho.append(rota, status);
   item.append(cabecalho);
@@ -174,11 +211,25 @@ function renderizarUsuarios(usuarios) {
 
   for (const usuario of usuarios) {
     const linha = document.createElement('tr');
-    for (const valor of [usuario.nome, usuario.email, usuario.perfil, usuario.id]) {
-      const celula = document.createElement('td');
-      celula.textContent = valor;
-      linha.append(celula);
-    }
+
+    const nome = document.createElement('td');
+    const avatar = document.createElement('span');
+    avatar.className = 'avatar pequeno';
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.textContent = iniciais(usuario.nome);
+    const textoNome = document.createElement('span');
+    textoNome.textContent = usuario.nome;
+    nome.className = 'celula-nome';
+    nome.append(avatar, textoNome);
+
+    const email = document.createElement('td');
+    email.textContent = usuario.email;
+    const perfil = document.createElement('td');
+    perfil.append(criarSelo(usuario.perfil));
+    const id = document.createElement('td');
+    id.className = 'celula-id';
+    id.textContent = usuario.id;
+    id.title = usuario.id;
 
     const acoes = document.createElement('td');
     acoes.className = 'acoes-da-linha';
@@ -186,7 +237,8 @@ function renderizarUsuarios(usuarios) {
       criarBotao('Editar', 'secundario', () => prepararEdicao(usuario)),
       criarBotao('Excluir', 'perigo', () => excluirUsuario(usuario)),
     );
-    linha.append(acoes);
+
+    linha.append(nome, email, perfil, id, acoes);
     tabela.append(linha);
   }
 
@@ -200,6 +252,19 @@ function criarBotao(texto, classe, aoClicar) {
   botao.textContent = texto;
   botao.addEventListener('click', aoClicar);
   return botao;
+}
+
+// Caixa de confirmação (<dialog>). Devolve true se a pessoa confirmou.
+function confirmar({ titulo, mensagem, rotulo }) {
+  const dialogo = $('#dialogo-confirmacao');
+  $('#dialogo-titulo').textContent = titulo;
+  $('#dialogo-mensagem').textContent = mensagem;
+  $('#dialogo-confirmar').textContent = rotulo;
+  dialogo.returnValue = '';
+  dialogo.showModal();
+  return new Promise((resolver) => {
+    dialogo.addEventListener('close', () => resolver(dialogo.returnValue === 'confirmar'), { once: true });
+  });
 }
 
 // Lê o payload do JWT só para exibir. Não confere a assinatura e por isso
@@ -221,20 +286,29 @@ function lerPayloadJwt(token) {
 
 async function entrar(evento) {
   evento.preventDefault();
-  const dados = new FormData(evento.target);
-  const resposta = await chamarApi('POST', '/auth/login', {
-    email: dados.get('email'),
-    senha: dados.get('senha'),
-  });
+  const formulario = evento.target;
+  const botao = formulario.querySelector('button[type=submit]');
+  botao.setAttribute('aria-busy', 'true');
+  const dados = new FormData(formulario);
+  const resposta = await chamarApi(
+    'POST',
+    '/auth/login',
+    { email: dados.get('email'), senha: dados.get('senha') },
+    { avisarFalha: false },
+  );
+  botao.removeAttribute('aria-busy');
 
   if (!resposta.ok) {
     escreverMensagem('#mensagem-login', descreverErro(resposta.corpo), 'erro');
     return;
   }
-  evento.target.reset();
+  formulario.reset();
   escreverMensagem('#mensagem-login', '');
   salvarSessao(resposta.corpo);
   mostrarTela();
+  toast.sucesso(`Perfil ${sessao.usuario.perfil}. O token vale 30 minutos.`, {
+    titulo: `Bem-vindo(a), ${sessao.usuario.nome}`,
+  });
   carregarUsuarios();
 }
 
@@ -243,6 +317,7 @@ function sair() {
   cancelarEdicao();
   renderizarUsuarios([]);
   mostrarTela();
+  toast.info('O token foi descartado deste navegador.', { titulo: 'Sessão encerrada' });
 }
 
 // ADMINISTRADOR e OPERADOR veem a lista; CLIENTE, só o próprio cadastro.
@@ -268,6 +343,7 @@ async function consultarPorId(evento) {
   evento.preventDefault();
   const id = new FormData(evento.target).get('id').trim();
   if (!id) {
+    toast.aviso('Informe o ID de um usuário.');
     return;
   }
   const resposta = await chamarApi('GET', rotaDoUsuario(id));
@@ -316,16 +392,23 @@ async function salvarUsuario(evento) {
   }
   const acao = idEmEdicao ? 'atualizado' : 'cadastrado';
   cancelarEdicao();
-  escreverMensagem('#mensagem-formulario', `Usuário ${acao} com sucesso.`, 'sucesso');
+  escreverMensagem('#mensagem-formulario', '');
+  toast.sucesso(`${resposta.corpo.nome} (${resposta.corpo.perfil}).`, { titulo: `Usuário ${acao}` });
   carregarUsuarios();
 }
 
 async function excluirUsuario(usuario) {
-  if (!window.confirm(`Excluir ${usuario.nome} (${usuario.email})?`)) {
+  const confirmado = await confirmar({
+    titulo: `Excluir ${usuario.nome}?`,
+    mensagem: `${usuario.email} perde o acesso na hora, mesmo com um token ainda válido. Não dá para desfazer.`,
+    rotulo: 'Excluir',
+  });
+  if (!confirmado) {
     return;
   }
   const resposta = await chamarApi('DELETE', rotaDoUsuario(usuario.id));
   if (resposta.ok) {
+    toast.sucesso(`${usuario.nome} foi removido.`, { titulo: 'Usuário excluído' });
     carregarUsuarios();
   }
 }

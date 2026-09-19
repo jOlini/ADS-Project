@@ -1,34 +1,79 @@
-/* Estilo do front-end. Mesmas cores do painel administrativo (api/painel/painel.css). */
+/*
+ * Visual do Pessoal Finance: vidro fosco (glassmorphism) sobre fundo em
+ * gradiente, sombras suaves e fonte Inter. Mesmos tokens do painel
+ * administrativo (api/painel/painel.css), para as duas interfaces
+ * parecerem um produto só.
+ */
 
 :root {
-  --fundo: #f4f6f8;
-  --superficie: #ffffff;
-  --texto: #1f2933;
-  --texto-suave: #5f6b7a;
-  --borda: #d9e0e7;
-  --destaque: #0f766e;
-  --destaque-hover: #115e59;
-  --sucesso: #15803d;
-  --erro: #b91c1c;
-  --raio: 10px;
+  --fonte: 'Inter Variable', 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  --texto: #0f172a;
+  --texto-suave: #475569;
+  --fundo: #eef2f9;
+  --mancha-1: rgba(20, 184, 166, 0.35);
+  --mancha-2: rgba(99, 102, 241, 0.32);
+  --mancha-3: rgba(56, 189, 248, 0.28);
+
+  --vidro: rgba(255, 255, 255, 0.62);
+  --vidro-forte: rgba(255, 255, 255, 0.8);
+  --vidro-borda: rgba(255, 255, 255, 0.75);
+  --campo: rgba(255, 255, 255, 0.7);
+  --campo-borda: rgba(15, 23, 42, 0.12);
+
+  --destaque: #4f46e5;
+  --gradiente: linear-gradient(135deg, #14b8a6 0%, #6366f1 55%, #8b5cf6 100%);
+  --anel-foco: 0 0 0 4px rgba(99, 102, 241, 0.25);
+
+  --sucesso: #059669;
+  --erro: #dc2626;
+  --aviso: #d97706;
+  --info: #2563eb;
+
+  --sombra: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 12px 32px -12px rgba(15, 23, 42, 0.25),
+    0 4px 10px -6px rgba(15, 23, 42, 0.12);
+  --sombra-botao: 0 8px 20px -8px rgba(79, 70, 229, 0.6);
+  --raio: 18px;
+  --raio-pequeno: 12px;
+  --desfoque: blur(18px) saturate(160%);
+  --curva: cubic-bezier(0.22, 1, 0.36, 1);
 
   color-scheme: light dark;
-  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--fonte);
+  font-size: 16px;
+  line-height: 1.55;
+  font-feature-settings: 'cv11', 'ss01';
   color: var(--texto);
   background: var(--fundo);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --fundo: #111418;
-    --superficie: #1a1f25;
-    --texto: #e6e9ed;
-    --texto-suave: #9aa5b1;
-    --borda: #2c343d;
-    --destaque: #2dd4bf;
-    --destaque-hover: #5eead4;
-    --sucesso: #4ade80;
+    --texto: #e2e8f0;
+    --texto-suave: #94a3b8;
+    --fundo: #060913;
+    --mancha-1: rgba(20, 184, 166, 0.32);
+    --mancha-2: rgba(99, 102, 241, 0.4);
+    --mancha-3: rgba(139, 92, 246, 0.3);
+
+    --vidro: rgba(15, 23, 42, 0.55);
+    --vidro-forte: rgba(15, 23, 42, 0.78);
+    --vidro-borda: rgba(255, 255, 255, 0.09);
+    --campo: rgba(255, 255, 255, 0.05);
+    --campo-borda: rgba(255, 255, 255, 0.12);
+
+    --destaque: #a5b4fc;
+    --anel-foco: 0 0 0 4px rgba(129, 140, 248, 0.3);
+
+    --sucesso: #34d399;
     --erro: #f87171;
+    --aviso: #fbbf24;
+    --info: #60a5fa;
+
+    --sombra: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 20px 40px -16px rgba(0, 0, 0, 0.7),
+      0 4px 12px -6px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -38,43 +83,93 @@
 
 body {
   margin: 0;
+  min-height: 100vh;
+}
+
+/* Fundo: manchas de cor desfocadas que flutuam devagar atrás do vidro. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  background:
+    radial-gradient(40% 35% at 15% 20%, var(--mancha-1), transparent 70%),
+    radial-gradient(35% 40% at 85% 15%, var(--mancha-2), transparent 70%),
+    radial-gradient(45% 40% at 50% 95%, var(--mancha-3), transparent 70%);
+  filter: blur(20px);
+  animation: flutuar 24s ease-in-out infinite alternate;
+}
+
+@keyframes flutuar {
+  to {
+    transform: translate3d(3%, -2%, 0) rotate(4deg) scale(1.05);
+  }
 }
 
 h1 {
-  margin: 0 0 16px;
-  font-size: 1.6rem;
-  line-height: 1.2;
+  margin: 0;
+  font-size: clamp(1.6rem, 1.2rem + 1.2vw, 2rem);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  font-weight: 750;
 }
 
 a {
   color: var(--destaque);
+  font-weight: 600;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 code {
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 0.9em;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.88em;
 }
 
-/* Cabeçalho e navegação */
+/* ---------------------------------------------------------------- Cabeçalho */
 
 .topo {
+  position: sticky;
+  top: 12px;
+  z-index: 10;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px;
-  background: var(--superficie);
-  border-bottom: 1px solid var(--borda);
+  width: min(1100px, calc(100% - 24px));
+  margin: 12px auto 0;
+  padding: 10px 14px 10px 18px;
+  background: var(--vidro);
+  border: 1px solid var(--vidro-borda);
+  border-radius: 999px;
+  box-shadow: var(--sombra);
+  backdrop-filter: var(--desfoque);
+  -webkit-backdrop-filter: var(--desfoque);
+  animation: surgir 0.5s var(--curva) both;
 }
 
 .marca {
   display: flex;
   gap: 10px;
   align-items: center;
-  font-weight: 700;
   color: var(--texto);
+  font-weight: 500;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
   text-decoration: none;
+}
+
+.marca img {
+  border-radius: 10px;
+  box-shadow: 0 6px 16px -6px rgba(15, 118, 110, 0.7);
+}
+
+.marca strong {
+  background: var(--gradiente);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .topo nav {
@@ -83,57 +178,127 @@ code {
 }
 
 .topo nav a {
-  padding: 6px 12px;
-  border-radius: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
   color: var(--texto-suave);
+  font-size: 0.92rem;
   text-decoration: none;
-  font-weight: 600;
+  transition: color 0.2s, background 0.2s;
+}
+
+.topo nav a:hover {
+  color: var(--texto);
+  background: var(--campo);
 }
 
 /* O NavLink marca a rota atual com a classe "active". */
 .topo nav a.active {
-  color: var(--destaque);
-  background: color-mix(in srgb, var(--destaque) 12%, transparent);
+  color: #fff;
+  background: var(--gradiente);
+  box-shadow: var(--sombra-botao);
 }
 
 .conteudo {
-  padding: 40px 16px;
   display: grid;
   justify-items: center;
+  padding: 48px 16px 64px;
 }
 
-/* Cartão e formulário */
+/* -------------------------------------------------------------- Cartão (vidro) */
 
 .cartao {
-  width: min(420px, 100%);
-  background: var(--superficie);
-  border: 1px solid var(--borda);
+  width: 100%;
+  background: var(--vidro);
+  border: 1px solid var(--vidro-borda);
   border-radius: var(--raio);
-  padding: 24px;
+  box-shadow: var(--sombra);
+  backdrop-filter: var(--desfoque);
+  -webkit-backdrop-filter: var(--desfoque);
+  padding: 32px;
+  animation: surgir 0.6s var(--curva) both;
 }
+
+.estreito {
+  max-width: 460px;
+}
+
+@media (max-width: 520px) {
+  .cartao {
+    padding: 24px 20px;
+  }
+}
+
+.cabecalho-do-cartao {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+
+.rotulo {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--destaque);
+}
+
+.discreto {
+  margin: 0;
+  color: var(--texto-suave);
+}
+
+/* ---------------------------------------------------------------- Formulário */
 
 form {
   display: grid;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+/* minmax(0, 1fr): sem ele, a largura mínima natural dos inputs estoura o cartão. */
+.duas-colunas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 420px) {
+  .duas-colunas {
+    grid-template-columns: 1fr;
+  }
 }
 
 .campo {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .campo label {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
 }
 
 .campo input {
+  width: 100%;
+  min-width: 0;
   font: inherit;
-  padding: 10px 12px;
-  border: 1px solid var(--borda);
-  border-radius: 8px;
-  background: var(--superficie);
+  padding: 12px 14px;
+  border: 1px solid var(--campo-borda);
+  border-radius: var(--raio-pequeno);
+  background: var(--campo);
   color: var(--texto);
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.campo input:hover {
+  border-color: color-mix(in srgb, var(--destaque) 40%, var(--campo-borda));
+}
+
+.campo input:focus {
+  outline: none;
+  border-color: var(--destaque);
+  box-shadow: var(--anel-foco);
+  background: var(--vidro-forte);
 }
 
 .campo input[aria-invalid='true'] {
@@ -142,42 +307,84 @@ form {
 
 .erro-do-campo {
   color: var(--erro);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  animation: surgir 0.25s var(--curva) both;
 }
 
-input:focus-visible,
-button:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--destaque);
-  outline-offset: 2px;
-}
+/* ------------------------------------------------------------------- Botões */
 
 button {
+  position: relative;
   font: inherit;
-  font-weight: 600;
-  padding: 10px 16px;
-  border: 1px solid var(--destaque);
-  border-radius: 8px;
-  background: var(--destaque);
+  font-weight: 650;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: var(--raio-pequeno);
+  background: var(--gradiente);
+  background-size: 150% 150%;
   color: #fff;
   cursor: pointer;
+  box-shadow: var(--sombra-botao);
+  transition: transform 0.2s var(--curva), box-shadow 0.2s, background-position 0.4s, opacity 0.2s;
 }
 
 button:hover:not(:disabled) {
-  background: var(--destaque-hover);
+  transform: translateY(-1px);
+  background-position: 100% 50%;
+  box-shadow: 0 12px 26px -10px rgba(79, 70, 229, 0.75);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: none;
+  box-shadow: var(--anel-foco);
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.7;
   cursor: progress;
 }
 
-button.secundario {
-  background: transparent;
-  color: var(--destaque);
+/* Carregando: um anel girando à direita do texto do botão. */
+button[aria-busy='true']::after {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-left: 10px;
+  vertical-align: -2px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: girar 0.7s linear infinite;
 }
 
-/* Mensagens */
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+button.secundario {
+  width: 100%;
+  background: var(--campo);
+  color: var(--texto);
+  border: 1px solid var(--campo-borda);
+  box-shadow: none;
+}
+
+button.secundario:hover:not(:disabled) {
+  background: var(--vidro-forte);
+  box-shadow: 0 8px 18px -12px rgba(15, 23, 42, 0.4);
+}
+
+/* ---------------------------------------------------------------- Mensagens */
 
 .mensagem {
   min-height: 1.5em;
@@ -189,29 +396,77 @@ button.secundario {
   font-weight: 600;
 }
 
-.mensagem.sucesso {
-  margin-bottom: 12px;
-  color: var(--sucesso);
-  font-weight: 600;
+.mensagem.erro:not(:empty) {
+  padding: 10px 14px;
+  border-radius: var(--raio-pequeno);
+  background: color-mix(in srgb, var(--erro) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--erro) 25%, transparent);
+  animation: tremer 0.4s var(--curva);
 }
 
-.discreto {
-  color: var(--texto-suave);
+@keyframes tremer {
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
 }
 
 .rodape-do-cartao {
-  margin: 16px 0 0;
+  margin: 20px 0 0;
   text-align: center;
   color: var(--texto-suave);
 }
 
-/* Página principal */
+/* ---------------------------------------------------------- Página principal */
+
+.perfil {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
+  background: var(--gradiente);
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 750;
+  box-shadow: var(--sombra-botao);
+}
 
 .dados-pessoais {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 10px 16px;
-  margin: 0 0 20px;
+  gap: 10px;
+  margin: 0 0 24px;
+}
+
+.dados-pessoais div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: var(--raio-pequeno);
+  background: var(--campo);
+  border: 1px solid var(--campo-borda);
+  animation: surgir 0.5s var(--curva) both;
+}
+
+.dados-pessoais div:nth-child(2) {
+  animation-delay: 0.06s;
+}
+
+.dados-pessoais div:nth-child(3) {
+  animation-delay: 0.12s;
 }
 
 .dados-pessoais dt {
@@ -220,5 +475,239 @@ button.secundario {
 
 .dados-pessoais dd {
   margin: 0;
-  font-weight: 600;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Esqueleto de carregamento: blocos com brilho passando. */
+.carregando {
+  display: grid;
+  gap: 14px;
+}
+
+.esqueleto {
+  display: block;
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--campo) 25%, var(--vidro-forte) 50%, var(--campo) 75%);
+  background-size: 200% 100%;
+  animation: brilhar 1.2s ease-in-out infinite;
+}
+
+.esqueleto.circulo {
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
+}
+
+.esqueleto.larga {
+  width: 70%;
+  height: 24px;
+}
+
+@keyframes brilhar {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* -------------------------------------------------------------------- Toasts */
+
+.toasts {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toasts-topo-direita {
+  top: 16px;
+  right: 16px;
+}
+
+.toasts-topo-centro {
+  top: 16px;
+  left: 50%;
+  translate: -50% 0;
+}
+
+.toasts-base-direita {
+  bottom: 16px;
+  right: 16px;
+  flex-direction: column-reverse;
+}
+
+.toasts-base-centro {
+  bottom: 16px;
+  left: 50%;
+  translate: -50% 0;
+  flex-direction: column-reverse;
+}
+
+.toast {
+  --cor-do-toast: var(--info);
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 14px 16px;
+  background: var(--vidro-forte);
+  border: 1px solid var(--vidro-borda);
+  border-radius: 16px;
+  box-shadow: var(--sombra);
+  backdrop-filter: var(--desfoque);
+  -webkit-backdrop-filter: var(--desfoque);
+  pointer-events: auto;
+  animation: toast-entrar 0.45s var(--curva) both;
+}
+
+.toast-sucesso {
+  --cor-do-toast: var(--sucesso);
+}
+
+.toast-erro {
+  --cor-do-toast: var(--erro);
+}
+
+.toast-aviso {
+  --cor-do-toast: var(--aviso);
+}
+
+.toast.saindo {
+  animation: toast-sair 0.25s ease-in both;
+}
+
+.toast-icone {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: var(--cor-do-toast);
+  background: color-mix(in srgb, var(--cor-do-toast) 16%, transparent);
+}
+
+.toast svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.toast-texto {
+  display: grid;
+  gap: 2px;
+  padding-top: 5px;
+  min-width: 0;
+}
+
+.toast-texto strong {
+  font-size: 0.95rem;
+}
+
+.toast-texto p {
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+button.toast-acao {
+  justify-self: start;
+  margin-top: 8px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--cor-do-toast) 15%, transparent);
+  color: var(--cor-do-toast);
+  box-shadow: none;
+}
+
+button.toast-fechar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  color: var(--texto-suave);
+  box-shadow: none;
+}
+
+button.toast-fechar:hover:not(:disabled) {
+  background: var(--campo);
+  color: var(--texto);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Barra de tempo: encolhe até sumir; quando termina, o toast fecha. */
+.toast-progresso {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--cor-do-toast);
+  transform-origin: left;
+  animation: toast-tempo var(--duracao) linear forwards;
+}
+
+.toast:hover .toast-progresso,
+.toast:focus-within .toast-progresso {
+  animation-play-state: paused;
+}
+
+@keyframes toast-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+  }
+}
+
+@keyframes toast-sair {
+  to {
+    opacity: 0;
+    transform: translateX(24px) scale(0.96);
+  }
+}
+
+@keyframes toast-tempo {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* ---------------------------------------------------------------- Animações */
+
+@keyframes surgir {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+}
+
+/* Quem pediu menos movimento no sistema operacional não vê as animações.
+   A barra de tempo do toast fica de fora: é ela que marca a hora de fechar. */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.toast-progresso),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .toast-progresso {
+    opacity: 0;
+  }
 }
