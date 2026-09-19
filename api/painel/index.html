@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Administração · Pessoal Finance</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <!-- Sem script nem estilo embutido no HTML: a Content-Security-Policy da
+         API só permite arquivos da própria origem (ver app/seguranca.py). -->
+    <link rel="stylesheet" href="painel.css" />
+    <script type="module" src="painel.js"></script>
+  </head>
+  <body>
+    <header class="topo">
+      <span class="marca">
+        <img src="favicon.svg" alt="" width="28" height="28" />
+        Pessoal Finance · Administração
+      </span>
+      <div id="sessao" class="sessao" hidden>
+        <span id="sessao-usuario"></span>
+        <button id="botao-sair" type="button" class="secundario">Sair</button>
+      </div>
+    </header>
+
+    <main class="conteudo">
+      <!-- Tela 1: login na API -->
+      <section id="tela-login" class="cartao estreito">
+        <h1>Login</h1>
+        <p class="discreto">Autentica em <code>POST /auth/login</code> e recebe um token JWT.</p>
+        <form id="form-login" novalidate>
+          <label>E-mail <input type="email" name="email" autocomplete="username" /></label>
+          <label>Senha <input type="password" name="senha" autocomplete="current-password" /></label>
+          <button type="submit">Entrar</button>
+          <p id="mensagem-login" class="mensagem" role="alert"></p>
+        </form>
+      </section>
+
+      <!-- Tela 2: gestão de usuários -->
+      <section id="tela-usuarios" hidden>
+        <p class="aviso">
+          Os botões aparecem para todos os perfis de propósito: quem decide é a API (RBAC). Tente uma ação que o
+          seu perfil não tem e veja o <strong>403</strong> em "Respostas da API".
+        </p>
+
+        <div class="grade">
+          <section class="cartao">
+            <h2>Usuários</h2>
+            <div class="acoes">
+              <button id="botao-listar" type="button">Listar todos</button>
+              <button id="botao-meus-dados" type="button" class="secundario">Meus dados</button>
+            </div>
+            <form id="form-consulta" class="consulta">
+              <input name="id" placeholder="ID do usuário" aria-label="ID do usuário" />
+              <button type="submit" class="secundario">Consultar por ID</button>
+            </form>
+
+            <div class="rolagem">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>E-mail</th>
+                    <th>Perfil</th>
+                    <th>ID</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="tabela-usuarios"></tbody>
+              </table>
+            </div>
+            <p id="tabela-vazia" class="discreto">Nenhum usuário carregado.</p>
+          </section>
+
+          <section class="cartao">
+            <h2 id="titulo-formulario">Cadastrar usuário</h2>
+            <form id="form-usuario" novalidate>
+              <label>Nome <input name="nome" maxlength="100" /></label>
+              <label>E-mail <input type="email" name="email" /></label>
+              <label id="campo-senha">
+                Senha (8 a 64 caracteres)
+                <input type="password" name="senha" maxlength="64" autocomplete="new-password" />
+              </label>
+              <label>
+                Perfil
+                <select name="perfil">
+                  <option value="CLIENTE">CLIENTE</option>
+                  <option value="OPERADOR">OPERADOR</option>
+                  <option value="ADMINISTRADOR">ADMINISTRADOR</option>
+                </select>
+              </label>
+              <div class="acoes">
+                <button id="botao-salvar" type="submit">Cadastrar</button>
+                <button id="botao-cancelar" type="button" class="secundario" hidden>Cancelar edição</button>
+              </div>
+              <p id="mensagem-formulario" class="mensagem" role="alert"></p>
+            </form>
+          </section>
+        </div>
+
+        <details class="cartao">
+          <summary>Token JWT: payload decodificado</summary>
+          <p class="discreto">
+            O payload é só Base64: qualquer um lê. Por isso leva id, nome, perfil e datas, e nunca senha. Quem garante
+            que ninguém alterou é a assinatura, conferida pela API a cada requisição.
+          </p>
+          <pre id="payload-token"></pre>
+        </details>
+      </section>
+
+      <section class="cartao respostas" aria-live="polite">
+        <h2>Respostas da API</h2>
+        <p id="sem-respostas" class="discreto">Nenhuma requisição feita ainda.</p>
+        <ol id="lista-respostas"></ol>
+      </section>
+    </main>
+  </body>
+</html>

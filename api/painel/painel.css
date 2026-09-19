@@ -1,0 +1,325 @@
+/* Painel administrativo. Mesmas cores e componentes do front-end React (web/src/index.css). */
+
+:root {
+  --fundo: #f4f6f8;
+  --superficie: #ffffff;
+  --texto: #1f2933;
+  --texto-suave: #5f6b7a;
+  --borda: #d9e0e7;
+  --destaque: #0f766e;
+  --destaque-hover: #115e59;
+  --sucesso: #15803d;
+  --aviso: #b45309;
+  --erro: #b91c1c;
+  --codigo: #eef2f5;
+  --raio: 10px;
+
+  color-scheme: light dark;
+  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
+  color: var(--texto);
+  background: var(--fundo);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #111418;
+    --superficie: #1a1f25;
+    --texto: #e6e9ed;
+    --texto-suave: #9aa5b1;
+    --borda: #2c343d;
+    --destaque: #2dd4bf;
+    --destaque-hover: #5eead4;
+    --sucesso: #4ade80;
+    --aviso: #fbbf24;
+    --erro: #f87171;
+    --codigo: #0d1014;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+h1,
+h2 {
+  margin: 0 0 12px;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: 1.6rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+}
+
+code,
+pre {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+.topo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borda);
+}
+
+.marca {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-weight: 700;
+}
+
+.sessao {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.sessao[hidden] {
+  display: none;
+}
+
+.conteudo {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  display: grid;
+  gap: 20px;
+}
+
+.cartao {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  padding: 20px;
+  min-width: 0;
+}
+
+.estreito {
+  width: min(420px, 100%);
+  justify-self: center;
+}
+
+.grade {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 860px) {
+  .grade {
+    grid-template-columns: 1fr;
+  }
+}
+
+form {
+  display: grid;
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+label[hidden] {
+  display: none;
+}
+
+input,
+select {
+  font: inherit;
+  padding: 9px 11px;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  background: var(--superficie);
+  color: var(--texto);
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--destaque);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  font-weight: 600;
+  padding: 9px 14px;
+  border: 1px solid var(--destaque);
+  border-radius: 8px;
+  background: var(--destaque);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--destaque-hover);
+}
+
+button.secundario {
+  background: transparent;
+  color: var(--destaque);
+}
+
+button.perigo {
+  background: transparent;
+  border-color: var(--erro);
+  color: var(--erro);
+}
+
+button[hidden] {
+  display: none;
+}
+
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.consulta {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.consulta input {
+  flex: 1;
+  min-width: 0;
+}
+
+.rolagem {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid var(--borda);
+  vertical-align: middle;
+}
+
+td:nth-child(4) {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--texto-suave);
+}
+
+.acoes-da-linha {
+  display: flex;
+  gap: 6px;
+}
+
+.acoes-da-linha button {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+
+.discreto {
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.discreto[hidden] {
+  display: none;
+}
+
+.aviso {
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border-left: 4px solid var(--aviso);
+  background: var(--superficie);
+  border-radius: 6px;
+}
+
+.mensagem {
+  min-height: 1.5em;
+  margin: 0;
+}
+
+.mensagem.erro {
+  color: var(--erro);
+  font-weight: 600;
+}
+
+.mensagem.sucesso {
+  color: var(--sucesso);
+  font-weight: 600;
+}
+
+details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+pre {
+  margin: 8px 0 0;
+  padding: 12px;
+  background: var(--codigo);
+  border-radius: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.respostas ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.resposta {
+  border: 1px solid var(--borda);
+  border-left: 5px solid var(--texto-suave);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.resposta header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.resposta.sucesso {
+  border-left-color: var(--sucesso);
+}
+
+.resposta.aviso {
+  border-left-color: var(--aviso);
+}
+
+.resposta.erro {
+  border-left-color: var(--erro);
+}
