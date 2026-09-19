@@ -1,0 +1,9 @@
+# Dependências de execução da API, com versão travada: o CI, o Docker e a
+# máquina de cada pessoa instalam exatamente as mesmas.
+fastapi==0.141.1
+uvicorn==0.53.0
+pydantic-settings==2.15.0
+email-validator==2.3.0
+pyjwt==2.14.0
+bcrypt==5.0.0
+pymongo==4.18.1

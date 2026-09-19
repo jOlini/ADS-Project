@@ -38,6 +38,21 @@ jobs:
       - name: Gerar o build de produção
         run: npm run build
         working-directory: web
+        # Configuração do app Web do Firebase (ver web/.env.example). É pública
+        # por natureza, mas fica nos secrets do repositório para não ser versionada.
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+
+      # O Pages só conhece arquivos: /ADS-Project/principal não existe no
+      # disco e daria 404 ao recarregar. Um 404.html igual ao index.html faz o
+      # app abrir em qualquer rota e o React Router resolve o caminho.
+      - name: Criar o fallback de rotas da SPA
+        run: cp web/dist/index.html web/dist/404.html
 
       - name: Configurar o GitHub Pages
         uses: actions/configure-pages@v5

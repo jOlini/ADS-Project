@@ -1,0 +1,26 @@
+# Back-end completo para desenvolvimento e demonstração: MongoDB + API.
+# Antes: copiar api/.env.example para api/.env e trocar os valores.
+# Subir: docker compose up --build   ·   API em http://localhost:8081
+
+services:
+  mongo:
+    image: mongo:7
+    volumes:
+      - dados-mongo:/data/db
+    # Sem "ports": o banco só é alcançável pela rede interna do compose,
+    # nunca pela máquina host nem pela rede local.
+
+  api:
+    build: ./api
+    env_file: ./api/.env
+    environment:
+      # Sobrescreve o MONGODB_URI do .env: dentro do compose o banco é o
+      # serviço "mongo", não o localhost.
+      MONGODB_URI: mongodb://mongo:27017/pessoal-finance
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongo
+
+volumes:
+  dados-mongo:

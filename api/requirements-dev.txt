@@ -1,0 +1,4 @@
+# Execução + testes. O httpx2 é o cliente HTTP do TestClient do FastAPI.
+-r requirements.txt
+pytest==9.1.1
+httpx2==2.13.0

@@ -1,0 +1,11 @@
+# Ambiente virtual e caches locais
+.venv
+__pycache__
+.pytest_cache
+
+# Testes rodam no CI, não entram na imagem
+tests
+
+# Segredos: as variáveis chegam ao container pelo docker compose (env_file)
+.env
+.env.*

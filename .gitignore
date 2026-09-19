@@ -5,14 +5,11 @@ base_docs/
 CLAUDE.md
 .claude/
 
-# --- Java / Spring Boot ---
-target/
-build/
-!.mvn/wrapper/maven-wrapper.jar
-*.class
-*.jar
-*.war
-hs_err_pid*
+# --- Python / FastAPI ---
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
 
 # --- Node / React ---
 node_modules/
