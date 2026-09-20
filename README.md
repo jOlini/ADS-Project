@@ -17,7 +17,7 @@ Release em construção: **0.1 - Identidade e acesso**.
 
 | Módulo | Descrição | Estado |
 |---|---|---|
-| Identidade e acesso | Cadastro, login, perfis de acesso e administração de usuários | Em validação |
+| Identidade e acesso | Cadastro, login, perfis de acesso e administração de usuários | Concluído |
 | Lançamentos | Receitas e despesas, contas e categorias | Planejado |
 | Dashboard | Saldo, totais do mês e comparativo receita × despesa | Planejado |
 | Comprovantes | Anexo de arquivo ao lançamento | Planejado |
@@ -70,7 +70,7 @@ alcance a área administrativa.
 | Persistência da API | MongoDB 7 (pymongo) |
 | Painel administrativo | HTML, CSS e JavaScript puros, servidos pela própria API |
 | Área do cliente | React 19 · Vite · React Router · Firebase Authentication · Cloud Firestore |
-| Interface | Glassmorphism com gradientes, fonte Inter auto-hospedada (SIL OFL), toasts próprios, animações que respeitam "reduzir movimento" |
+| Interface | Visual "extrato vivo": extrato por dia com saldo do dia, neutros esverdeados, um verde de marca para ação e foco, fonte Figtree auto-hospedada (SIL OFL), temas claro e escuro automáticos, toasts próprios e transições curtas que respeitam "reduzir movimento" |
 | Testes | pytest (API) · Vitest (front-end) |
 | CI/CD | GitHub Actions · GitHub Pages · alertas no Discord |
 | Containers | Docker · Docker Compose |
