@@ -44,3 +44,12 @@ export function validarCadastro(dados, agora = new Date()) {
 
   return erros;
 }
+
+// Ordem em que os campos aparecem na tela. Depois de um envio com erro, o
+// foco vai para o primeiro campo inválido nessa ordem, e não para o botão.
+export const ORDEM_DO_CADASTRO = ['email', 'senha', 'nome', 'sobrenome', 'dataNascimento'];
+
+// Devolve o nome do primeiro campo com erro, na ordem dada, ou null.
+export function primeiroCampoComErro(erros, ordem) {
+  return ordem.find((campo) => Boolean(erros[campo])) ?? null;
+}
