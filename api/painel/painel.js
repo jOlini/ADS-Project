@@ -8,6 +8,7 @@
 import { toast } from './toasts.js';
 
 const CHAVE_DA_SESSAO = 'pessoal-finance.sessao-admin';
+const CHAVE_DA_DEMONSTRACAO = 'pessoal-finance.modo-demonstracao';
 const MAXIMO_DE_RESPOSTAS = 15;
 const PERFIS = ['ADMINISTRADOR', 'OPERADOR', 'CLIENTE'];
 
@@ -37,6 +38,8 @@ const $ = (seletor) => document.querySelector(seletor);
 
 let sessao = lerSessao();
 let numeroDaResposta = 0;
+// Última lista vinda da API; o filtro trabalha sobre ela, sem nova chamada.
+let usuariosCarregados = null;
 
 // ---------------------------------------------------------------------------
 // Sessão: token no sessionStorage, que some ao fechar a aba. Um token
@@ -166,7 +169,7 @@ function mostrarTela() {
     $('#sessao-nome').textContent = nome;
     $('#sessao-validade').textContent = `token válido até ${expira}`;
     $('#sessao-perfil').replaceWith(Object.assign(criarSelo(perfil), { id: 'sessao-perfil' }));
-    $('#payload-token').textContent = JSON.stringify(lerPayloadJwt(sessao.token), null, 2);
+    mostrarPayload(lerPayloadJwt(sessao.token));
   }
 }
 
@@ -205,51 +208,134 @@ function classeDoStatus(status) {
   return status >= 400 && status < 500 ? 'aviso' : 'erro';
 }
 
+// Guarda a lista vinda da API e desenha a tabela com o filtro atual.
 function renderizarUsuarios(usuarios) {
+  usuariosCarregados = usuarios;
+  desenharTabela();
+}
+
+// "66f1a2…192a3b": começo e fim do ID. O fim é o que diferencia dois
+// ObjectIds criados em sequência, então nunca é o pedaço cortado; no celular
+// só o fim aparece ("…192a3b").
+function abreviarId(id) {
+  if (id.length <= 14) {
+    return [id];
+  }
+  const inicio = document.createElement('span');
+  inicio.className = 'id-inicio';
+  inicio.textContent = id.slice(0, 6);
+  return [inicio, `…${id.slice(-6)}`];
+}
+
+async function copiarId(id) {
+  try {
+    await navigator.clipboard.writeText(id);
+    $('#consulta-id').value = id;
+    toast.info(id, { titulo: 'ID copiado', duracao: 2500 });
+  } catch {
+    toast.aviso('O navegador bloqueou a área de transferência. Selecione o ID no campo de consulta.', {
+      titulo: 'Não foi possível copiar',
+    });
+    $('#consulta-id').value = id;
+  }
+}
+
+// Busca sem acento e sem diferença de maiúsculas: "joao" acha "João".
+function normalizar(texto) {
+  return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function desenharTabela() {
   const tabela = $('#tabela-usuarios');
   tabela.replaceChildren();
 
+  const termo = normalizar($('#filtro').value.trim());
+  const usuarios = (usuariosCarregados ?? []).filter(
+    (usuario) => !termo || normalizar(`${usuario.nome} ${usuario.email}`).includes(termo),
+  );
+
   for (const usuario of usuarios) {
     const linha = document.createElement('tr');
+    linha.dataset.id = usuario.id;
+    linha.classList.toggle('em-edicao', usuario.id === idEmEdicao);
 
     const nome = document.createElement('td');
+    nome.dataset.rotulo = 'Nome';
     const avatar = document.createElement('span');
     avatar.className = 'avatar pequeno';
     avatar.setAttribute('aria-hidden', 'true');
     avatar.textContent = iniciais(usuario.nome);
     const textoNome = document.createElement('span');
+    textoNome.className = 'nome';
     textoNome.textContent = usuario.nome;
-    nome.className = 'celula-nome';
-    nome.append(avatar, textoNome);
+    textoNome.title = usuario.nome;
+    const blocoNome = document.createElement('div');
+    blocoNome.className = 'celula-nome';
+    blocoNome.append(avatar, textoNome);
+    nome.append(blocoNome);
 
     const email = document.createElement('td');
-    email.textContent = usuario.email;
+    email.dataset.rotulo = 'E-mail';
+    const textoEmail = document.createElement('div');
+    textoEmail.className = 'celula-email';
+    textoEmail.textContent = usuario.email;
+    textoEmail.title = usuario.email;
+    email.append(textoEmail);
+
     const perfil = document.createElement('td');
+    perfil.dataset.rotulo = 'Perfil';
     perfil.append(criarSelo(usuario.perfil));
+
     const id = document.createElement('td');
-    id.className = 'celula-id';
-    id.textContent = usuario.id;
-    id.title = usuario.id;
+    id.dataset.rotulo = 'ID';
+    const botaoId = criarBotao('', 'celula-id', () => copiarId(usuario.id), `Copiar o ID de ${usuario.nome}`);
+    botaoId.append(...abreviarId(usuario.id));
+    botaoId.title = `${usuario.id} (clique para copiar)`;
+    id.append(botaoId);
 
     const acoes = document.createElement('td');
     acoes.className = 'acoes-da-linha';
     acoes.append(
-      criarBotao('Editar', 'secundario', () => prepararEdicao(usuario)),
-      criarBotao('Excluir', 'perigo', () => excluirUsuario(usuario)),
+      criarBotao('Editar', 'texto', () => prepararEdicao(usuario), `Editar ${usuario.nome}`),
+      criarBotao('Excluir', 'texto perigo', () => excluirUsuario(usuario), `Excluir ${usuario.nome}`),
     );
 
     linha.append(nome, email, perfil, id, acoes);
     tabela.append(linha);
   }
 
-  $('#tabela-vazia').hidden = usuarios.length > 0;
+  atualizarContagem(usuarios.length, termo);
 }
 
-function criarBotao(texto, classe, aoClicar) {
+// Contagem acima da tabela e estado vazio, que diz o que fazer em seguida.
+function atualizarContagem(visiveis, termo) {
+  const total = usuariosCarregados?.length ?? 0;
+  const plural = (n) => (n === 1 ? '1 usuário' : `${n} usuários`);
+  $('#contagem').textContent =
+    usuariosCarregados === null ? '' : termo ? `${plural(visiveis)} de ${total}` : plural(total);
+
+  const vazio = $('#tabela-vazia');
+  vazio.hidden = visiveis > 0;
+  if (usuariosCarregados === null) {
+    $('#vazio-titulo').textContent = 'Nenhum usuário carregado.';
+    $('#vazio-texto').textContent = 'Use “Atualizar lista” para buscar os usuários na API.';
+  } else if (termo) {
+    $('#vazio-titulo').textContent = 'Nenhum usuário corresponde ao filtro.';
+    $('#vazio-texto').textContent = 'Confira a grafia ou apague o filtro para ver a lista inteira.';
+  } else {
+    $('#vazio-titulo').textContent = 'A API não devolveu nenhum usuário.';
+    $('#vazio-texto').textContent = 'Cadastre o primeiro no formulário ao lado.';
+  }
+}
+
+function criarBotao(texto, classe, aoClicar, rotuloAcessivel) {
   const botao = document.createElement('button');
   botao.type = 'button';
   botao.className = classe;
   botao.textContent = texto;
+  if (rotuloAcessivel) {
+    botao.setAttribute('aria-label', rotuloAcessivel);
+  }
   botao.addEventListener('click', aoClicar);
   return botao;
 }
@@ -267,17 +353,108 @@ function confirmar({ titulo, mensagem, rotulo }) {
   });
 }
 
+// Erro de um campo aparece embaixo dele, ligado por aria-describedby, e o
+// foco vai para o primeiro campo com problema. Devolve os campos marcados.
+function mostrarErrosDosCampos(formulario, erros) {
+  const marcados = [];
+  for (const [nome, mensagem] of Object.entries(erros)) {
+    const campo = formulario.elements[nome];
+    if (!(campo instanceof HTMLElement) || campo.closest('[hidden]')) {
+      continue;
+    }
+    const aviso = document.createElement('span');
+    aviso.id = `${campo.id}-erro`;
+    aviso.className = 'erro-do-campo';
+    aviso.textContent = mensagem;
+    campo.closest('.campo').append(aviso);
+    campo.setAttribute('aria-invalid', 'true');
+    campo.setAttribute('aria-describedby', [campo.getAttribute('aria-describedby'), aviso.id].filter(Boolean).join(' '));
+    marcados.push(nome);
+  }
+  // Primeiro na ordem da tela, não na ordem em que a API listou.
+  const primeiro = [...formulario.elements].find((campo) => marcados.includes(campo.name));
+  primeiro?.focus();
+  return marcados;
+}
+
+function limparErrosDosCampos(formulario) {
+  for (const aviso of formulario.querySelectorAll('.erro-do-campo')) {
+    const campo = formulario.querySelector(`[aria-describedby~="${aviso.id}"]`);
+    if (campo) {
+      const restantes = campo.getAttribute('aria-describedby').split(' ').filter((id) => id !== aviso.id);
+      if (restantes.length > 0) {
+        campo.setAttribute('aria-describedby', restantes.join(' '));
+      } else {
+        campo.removeAttribute('aria-describedby');
+      }
+      campo.removeAttribute('aria-invalid');
+    }
+    aviso.remove();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Modo demonstração: o cordão abre e fecha a gaveta com o RBAC, o payload do
+// JWT e as respostas da API. A escolha fica guardada nesta aba, para não ter
+// de reabrir a cada recarga durante os prints.
+
+function abrirDemonstracao(aberta) {
+  const gaveta = $('#gaveta-demo');
+  gaveta.classList.toggle('aberta', aberta);
+  gaveta.inert = !aberta;
+  $('#cordao').setAttribute('aria-expanded', String(aberta));
+  $('#cordao-estado').textContent = aberta ? 'Fechar' : 'Abrir';
+  try {
+    sessionStorage.setItem(CHAVE_DA_DEMONSTRACAO, aberta ? '1' : '0');
+  } catch {
+    // Armazenamento bloqueado: a gaveta funciona, só não lembra a escolha.
+  }
+}
+
+function demonstracaoEstavaAberta() {
+  try {
+    return sessionStorage.getItem(CHAVE_DA_DEMONSTRACAO) === '1';
+  } catch {
+    return false;
+  }
+}
+
 // Lê o payload do JWT só para exibir. Não confere a assinatura e por isso
 // não decide nada: quem valida o token e aplica o RBAC é a API.
 function lerPayloadJwt(token) {
   try {
     const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
     const bytes = Uint8Array.from(atob(base64), (caractere) => caractere.charCodeAt(0));
-    const payload = JSON.parse(new TextDecoder().decode(bytes));
-    const data = (segundos) => new Date(segundos * 1000).toLocaleString('pt-BR');
-    return { ...payload, 'iat (emitido em)': data(payload.iat), 'exp (expira em)': data(payload.exp) };
+    return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     return null;
+  }
+}
+
+// O payload aparece exatamente como veio no token; as datas legíveis ficam
+// numa lista à parte, para não parecerem campos do JWT.
+function mostrarPayload(payload) {
+  $('#payload-token').textContent = payload ? JSON.stringify(payload, null, 2) : '';
+  const datas = $('#datas-token');
+  datas.replaceChildren();
+  if (!payload) {
+    return;
+  }
+  const linhas = [
+    ['iat · emitido em', payload.iat],
+    ['exp · expira em', payload.exp],
+  ];
+  for (const [rotulo, segundos] of linhas) {
+    if (!Number.isFinite(segundos)) {
+      continue;
+    }
+    const item = document.createElement('div');
+    const termo = document.createElement('dt');
+    termo.textContent = rotulo;
+    const valor = document.createElement('dd');
+    valor.textContent = new Date(segundos * 1000).toLocaleString('pt-BR');
+    item.append(termo, valor);
+    datas.append(item);
   }
 }
 
@@ -287,6 +464,16 @@ function lerPayloadJwt(token) {
 async function entrar(evento) {
   evento.preventDefault();
   const formulario = evento.target;
+  limparErrosDosCampos(formulario);
+  const vazios = {
+    ...(formulario.email.value.trim() ? {} : { email: 'Informe o e-mail.' }),
+    ...(formulario.senha.value ? {} : { senha: 'Informe a senha.' }),
+  };
+  if (Object.keys(vazios).length > 0) {
+    escreverMensagem('#mensagem-login', '');
+    mostrarErrosDosCampos(formulario, vazios);
+    return;
+  }
   const botao = formulario.querySelector('button[type=submit]');
   botao.setAttribute('aria-busy', 'true');
   const dados = new FormData(formulario);
@@ -315,7 +502,7 @@ async function entrar(evento) {
 function sair() {
   encerrarSessao();
   cancelarEdicao();
-  renderizarUsuarios([]);
+  renderizarUsuarios(null);
   mostrarTela();
   toast.info('O token foi descartado deste navegador.', { titulo: 'Sessão encerrada' });
 }
@@ -365,7 +552,15 @@ function prepararEdicao(usuario) {
   $('#botao-salvar').textContent = 'Salvar alterações';
   $('#botao-cancelar').hidden = false;
   escreverMensagem('#mensagem-formulario', '');
+  limparErrosDosCampos(formulario);
+  marcarLinhaEmEdicao();
   formulario.nome.focus();
+}
+
+function marcarLinhaEmEdicao() {
+  for (const linha of document.querySelectorAll('#tabela-usuarios tr')) {
+    linha.classList.toggle('em-edicao', linha.dataset.id === idEmEdicao);
+  }
 }
 
 function cancelarEdicao() {
@@ -375,6 +570,8 @@ function cancelarEdicao() {
   $('#titulo-formulario').textContent = 'Cadastrar usuário';
   $('#botao-salvar').textContent = 'Cadastrar';
   $('#botao-cancelar').hidden = true;
+  limparErrosDosCampos($('#form-usuario'));
+  marcarLinhaEmEdicao();
 }
 
 async function salvarUsuario(evento) {
@@ -386,8 +583,15 @@ async function salvarUsuario(evento) {
     ? await chamarApi('PUT', rotaDoUsuario(idEmEdicao), dados)
     : await chamarApi('POST', '/usuarios', { ...dados, senha: formulario.senha.value });
 
+  limparErrosDosCampos(formulario);
   if (!resposta.ok) {
-    escreverMensagem('#mensagem-formulario', descreverErro(resposta.corpo), 'erro');
+    const campos = resposta.corpo?.campos ?? {};
+    const mapeados = mostrarErrosDosCampos(formulario, campos);
+    // O detalhe geral vai para a mensagem; o que é de um campo fica no campo.
+    const resto = Object.entries(campos)
+      .filter(([campo]) => !mapeados.includes(campo))
+      .map(([campo, erro]) => `${campo}: ${erro}`);
+    escreverMensagem('#mensagem-formulario', [resposta.corpo?.detail, ...resto].filter(Boolean).join(' ') || 'Erro inesperado.', 'erro');
     return;
   }
   const acao = idEmEdicao ? 'atualizado' : 'cadastrado';
@@ -422,6 +626,9 @@ $('#botao-meus-dados').addEventListener('click', meusDados);
 $('#form-consulta').addEventListener('submit', consultarPorId);
 $('#form-usuario').addEventListener('submit', salvarUsuario);
 $('#botao-cancelar').addEventListener('click', cancelarEdicao);
+$('#filtro').addEventListener('input', desenharTabela);
+$('#cordao').addEventListener('click', () => abrirDemonstracao($('#cordao').getAttribute('aria-expanded') !== 'true'));
+abrirDemonstracao(demonstracaoEstavaAberta());
 
 mostrarTela();
 if (sessao) {

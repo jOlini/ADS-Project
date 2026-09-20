@@ -15,13 +15,24 @@ export default function Login() {
 
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [faltando, setFaltando] = useState({});
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
 
   async function acessar(evento) {
     evento.preventDefault();
-    if (!email.trim() || !senha) {
-      setErro('Informe e-mail e senha.');
+    const formulario = evento.currentTarget;
+
+    // Campo vazio é marcado no próprio campo, e o foco vai até ele.
+    const vazios = {
+      ...(email.trim() ? {} : { email: 'Informe o e-mail.' }),
+      ...(senha ? {} : { senha: 'Informe a senha.' }),
+    };
+    setFaltando(vazios);
+    const primeiro = Object.keys(vazios)[0];
+    if (primeiro) {
+      setErro('');
+      formulario.elements[primeiro].focus();
       return;
     }
 
@@ -43,31 +54,68 @@ export default function Login() {
   }
 
   return (
-    <section className="cartao estreito">
-      <header className="cabecalho-do-cartao">
-        <span className="rotulo">Área do cliente</span>
-        <h1>Entrar</h1>
-        <p className="discreto">Acesse sua conta para ver seus dados.</p>
-      </header>
+    <div className="acesso">
+      <div className="acesso-coluna">
+        <Link to="/login" className="marca">
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width="28" height="28" />
+          <span>Pessoal Finance</span>
+        </Link>
 
-      <form onSubmit={acessar} noValidate>
-        <Campo rotulo="E-mail" type="email" name="email" autoComplete="username"
-          value={email} onChange={(evento) => setEmail(evento.target.value)} />
-        <Campo rotulo="Senha" type="password" name="senha" autoComplete="current-password"
-          value={senha} onChange={(evento) => setSenha(evento.target.value)} />
+        <section className="acesso-formulario" aria-labelledby="titulo-login">
+          <header className="acesso-cabecalho">
+            <h1 id="titulo-login">Entrar</h1>
+            <p className="discreto">Use o e-mail e a senha da sua conta.</p>
+          </header>
 
-        <button type="submit" disabled={enviando} aria-busy={enviando}>
-          {enviando ? 'Acessando…' : 'Acessar'}
-        </button>
+          <form onSubmit={acessar} noValidate>
+            <Campo rotulo="E-mail" type="email" name="email" autoComplete="username" inputMode="email"
+              value={email} onChange={(evento) => setEmail(evento.target.value)} erro={faltando.email} />
+            <Campo rotulo="Senha" type="password" name="senha" autoComplete="current-password"
+              value={senha} onChange={(evento) => setSenha(evento.target.value)} erro={faltando.senha} />
 
-        <p className="mensagem erro" role="alert">
-          {erro}
+            <p className="mensagem erro" role="alert">
+              {erro}
+            </p>
+
+            <button type="submit" className="largo" disabled={enviando} aria-busy={enviando}>
+              {enviando ? 'Entrando…' : 'Entrar'}
+            </button>
+          </form>
+        </section>
+
+        <p className="rodape-do-formulario">
+          Ainda não tem conta? <Link to="/cadastro">Criar conta</Link>
         </p>
-      </form>
+      </div>
 
-      <p className="rodape-do-cartao">
-        Não tem conta? <Link to="/cadastro">Cadastre-se</Link>
-      </p>
-    </section>
+      <aside className="vitrine" aria-label="Sobre o Pessoal Finance">
+        <p className="frase">
+          <span>Quanto entra,</span>
+          <span>quanto sai,</span>
+          <span>quanto sobra.</span>
+        </p>
+        <p className="apoio">
+          Seu dinheiro em um lugar só, sem planilha e sem ligar o aplicativo ao banco.
+        </p>
+        <div className="amostra" aria-hidden="true">
+          <header>
+            <span>Extrato de setembro</span>
+            <span>exemplo</span>
+          </header>
+          <div>
+            <span>Salário</span>
+            <b>+ R$ 6.800,00</b>
+          </div>
+          <div>
+            <span>Aluguel</span>
+            <b>− R$ 1.850,00</b>
+          </div>
+          <div>
+            <span>Supermercado</span>
+            <b>− R$ 214,37</b>
+          </div>
+        </div>
+      </aside>
+    </div>
   );
 }

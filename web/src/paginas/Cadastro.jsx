@@ -4,7 +4,8 @@ import AvisoFirebase from '../componentes/AvisoFirebase';
 import Campo from '../componentes/Campo';
 import { useToast } from '../componentes/toast/useToast';
 import { firebaseConfigurado } from '../firebase';
-import { validarCadastro } from '../regras/cadastro';
+import { ORDEM_DO_CADASTRO, TAMANHO_MINIMO_SENHA, primeiroCampoComErro, validarCadastro } from '../regras/cadastro';
+import { hojeIso } from '../regras/datas';
 import { mensagemDeErro } from '../regras/erros';
 import { cadastrar } from '../servicos/contas';
 
@@ -27,11 +28,14 @@ export default function Cadastro() {
 
   async function cadastrarUsuario(evento) {
     evento.preventDefault();
+    const formulario = evento.currentTarget;
     setMensagem('');
 
     const encontrados = validarCadastro(dados);
     setErros(encontrados);
-    if (Object.keys(encontrados).length > 0) {
+    const primeiro = primeiroCampoComErro(encontrados, ORDEM_DO_CADASTRO);
+    if (primeiro) {
+      formulario.elements[primeiro].focus();
       return;
     }
 
@@ -55,39 +59,77 @@ export default function Cadastro() {
   }
 
   return (
-    <section className="cartao estreito">
-      <header className="cabecalho-do-cartao">
-        <span className="rotulo">Área do cliente</span>
-        <h1>Criar conta</h1>
-        <p className="discreto">Seus dados ficam no Firebase, protegidos pelas regras do Firestore.</p>
-      </header>
+    <div className="acesso">
+      <div className="acesso-coluna">
+        <Link to="/login" className="marca">
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width="28" height="28" />
+          <span>Pessoal Finance</span>
+        </Link>
 
-      <form onSubmit={cadastrarUsuario} noValidate>
-        <Campo rotulo="E-mail" type="email" name="email" autoComplete="email"
-          value={dados.email} onChange={alterar} erro={erros.email} />
-        <Campo rotulo="Senha" type="password" name="senha" autoComplete="new-password"
-          value={dados.senha} onChange={alterar} erro={erros.senha} />
-        <div className="duas-colunas">
-          <Campo rotulo="Nome" name="nome" autoComplete="given-name"
-            value={dados.nome} onChange={alterar} erro={erros.nome} />
-          <Campo rotulo="Sobrenome" name="sobrenome" autoComplete="family-name"
-            value={dados.sobrenome} onChange={alterar} erro={erros.sobrenome} />
-        </div>
-        <Campo rotulo="Data de nascimento" type="date" name="dataNascimento" autoComplete="bday"
-          value={dados.dataNascimento} onChange={alterar} erro={erros.dataNascimento} />
+        <section className="acesso-formulario" aria-labelledby="titulo-cadastro">
+          <header className="acesso-cabecalho">
+            <h1 id="titulo-cadastro">Criar conta</h1>
+            <p className="discreto">Todos os campos são obrigatórios.</p>
+          </header>
 
-        <button type="submit" disabled={enviando} aria-busy={enviando}>
-          {enviando ? 'Cadastrando…' : 'Cadastrar'}
-        </button>
+          <form onSubmit={cadastrarUsuario} noValidate>
+            <Campo rotulo="E-mail" type="email" name="email" autoComplete="email" inputMode="email"
+              value={dados.email} onChange={alterar} erro={erros.email} />
+            <Campo rotulo="Senha" type="password" name="senha" autoComplete="new-password"
+              dica={`Pelo menos ${TAMANHO_MINIMO_SENHA} caracteres.`}
+              value={dados.senha} onChange={alterar} erro={erros.senha} />
+            <div className="duas-colunas">
+              <Campo rotulo="Nome" name="nome" autoComplete="given-name" maxLength={100}
+                value={dados.nome} onChange={alterar} erro={erros.nome} />
+              <Campo rotulo="Sobrenome" name="sobrenome" autoComplete="family-name" maxLength={100}
+                value={dados.sobrenome} onChange={alterar} erro={erros.sobrenome} />
+            </div>
+            <Campo rotulo="Data de nascimento" type="date" name="dataNascimento" autoComplete="bday"
+              min="1900-01-01" max={hojeIso()}
+              value={dados.dataNascimento} onChange={alterar} erro={erros.dataNascimento} />
 
-        <p className="mensagem erro" role="alert">
-          {mensagem}
+            <p className="mensagem erro" role="alert">
+              {mensagem}
+            </p>
+
+            <button type="submit" className="largo" disabled={enviando} aria-busy={enviando}>
+              {enviando ? 'Criando conta…' : 'Criar conta'}
+            </button>
+          </form>
+        </section>
+
+        <p className="rodape-do-formulario">
+          Já tem conta? <Link to="/login">Entrar</Link>
         </p>
-      </form>
+      </div>
 
-      <p className="rodape-do-cartao">
-        Já tem conta? <Link to="/login">Entrar</Link>
-      </p>
-    </section>
+      <aside className="vitrine" aria-label="O que você vai ver depois de entrar">
+        <p className="frase">
+          <span>Seus dados,</span>
+          <span>só para você.</span>
+        </p>
+        <p className="apoio">
+          Nome, sobrenome e data de nascimento aparecem na sua página principal. Só a sua conta tem acesso a eles.
+        </p>
+        <div className="amostra" aria-hidden="true">
+          <header>
+            <span>Resumo de setembro</span>
+            <span>exemplo</span>
+          </header>
+          <div>
+            <span>Entradas</span>
+            <b>R$ 7.350,00</b>
+          </div>
+          <div>
+            <span>Saídas</span>
+            <b>R$ 4.912,48</b>
+          </div>
+          <div>
+            <span>Sobra do mês</span>
+            <b>R$ 2.437,52</b>
+          </div>
+        </div>
+      </aside>
+    </div>
   );
 }

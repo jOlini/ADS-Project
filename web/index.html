@@ -2,12 +2,15 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <!-- Favicon próprio do Pessoal Finance (web/public/favicon.svg): barras de
-         saldo e seta de tendência. O Vite acrescenta o base (/ADS-Project/) no build. -->
+    <!-- Marca do Pessoal Finance (web/public/favicon.svg): as linhas do extrato
+         com o ponto da entrada. O Vite acrescenta o base (/ADS-Project/) no build. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Pessoal Finance: controle financeiro pessoal." />
-    <meta name="theme-color" content="#0f766e" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Mesma cor da barra superior em cada tema (tokens em src/index.css). -->
+    <meta name="theme-color" content="#eceeeb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111916" media="(prefers-color-scheme: dark)" />
     <title>Pessoal Finance</title>
   </head>
   <body>

@@ -1,7 +1,7 @@
 // Testes unitários da validação do cadastro: função pura, sem Firebase,
 // sem rede e sem navegador. Padrão Arrange-Act-Assert em cada teste.
 import { describe, expect, it } from 'vitest';
-import { validarCadastro } from './cadastro';
+import { ORDEM_DO_CADASTRO, primeiroCampoComErro, validarCadastro } from './cadastro';
 
 // Dados fictícios: nenhum dado pessoal real entra no repositório público.
 const VALIDO = {
@@ -48,5 +48,21 @@ describe('validarCadastro', () => {
     expect(validarCadastro({ ...VALIDO, dataNascimento: '2023-02-30' }, HOJE).dataNascimento).toBe(
       'Data de nascimento inválida.',
     );
+  });
+});
+
+describe('primeiroCampoComErro', () => {
+  it('segue a ordem da tela, não a ordem das chaves do objeto', () => {
+    const erros = { dataNascimento: 'Informe a data de nascimento.', senha: 'Informe a senha.' };
+
+    expect(primeiroCampoComErro(erros, ORDEM_DO_CADASTRO)).toBe('senha');
+  });
+
+  it('devolve null quando não há erro', () => {
+    expect(primeiroCampoComErro({}, ORDEM_DO_CADASTRO)).toBeNull();
+  });
+
+  it('ignora campos com mensagem vazia', () => {
+    expect(primeiroCampoComErro({ email: '', nome: 'Informe o nome.' }, ORDEM_DO_CADASTRO)).toBe('nome');
   });
 });

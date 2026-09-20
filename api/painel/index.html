@@ -3,127 +3,189 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#4f46e5" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#eceeeb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111916" media="(prefers-color-scheme: dark)" />
     <title>Administração · Pessoal Finance</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <!-- Sem script nem estilo embutido no HTML: a Content-Security-Policy da
          API só permite arquivos da própria origem (ver app/seguranca.py).
-         A fonte Inter também vem daqui (fontes/), não do Google Fonts. -->
-    <link rel="preload" href="fontes/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin />
+         A fonte Figtree também vem daqui (fontes/), não do Google Fonts. -->
+    <link rel="preload" href="fontes/figtree-latin-wght.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="painel.css" />
     <script type="module" src="painel.js"></script>
   </head>
   <body>
     <header class="topo">
-      <span class="marca">
-        <img src="favicon.svg" alt="" width="32" height="32" />
-        <span>Pessoal <strong>Finance</strong> <small>Administração</small></span>
-      </span>
-      <div id="sessao" class="sessao" hidden>
-        <span id="sessao-avatar" class="avatar" aria-hidden="true"></span>
-        <span class="sessao-texto">
-          <strong id="sessao-nome"></strong>
-          <small id="sessao-validade"></small>
+      <div class="topo-interno">
+        <span class="marca">
+          <img src="favicon.svg" alt="" width="28" height="28" />
+          <span>Pessoal Finance</span>
+          <span class="marca-area">Administração</span>
         </span>
-        <span id="sessao-perfil" class="selo"></span>
-        <button id="botao-sair" type="button" class="secundario">Sair</button>
+        <div id="sessao" class="sessao" hidden>
+          <span id="sessao-avatar" class="avatar pequeno" aria-hidden="true"></span>
+          <span class="sessao-texto">
+            <strong id="sessao-nome"></strong>
+            <small id="sessao-validade"></small>
+          </span>
+          <span id="sessao-perfil" class="selo"></span>
+          <button id="botao-sair" type="button" class="secundario compacto">Sair</button>
+        </div>
       </div>
     </header>
 
     <main class="conteudo">
       <!-- Tela 1: login na API -->
-      <section id="tela-login" class="cartao estreito">
-        <header class="cabecalho-do-cartao">
-          <span class="rotulo">Back-office</span>
-          <h1>Entrar</h1>
-          <p class="discreto">Autentica em <code>POST /auth/login</code> e recebe um token JWT.</p>
-        </header>
-        <form id="form-login" novalidate>
-          <label>E-mail <input type="email" name="email" autocomplete="username" /></label>
-          <label>Senha <input type="password" name="senha" autocomplete="current-password" /></label>
-          <button type="submit">Entrar</button>
-          <p id="mensagem-login" class="mensagem" role="alert"></p>
-        </form>
+      <section id="tela-login" class="acesso" aria-labelledby="titulo-login">
+        <div class="acesso-formulario">
+          <header class="acesso-cabecalho">
+            <h1 id="titulo-login">Entrar na administração</h1>
+            <p class="discreto">Use uma conta cadastrada na API: administrador, operador ou cliente.</p>
+          </header>
+          <form id="form-login" novalidate>
+            <div class="campo">
+              <label for="login-email">E-mail</label>
+              <input id="login-email" type="email" name="email" autocomplete="username" inputmode="email" />
+            </div>
+            <div class="campo">
+              <label for="login-senha">Senha</label>
+              <input id="login-senha" type="password" name="senha" autocomplete="current-password" />
+            </div>
+            <p id="mensagem-login" class="mensagem" role="alert"></p>
+            <button type="submit">Entrar</button>
+          </form>
+        </div>
+        <aside class="vitrine" aria-label="O que o painel faz">
+          <p class="frase"><span>Usuários da plataforma,</span> <span>em um só lugar.</span></p>
+          <p>
+            Administradores e operadores cuidam das contas; clientes consultam os próprios dados. Quem decide o que
+            cada perfil pode fazer é a API.
+          </p>
+        </aside>
       </section>
 
       <!-- Tela 2: gestão de usuários -->
-      <section id="tela-usuarios" class="tela" hidden>
-        <p class="aviso">
-          Os botões aparecem para todos os perfis de propósito: quem decide é a API (RBAC). Tente uma ação que o
-          seu perfil não tem e veja o <strong>403</strong> no aviso e em "Respostas da API".
-        </p>
+      <section id="tela-usuarios" hidden>
+        <header class="cabecalho-da-pagina">
+          <div class="titulo-com-contagem">
+            <h1>Usuários</h1>
+            <p id="contagem" class="discreto" aria-live="polite"></p>
+          </div>
+          <div class="acoes">
+            <button id="botao-listar" type="button" class="secundario">Atualizar lista</button>
+            <button id="botao-meus-dados" type="button" class="secundario">Meus dados</button>
+          </div>
+        </header>
 
-        <div class="grade">
-          <section class="cartao">
-            <header class="cabecalho-da-secao">
-              <h2>Usuários</h2>
-              <div class="acoes">
-                <button id="botao-listar" type="button">Listar todos</button>
-                <button id="botao-meus-dados" type="button" class="secundario">Meus dados</button>
+        <div class="usuarios">
+          <section class="cartao usuarios-lista" aria-label="Lista de usuários">
+            <div class="ferramentas">
+              <div class="campo filtro">
+                <label for="filtro">Filtrar</label>
+                <input id="filtro" type="search" placeholder="Nome ou e-mail" autocomplete="off" />
               </div>
-            </header>
-            <form id="form-consulta" class="consulta">
-              <input name="id" placeholder="ID do usuário" aria-label="ID do usuário" />
-              <button type="submit" class="secundario">Consultar por ID</button>
-            </form>
+              <form id="form-consulta" class="campo consulta">
+                <label for="consulta-id">Consultar por ID</label>
+                <div class="linha-de-campo">
+                  <input id="consulta-id" name="id" autocomplete="off" spellcheck="false" />
+                  <button type="submit" class="secundario">Consultar</button>
+                </div>
+              </form>
+            </div>
 
             <div class="rolagem">
-              <table>
+              <table class="tabela">
+                <caption class="apenas-leitor">Usuários carregados da API</caption>
                 <thead>
                   <tr>
-                    <th>Nome</th>
-                    <th>E-mail</th>
-                    <th>Perfil</th>
-                    <th>ID</th>
-                    <th><span class="apenas-leitor">Ações</span></th>
+                    <th scope="col">Nome</th>
+                    <th scope="col">E-mail</th>
+                    <th scope="col">Perfil</th>
+                    <th scope="col">ID</th>
+                    <th scope="col"><span class="apenas-leitor">Ações</span></th>
                   </tr>
                 </thead>
                 <tbody id="tabela-usuarios"></tbody>
               </table>
             </div>
-            <p id="tabela-vazia" class="vazio">Nenhum usuário carregado.</p>
+            <div id="tabela-vazia" class="vazio">
+              <strong id="vazio-titulo">Nenhum usuário carregado.</strong>
+              <p id="vazio-texto">Use “Atualizar lista” para buscar os usuários na API.</p>
+            </div>
           </section>
 
-          <section class="cartao">
-            <h2 id="titulo-formulario">Cadastrar usuário</h2>
+          <section class="cartao painel usuarios-formulario" aria-labelledby="titulo-formulario">
+            <div class="cabecalho-do-painel">
+              <h2 id="titulo-formulario">Cadastrar usuário</h2>
+            </div>
             <form id="form-usuario" novalidate>
-              <label>Nome <input name="nome" maxlength="100" /></label>
-              <label>E-mail <input type="email" name="email" /></label>
-              <label id="campo-senha">
-                Senha (8 a 64 caracteres)
-                <input type="password" name="senha" maxlength="64" autocomplete="new-password" />
-              </label>
-              <label>
-                Perfil
-                <select name="perfil">
-                  <option value="CLIENTE">CLIENTE</option>
-                  <option value="OPERADOR">OPERADOR</option>
-                  <option value="ADMINISTRADOR">ADMINISTRADOR</option>
+              <div class="campo">
+                <label for="usuario-nome">Nome</label>
+                <input id="usuario-nome" name="nome" maxlength="100" autocomplete="off" />
+              </div>
+              <div class="campo">
+                <label for="usuario-email">E-mail</label>
+                <input id="usuario-email" type="email" name="email" autocomplete="off" inputmode="email" />
+              </div>
+              <div class="campo" id="campo-senha">
+                <label for="usuario-senha">Senha</label>
+                <input id="usuario-senha" type="password" name="senha" maxlength="64" autocomplete="new-password" aria-describedby="dica-senha" />
+                <span id="dica-senha" class="dica-do-campo">De 8 a 64 caracteres.</span>
+              </div>
+              <div class="campo">
+                <label for="usuario-perfil">Perfil</label>
+                <select id="usuario-perfil" name="perfil">
+                  <option value="CLIENTE">Cliente</option>
+                  <option value="OPERADOR">Operador</option>
+                  <option value="ADMINISTRADOR">Administrador</option>
                 </select>
-              </label>
+              </div>
+              <p id="mensagem-formulario" class="mensagem" role="alert"></p>
               <div class="acoes">
                 <button id="botao-salvar" type="submit">Cadastrar</button>
                 <button id="botao-cancelar" type="button" class="secundario" hidden>Cancelar edição</button>
               </div>
-              <p id="mensagem-formulario" class="mensagem" role="alert"></p>
             </form>
           </section>
         </div>
 
-        <details class="cartao">
-          <summary>Token JWT: payload decodificado</summary>
-          <p class="discreto">
-            O payload é só Base64: qualquer um lê. Por isso leva id, nome, perfil e datas, e nunca senha. Quem garante
-            que ninguém alterou é a assinatura, conferida pela API a cada requisição.
-          </p>
-          <pre id="payload-token"></pre>
-        </details>
-      </section>
-
-      <section class="cartao respostas" aria-live="polite">
-        <h2>Respostas da API</h2>
-        <p id="sem-respostas" class="vazio">Nenhuma requisição feita ainda.</p>
-        <ol id="lista-respostas"></ol>
+        <!-- Modo demonstração: abre, no lugar, o que serve de evidência para
+             Sistemas Web Seguros (RBAC, payload do JWT e respostas da API). -->
+        <section class="demonstracao" aria-label="Modo demonstração">
+          <button id="cordao" type="button" class="gatilho-demo" aria-expanded="false" aria-controls="gaveta-demo">
+            <span class="ponto-demo" aria-hidden="true"></span>
+            <span class="rotulo-demo">Modo demonstração</span>
+            <span class="descricao-demo">RBAC, token JWT e respostas da API</span>
+            <span id="cordao-estado" class="estado-demo">Abrir</span>
+          </button>
+          <div id="gaveta-demo" class="gaveta" inert>
+            <div class="gaveta-interna">
+              <section aria-labelledby="titulo-rbac">
+                <h2 id="titulo-rbac">Como o RBAC decide</h2>
+                <p>
+                  O painel autentica em <code>POST /auth/login</code> e recebe um token JWT válido por 30 minutos. Os
+                  botões aparecem para todos os perfis de propósito: quem decide é a API. Tente uma ação que o seu
+                  perfil não tem e veja o <strong>403</strong> no aviso e nas respostas da API.
+                </p>
+              </section>
+              <section aria-labelledby="titulo-jwt">
+                <h2 id="titulo-jwt">Token JWT: payload</h2>
+                <p>
+                  O payload é só Base64: qualquer um lê. Por isso leva id, nome, perfil e datas, e nunca senha. Quem
+                  garante que ninguém alterou é a assinatura, conferida pela API a cada requisição.
+                </p>
+                <pre id="payload-token"></pre>
+                <dl id="datas-token" class="datas-token"></dl>
+              </section>
+              <section class="respostas" aria-labelledby="titulo-respostas">
+                <h2 id="titulo-respostas">Respostas da API</h2>
+                <p id="sem-respostas" class="discreto">Nenhuma requisição feita ainda.</p>
+                <ol id="lista-respostas"></ol>
+              </section>
+            </div>
+          </div>
+        </section>
       </section>
     </main>
 
