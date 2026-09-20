@@ -1,8 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-// Fonte Inter hospedada junto com o app (sem chamar o Google Fonts).
-import '@fontsource-variable/inter';
+// Fonte Figtree (eixo de peso) hospedada junto com o app, sem chamar o
+// Google Fonts. A mesma fonte está no painel (api/painel/fontes/).
+import '@fontsource-variable/figtree';
 import './index.css';
 import ToastProvider from './componentes/toast/ToastProvider';
 import AppRoutes from './routes';
