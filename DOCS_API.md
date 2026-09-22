@@ -362,8 +362,11 @@ sequenceDiagram
 ## Como testar
 
 - **Painel:** `http://localhost:8081/painel/`. Faça login com o administrador inicial (`ADMIN_EMAIL` e
-  `ADMIN_SENHA` do `api/.env`), crie um operador e um cliente, saia e entre com cada um. Os botões aparecem
-  para todos os perfis de propósito: tente uma ação proibida e veja o `403` em "Respostas da API".
+  `ADMIN_SENHA` do `api/.env`), crie um operador e um cliente, saia e entre com cada um. Abra a barra
+  **Modo demonstração**, no fim da página: ela mostra o payload do token e, em **Respostas da API**, cada
+  chamada com método, caminho, status e corpo. Os botões aparecem para todos os perfis de propósito: tente
+  uma ação proibida e veja o `403` no aviso e em "Respostas da API". O roteiro completo, com a resposta
+  esperada de cada passo, está na seção "Como testar" do [`README.md`](README.md#como-testar).
 - **Swagger:** `http://localhost:8081/docs`. Rode `POST /auth/login`, copie o `token`, clique em
   **Authorize** e cole o token.
 - **Linha de comando:**
@@ -373,5 +376,6 @@ sequenceDiagram
   curl http://localhost:8081/usuarios -H "Authorization: Bearer <token>"
   ```
 
-- **Testes automatizados:** `cd api` e `pytest -v` (a suíte usa um repositório em memória e não precisa de
-  MongoDB). Rodam também no GitHub Actions a cada commit de pull request.
+- **Testes automatizados:** `cd api` e `pytest -v`, com as dependências do `requirements-dev.txt` instaladas
+  (a suíte usa um repositório em memória e não precisa de MongoDB). Resultado esperado: `57 passed`. Rodam
+  também no GitHub Actions a cada commit de pull request.
