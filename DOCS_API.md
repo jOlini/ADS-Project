@@ -388,6 +388,7 @@ Todos exigem o ID token do Firebase. Tudo que é do cliente fica sob um **espaç
 | `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Consultar lançamento | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}/estorno` | Estornar: cria o lançamento inverso, com a data de hoje | `201 Created` + `Location` | `401`, `404`, `409` |
+| `POST` | `/espacos/{espaco_id}/importacoes` | Importar o extrato do banco em CSV, ou só simular (`simular: true`) | `200 OK` (relatório por linha) | `400`, `401`, `404` |
 
 Lançamento não tem `PUT` nem `DELETE` (`405 Method Not Allowed`): o histórico não se reescreve. Um lançamento
 errado é corrigido com **estorno**, e os dois continuam visíveis. Conta e categoria não se excluem: desativadas,
@@ -462,6 +463,64 @@ Estorno: `409` para um lançamento já estornado ("Este lançamento já foi esto
 estorno ("Um estorno não pode ser estornado."). Um índice único no MongoDB garante um estorno por lançamento
 mesmo com duas requisições simultâneas; a listagem mostra `estornado_por` no original.
 
+### Importação do extrato (CSV)
+
+O cliente manda o **texto** do arquivo exportado pelo banco e diz onde lançar: a conta do extrato, a categoria
+das saídas e a das entradas. Cada linha vira uma receita (valor positivo) ou uma despesa (valor negativo), pelo
+mesmo caminho de um lançamento digitado (partidas dobradas, centavos, limites de descrição e valor).
+
+- **Formato aceito:** cabeçalho com as colunas **Data**, **Descrição** e **Valor** (também `Histórico`,
+  `Data Lançamento`, `Valor (R$)` e outros nomes comuns, sem diferença de acento ou caixa), separadas por `;`,
+  `,` ou tabulação, com até 10 linhas de dados da conta antes do cabeçalho. Data `DD/MM/AAAA` ou `AAAA-MM-DD`;
+  valor `1.234,56` (ou `1234.56`), com `-` nas saídas. Até 1000 linhas e 500 mil caracteres por importação.
+- **Linha ruim não barra o arquivo:** volta como `INVALIDA`, com o motivo, e as outras entram. Linhas de saldo
+  (`SALDO ANTERIOR`, `SALDO DO DIA`) são recusadas: não são lançamentos.
+- **Idempotência por linha:** cada linha ganha uma chave SHA-256 da conta, da data, do valor, da descrição
+  (sem acento, caixa ou espaços extras) e da ocorrência dela no arquivo (duas compras iguais no mesmo dia são
+  duas linhas). A chave é calculada pela API, nunca enviada pelo cliente (campo extra = `400`). Importar o mesmo
+  extrato de novo, ou um período maior que cobre o anterior, só traz o que falta: o resto volta como
+  `JA_IMPORTADA`. Um **índice único** `(espaco_id, chave_importacao)` no MongoDB garante isso mesmo com duas
+  importações simultâneas. Um lançamento importado e depois estornado não volta numa nova importação.
+- **Dois passos na tela:** `simular: true` confere o arquivo e responde o que entraria (`NOVA`), sem gravar;
+  depois, a mesma chamada sem `simular` grava. Se a importação parar no meio, repeti-la termina o que faltou.
+
+```http
+POST /espacos/{espaco_id}/importacoes
+Authorization: Bearer <ID token do Firebase>
+Content-Type: application/json
+
+{
+  "conta_id": "<id da conta>",
+  "categoria_despesa_id": "<id de uma categoria de despesa>",
+  "categoria_receita_id": "<id de uma categoria de receita>",
+  "csv": "Data;Descrição;Valor
+05/09/2026;Salário;6.800,00
+05/09/2026;Aluguel;-1.850,00
+",
+  "simular": false
+}
+```
+
+```json
+{
+  "simulacao": false,
+  "novas": 0,
+  "importadas": 2,
+  "ja_importadas": 0,
+  "invalidas": 0,
+  "linhas": [
+    { "linha": 2, "situacao": "IMPORTADA", "data": "2026-09-05", "descricao": "Salário",
+      "valor_centavos": 680000, "lancamento_id": "66f0...", "erro": null },
+    { "linha": 3, "situacao": "IMPORTADA", "data": "2026-09-05", "descricao": "Aluguel",
+      "valor_centavos": -185000, "lancamento_id": "66f1...", "erro": null }
+  ]
+}
+```
+
+`400` por campo quando o arquivo inteiro não serve (`csv`: sem cabeçalho, sem lançamentos, mais de 1000 linhas)
+ou quando o destino não vale (`conta_id`, `categoria_despesa_id`, `categoria_receita_id`: não encontrada,
+desativada ou do tipo errado). A conta de outra pessoa responde "Conta não encontrada.", como no lançamento.
+
 ### Validação do ID token do Firebase
 
 A API é *resource server*: não emite esse token, só confere que o Google o emitiu para o projeto configurado em
@@ -494,7 +553,8 @@ do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
 ### Como testar o livro-caixa
 
 - **Testes automatizados:** `api/tests/test_firebase.py` (validação do ID token), `test_financeiro_regras.py`
-  (partidas, estorno e coerência) e `test_financeiro_api.py` (rotas, isolamento, saldos e estorno). Os ID
+  (partidas, estorno e coerência), `test_financeiro_api.py` (rotas, isolamento, saldos e estorno) e
+  `test_financeiro_importacao.py` (leitura do CSV, chave por linha e importação sem duplicar). Os ID
   tokens de teste são assinados por uma chave RSA gerada na hora, no lugar das chaves do Google.
 - **Manual (Swagger):** com `FIREBASE_PROJECT_ID` no `api/.env`, obtenha um ID token de uma conta **de teste**
   da área do cliente pela API REST do Firebase Authentication (`<VITE_FIREBASE_API_KEY>` do `web/.env`):

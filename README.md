@@ -47,13 +47,13 @@ disciplinas. Cada uma avalia uma parte do mesmo sistema:
 ## Status
 
 Release **0.1 - Identidade e acesso: concluída** (tag `v0.1.0`; a `v0.1.1` traz a interface final).
-Release **0.2 - Lançamentos: em construção** (API do livro-caixa e telas de lançamentos, contas e categorias na
-`main`; a importação de extrato vem a seguir).
+Release **0.2 - Lançamentos: em construção** (API do livro-caixa, telas de lançamentos, contas e categorias e
+importação do extrato do banco em CSV).
 
 | Módulo | Descrição | Estado |
 |---|---|---|
 | Identidade e acesso | Cadastro, login, perfis de acesso e administração de usuários | Concluído |
-| Núcleo financeiro | Receitas, despesas e transferências, contas e categorias | Em construção (0.2): API e telas prontas |
+| Núcleo financeiro | Receitas, despesas e transferências, contas, categorias e importação de extrato (CSV) | Em construção (0.2): API e telas prontas |
 | Dashboard | Saldo, totais do mês e comparativo receita × despesa | Planejado (0.3) |
 | Comprovantes | Anexo de arquivo ao lançamento | Planejado (0.4) |
 
@@ -350,11 +350,13 @@ observador.
 | API | `api/tests/test_api.py` | Respostas HTTP, matriz completa do RBAC, 401/403/404/409 e cabeçalhos de segurança |
 | API | `api/tests/test_firebase.py` | ID token do Firebase: assinatura, RS256, `aud`, `iss`, datas, `sub`, token do back-office recusado |
 | API | `api/tests/test_financeiro_regras.py` | Partidas dobradas (soma zero), estorno, saldo e coerência dos campos do lançamento |
+| API | `api/tests/test_financeiro_importacao.py` | Extrato em CSV: formatos de banco, linha ruim com o motivo, chave por linha e importação repetida sem duplicar |
 | API | `api/tests/test_financeiro_api.py` | Livro-caixa pelo HTTP: identidades separadas, espaço alheio em 404, saldos, valores em centavos e estorno único |
 | Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro, datas, dinheiro em centavos, extrato e resumo do mês (com estorno e transferência) |
 | Front-end | `web/src/servicos/contas.test.js` | Cadastro no Firebase com o SDK simulado |
 | Front-end | `web/src/servicos/livroCaixa.test.js` | Chamadas à API com o ID token, erros em Problem Details e API fora do ar |
 | Front-end | `web/src/componentes/toast/toasts.test.js` | Regras dos avisos na tela |
+| Front-end | `web/src/regras/importacao.test.js` | Importação do extrato: arquivo em UTF-8 ou Windows-1252, categorias sugeridas e resumo do que entrou |
 
 Os mesmos testes rodam no GitHub Actions a cada commit de pull request e a cada push na `main`
 (ver [CI/CD](#cicd)).
@@ -435,6 +437,18 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
 4. O **Resumo** mostra o saldo em contas (`R$ 3.785,63` antes do estorno), as entradas, as saídas e o extrato do
    mês. Em **Categorias**, crie, renomeie ou desative uma categoria: desativada, ela sai do formulário de
    lançamento.
+5. Em **Lançamentos › Importar extrato**, escolha um CSV com as colunas Data, Descrição e Valor (exemplo
+   fictício abaixo), a conta e as categorias, e clique em **Conferir extrato**: a lista mostra o que entra e as
+   linhas com erro (a de saldo não é lançamento). **Importe** e depois confira o mesmo arquivo de novo: nenhum
+   lançamento é novo, todos aparecem como "Já importada".
+
+   ```text
+   Data;Descrição;Valor
+   01/09/2026;SALDO ANTERIOR;1.000,00
+   05/09/2026;Salário;3.000,00
+   12/09/2026;Padaria;-12,50
+   12/09/2026;Padaria;-12,50
+   ```
 
 ---
 
