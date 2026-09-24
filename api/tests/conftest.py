@@ -1,23 +1,30 @@
-"""Peças compartilhadas pelos testes: configuração fixa, repositório em memória
-(no lugar do MongoDB) e um cliente HTTP da API já com três usuários, um de
-cada perfil."""
+"""Peças compartilhadas pelos testes: configuração fixa, repositórios em memória
+(no lugar do MongoDB), um cliente HTTP da API já com três usuários do
+back-office (um de cada perfil) e ID tokens do Firebase assinados por uma
+chave RSA de teste (no lugar das chaves do Google)."""
 
+import time
 from dataclasses import replace
 from datetime import UTC, datetime
 
+import jwt
 import pytest
 from bson import ObjectId
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
 from app.config import Configuracoes
 from app.erros import ErroConflito
+from app.firebase import VerificadorFirebase
 from app.main import criar_app
 from app.modelos import Perfil, Usuario
 from app.senhas import gerar_hash
 from app.tokens import gerar_token
+from tests.livro_caixa_memoria import LivroCaixaMemoria
 
 SEGREDO_DE_TESTE = "segredo-de-teste-com-mais-de-32-bytes-0123"
 SENHA_DE_TESTE = "Senha@Teste1"
+PROJETO_DE_TESTE = "pessoal-finance-teste"
 
 
 class RepositorioMemoria:
@@ -71,6 +78,7 @@ def config():
         jwt_secret=SEGREDO_DE_TESTE,
         jwt_expiration=30,
         cors_origens="http://localhost:5173",
+        firebase_project_id=PROJETO_DE_TESTE,
     )
 
 
@@ -89,9 +97,55 @@ def repositorio(hash_de_teste):
 
 
 @pytest.fixture
-def api(config, repositorio):
+def livro_caixa():
+    return LivroCaixaMemoria()
+
+
+@pytest.fixture(scope="session")
+def chave_do_google():
+    # Faz o papel da chave privada com que o Google assina os ID tokens.
+    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+@pytest.fixture
+def verificador(chave_do_google):
+    return VerificadorFirebase(PROJETO_DE_TESTE, obter_chave=lambda token: chave_do_google.public_key())
+
+
+@pytest.fixture
+def token_firebase(chave_do_google):
+    """token_firebase("uid-ana") -> ID token válido, igual ao do Firebase.
+    Claims passados por nome substituem os padrões (None remove o claim)."""
+
+    def montar(uid, chave=None, **alteracoes):
+        agora = int(time.time())
+        payload = {
+            "iss": f"https://securetoken.google.com/{PROJETO_DE_TESTE}",
+            "aud": PROJETO_DE_TESTE,
+            "auth_time": agora - 60,
+            "user_id": uid,
+            "sub": uid,
+            "iat": agora - 60,
+            "exp": agora + 3600,
+            "email": f"{uid}@exemplo.com",
+        }
+        payload.update(alteracoes)
+        payload = {claim: valor for claim, valor in payload.items() if valor is not None}
+        return jwt.encode(payload, chave or chave_do_google, algorithm="RS256", headers={"kid": "chave-de-teste"})
+
+    return montar
+
+
+@pytest.fixture
+def cabecalho_do_cliente(token_firebase):
+    """cabecalho_do_cliente("uid-ana") -> {"Authorization": "Bearer <ID token>"}"""
+    return lambda uid: {"Authorization": f"Bearer {token_firebase(uid)}"}
+
+
+@pytest.fixture
+def api(config, repositorio, livro_caixa, verificador):
     # O "with" roda o ciclo de vida da app (startup/shutdown), como o uvicorn.
-    with TestClient(criar_app(config, repositorio)) as cliente:
+    with TestClient(criar_app(config, repositorio, livro_caixa, verificador)) as cliente:
         yield cliente
 
 

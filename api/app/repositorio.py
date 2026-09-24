@@ -9,10 +9,19 @@ from typing import Protocol
 
 from bson import ObjectId
 from pymongo import ASCENDING, MongoClient
+from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
 
 from app.erros import ErroConflito
 from app.modelos import Perfil, Usuario
+
+
+def conectar_mongo(uri: str) -> Database:
+    """Um cliente (e um pool de conexões) para a API inteira: usuários e
+    livro-caixa usam o mesmo banco."""
+    # tz_aware: as datas voltam do banco com fuso (UTC), iguais às gravadas.
+    cliente = MongoClient(uri, serverSelectionTimeoutMS=5000, tz_aware=True)
+    return cliente.get_default_database("pessoal-finance")
 
 
 class RepositorioUsuarios(Protocol):
@@ -34,10 +43,8 @@ class RepositorioUsuarios(Protocol):
 
 
 class RepositorioMongo:
-    def __init__(self, uri: str):
-        # tz_aware: as datas voltam do banco com fuso (UTC), iguais às gravadas.
-        cliente = MongoClient(uri, serverSelectionTimeoutMS=5000, tz_aware=True)
-        self._colecao = cliente.get_default_database("pessoal-finance")["usuarios"]
+    def __init__(self, banco: Database):
+        self._colecao = banco["usuarios"]
 
         # Índice único: mesmo que duas requisições cheguem juntas com o mesmo
         # e-mail, só uma é gravada. A checagem no serviço dá a mensagem
