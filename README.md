@@ -122,6 +122,7 @@ web/                  área do cliente (React + Firebase)
   src/paginas/        Cadastro, Login e Principal
   firestore.rules     regras de segurança do Firestore
   .env.example        modelo da configuração do Firebase
+  iniciar.bat/.sh     atalhos que instalam as dependências e sobem o app (npm start)
 .github/workflows/    ci-tests.yml, cd.yml e alertas.yml
 docker-compose.yml    MongoDB + API para rodar localmente
 subir-app.py          sobe tudo com um comando (venv, dependências, Docker, Vite e links)
@@ -138,7 +139,7 @@ DOCS_API.md           documentação técnica da API
 |---|---|---|
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows e macOS) ou Docker Engine com Compose v2 (Linux) | Atual | **API + MongoDB + painel.** É o único requisito para avaliar a API |
 | [Python](https://www.python.org/downloads/) | 3.11 ou mais novo | `subir-app.py` e testes da API fora do Docker (opcional) |
-| [Node.js](https://nodejs.org/) | 20 ou mais novo | Área do cliente (React) e testes do front-end (opcional) |
+| [Node.js](https://nodejs.org/) | 20.19 ou mais novo | Área do cliente (React) e testes do front-end (opcional) |
 | Projeto no [Firebase](https://console.firebase.google.com/) | — | Rodar a área do cliente localmente (opcional: a versão publicada já funciona) |
 
 As portas **8081** (API) e **5173** (área do cliente) precisam estar livres.
@@ -256,14 +257,19 @@ uvicorn app.main:criar_app --factory --port 8081 --reload
 
 ### Área do cliente (React)
 
-Com o `web/.env` configurado (passo 3 da instalação):
+Com o `web/.env` configurado (passo 3 da instalação), o atalho faz tudo: no Windows, dois cliques em
+`web/iniciar.bat`; no Linux e macOS, `bash web/iniciar.sh`. Ele confere o Node.js, roda o `npm install` na
+primeira vez e depois o `npm start`. Pelos comandos:
 
 ```bash
 cd web
-npm run dev
+npm install
+npm start
 ```
 
-Abre em http://localhost:5173/ADS-Project/ com as rotas `/cadastro`, `/login` e `/principal`.
+O navegador abre em http://localhost:5173/ADS-Project/ com as rotas `/cadastro`, `/login` e `/principal`
+(`npm run dev` sobe o mesmo servidor sem abrir o navegador). Guia só da área do cliente:
+[`web/README.md`](web/README.md).
 
 ### Front-end em container (nginx)
 
