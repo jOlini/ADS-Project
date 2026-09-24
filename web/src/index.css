@@ -1778,3 +1778,90 @@ button.toast-fechar:hover:not(:disabled) {
     opacity: 0;
   }
 }
+
+/* Importação do extrato: seletor de arquivo com a moldura dos outros campos e
+   a prévia com uma linha por lançamento do arquivo. */
+.campo input[type='file'] {
+  height: auto;
+  padding: 8px;
+  font-size: 0.875rem;
+}
+
+.campo input[type='file']::file-selector-button {
+  margin-right: 12px;
+  padding: 6px 12px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--texto);
+  background: var(--lateral);
+  border: 1px solid var(--linha-forte);
+  border-radius: var(--raio-pequeno);
+  cursor: pointer;
+}
+
+.previa-da-importacao {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.resumo-da-importacao {
+  margin: 0;
+  font-weight: 600;
+}
+
+.linhas-da-importacao {
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+}
+
+.linhas-da-importacao li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  padding: 8px 12px;
+}
+
+.linhas-da-importacao li + li {
+  border-top: 1px solid var(--linha);
+}
+
+.linhas-da-importacao .descricao {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linhas-da-importacao .valor {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.linhas-da-importacao .valor.entrada {
+  color: var(--positivo);
+}
+
+.linhas-da-importacao small {
+  grid-column: 1 / -1;
+  color: var(--suave);
+  font-size: 0.8125rem;
+}
+
+/* Já importada: fica na lista, apagada, para a pessoa ver que foi pulada. */
+.linhas-da-importacao .situacao-ja_importada :is(.descricao, .valor) {
+  color: var(--suave);
+}
+
+.linhas-da-importacao .situacao-invalida small {
+  color: var(--erro);
+}
+
+.previa-da-importacao .acoes-do-formulario button:last-child {
+  flex: 1;
+}

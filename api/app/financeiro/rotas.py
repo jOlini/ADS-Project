@@ -2,7 +2,8 @@
 
 Tudo fica sob /espacos/{espaco_id}: o espaço é o dono dos dados, e a
 dependência espaco_do_cliente barra quem não é membro antes de qualquer
-consulta. Lançamento não tem PUT nem DELETE: correção é por estorno.
+consulta. Lançamento não tem PUT nem DELETE: correção é por estorno. O
+extrato do banco (CSV) entra por /importacoes, sem duplicar linha já importada.
 """
 
 from datetime import date
@@ -17,9 +18,11 @@ from app.financeiro.modelos import (
     ContaResposta,
     Espaco,
     EspacoResposta,
+    ImportacaoResposta,
     LancamentoResposta,
     NovaCategoria,
     NovaConta,
+    NovaImportacao,
     NovoLancamento,
 )
 from app.financeiro.repositorio import RepositorioLivroCaixa
@@ -258,3 +261,27 @@ def estornar(
         requisicao.url_for("buscar_lancamento", espaco_id=espaco.id, lancamento_id=estorno.id)
     )
     return LancamentoResposta.de(estorno)
+
+
+# --- Importação de extrato ----------------------------------------------------
+
+
+@rotas_livro_caixa.post(
+    "/{espaco_id}/importacoes",
+    response_model=ImportacaoResposta,
+    summary="Importar extrato do banco em CSV (ou simular a importação)",
+    responses={**ERRO_400, **ERRO_404},
+)
+def importar_extrato(
+    dados: NovaImportacao,
+    espaco: Espaco = Depends(espaco_do_cliente),
+    cliente: ClienteFirebase = Depends(cliente_autenticado),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
+):
+    """Colunas Data, Descrição e Valor (negativo nas saídas), separadas por `;`, `,`
+    ou tabulação. Cada linha vira uma receita ou despesa na conta escolhida. Linha já
+    importada antes é pulada (`JA_IMPORTADA`), e linha ilegível volta com o motivo
+    (`INVALIDA`), sem barrar as outras. Com `simular: true`, nada é gravado e as linhas
+    que entrariam voltam como `NOVA`."""
+    resultados = servico.importar(espaco, dados, cliente.uid)
+    return ImportacaoResposta.de(resultados, simulacao=dados.simular)

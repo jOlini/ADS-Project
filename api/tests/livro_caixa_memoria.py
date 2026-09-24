@@ -1,7 +1,8 @@
 """Mesmo contrato do LivroCaixaMongo, guardando tudo em dicionários.
 
-Reproduz as duas garantias que no MongoDB vêm dos índices únicos: um espaço
-pessoal por pessoa e um estorno por lançamento.
+Reproduz as garantias que no MongoDB vêm dos índices únicos: um espaço
+pessoal por pessoa, um estorno por lançamento e uma chave de importação por
+espaço.
 """
 
 from dataclasses import replace
@@ -9,7 +10,7 @@ from dataclasses import replace
 from bson import ObjectId
 
 from app.erros import ErroConflito
-from app.financeiro.repositorio import MENSAGEM_JA_ESTORNADO, EspacoPessoalJaExiste
+from app.financeiro.repositorio import MENSAGEM_JA_ESTORNADO, EspacoPessoalJaExiste, LancamentoJaImportado
 
 
 def _copia(entidade):
@@ -100,6 +101,10 @@ class LivroCaixaMemoria:
     def inserir_lancamento(self, lancamento):
         if lancamento.estorno_de and any(l.estorno_de == lancamento.estorno_de for l in self.lancamentos.values()):
             raise ErroConflito(MENSAGEM_JA_ESTORNADO)
+        if lancamento.chave_importacao and lancamento.chave_importacao in self.chaves_importadas(
+            lancamento.espaco_id, [lancamento.chave_importacao]
+        ):
+            raise LancamentoJaImportado()
         lancamento.id = str(ObjectId())
         self.lancamentos[lancamento.id] = replace(lancamento, estornado_por=None)
         return lancamento
@@ -109,6 +114,13 @@ class LivroCaixaMemoria:
             l.estorno_de: l.id
             for l in self.lancamentos.values()
             if l.espaco_id == espaco_id and l.estorno_de in ids
+        }
+
+    def chaves_importadas(self, espaco_id, chaves):
+        return {
+            l.chave_importacao
+            for l in self.lancamentos.values()
+            if l.espaco_id == espaco_id and l.chave_importacao in chaves
         }
 
     def somar_partidas_por_conta(self, espaco_id):

@@ -54,10 +54,8 @@ def conferir_lancamento(
     """
     erros: dict[str, str] = {}
 
-    if conta is None:
-        erros["conta_id"] = "Conta não encontrada."
-    elif not conta.ativa:
-        erros["conta_id"] = "Conta desativada: reative-a para lançar nela."
+    if erro := _erro_da_conta(conta):
+        erros["conta_id"] = erro
 
     if dados.tipo == TipoLancamento.TRANSFERENCIA:
         if dados.categoria_id is not None:
@@ -66,23 +64,53 @@ def conferir_lancamento(
             erros["conta_destino_id"] = OBRIGATORIO
         elif dados.conta_destino_id == dados.conta_id:
             erros["conta_destino_id"] = "Escolha uma conta de destino diferente da de origem."
-        elif conta_destino is None:
-            erros["conta_destino_id"] = "Conta não encontrada."
-        elif not conta_destino.ativa:
-            erros["conta_destino_id"] = "Conta desativada: reative-a para lançar nela."
+        elif erro := _erro_da_conta(conta_destino):
+            erros["conta_destino_id"] = erro
         return erros
 
     if dados.conta_destino_id is not None:
         erros["conta_destino_id"] = "Só transferência tem conta de destino."
     if dados.categoria_id is None:
         erros["categoria_id"] = OBRIGATORIO
-    elif categoria is None:
-        erros["categoria_id"] = "Categoria não encontrada."
-    elif not categoria.ativa:
-        erros["categoria_id"] = "Categoria desativada: reative-a para lançar nela."
-    elif categoria.tipo.value != dados.tipo.value:
-        erros["categoria_id"] = f"Use uma categoria de {dados.tipo.value.lower()}."
+    elif erro := _erro_da_categoria(categoria, TipoCategoria(dados.tipo.value)):
+        erros["categoria_id"] = erro
     return erros
+
+
+def conferir_importacao(
+    conta: Conta | None,
+    categoria_despesa: Categoria | None,
+    categoria_receita: Categoria | None,
+) -> dict[str, str]:
+    """Erros por campo do destino de uma importação de extrato (vazio = pode
+    importar). Mesmas regras de um lançamento: conta e categorias do espaço,
+    ativas, e cada categoria do seu tipo."""
+    erros: dict[str, str] = {}
+    if erro := _erro_da_conta(conta):
+        erros["conta_id"] = erro
+    if erro := _erro_da_categoria(categoria_despesa, TipoCategoria.DESPESA):
+        erros["categoria_despesa_id"] = erro
+    if erro := _erro_da_categoria(categoria_receita, TipoCategoria.RECEITA):
+        erros["categoria_receita_id"] = erro
+    return erros
+
+
+def _erro_da_conta(conta: Conta | None) -> str | None:
+    if conta is None:
+        return "Conta não encontrada."
+    if not conta.ativa:
+        return "Conta desativada: reative-a para lançar nela."
+    return None
+
+
+def _erro_da_categoria(categoria: Categoria | None, tipo: TipoCategoria) -> str | None:
+    if categoria is None:
+        return "Categoria não encontrada."
+    if not categoria.ativa:
+        return "Categoria desativada: reative-a para lançar nela."
+    if categoria.tipo != tipo:
+        return f"Use uma categoria de {tipo.value.lower()}."
+    return None
 
 
 def montar_partidas(dados: NovoLancamento) -> list[Partida]:

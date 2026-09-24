@@ -109,3 +109,10 @@ export function lancar(espacoId, lancamento) {
 export function estornar(espacoId, lancamentoId) {
   return chamar(doEspaco(espacoId, `/lancamentos/${encodeURIComponent(lancamentoId)}/estorno`), { metodo: 'POST' });
 }
+
+// Extrato do banco em CSV: { conta_id, categoria_despesa_id, categoria_receita_id,
+// csv, simular }. Com simular, a API só diz o que entraria. Linha já importada
+// antes não entra de novo (chave de idempotência calculada pela API).
+export function importarExtrato(espacoId, importacao) {
+  return chamar(doEspaco(espacoId, '/importacoes'), { metodo: 'POST', corpo: importacao });
+}

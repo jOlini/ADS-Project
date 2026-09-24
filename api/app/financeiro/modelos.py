@@ -16,6 +16,9 @@ from app.modelos import Entrada
 # Teto de um valor, em centavos (R$ 1 bilhão). Barra número absurdo digitado
 # por engano e soma que estouraria o inteiro de 64 bits do MongoDB.
 LIMITE_EM_CENTAVOS = 100_000_000_000
+# Teto do texto de um extrato em CSV (caracteres). Um mês de extrato fica bem
+# abaixo; o limite barra requisição enorme antes de qualquer leitura.
+TAMANHO_MAXIMO_DO_CSV = 500_000
 
 
 class TipoEspaco(StrEnum):
@@ -44,6 +47,15 @@ class TipoLancamento(StrEnum):
     RECEITA = "RECEITA"
     DESPESA = "DESPESA"
     TRANSFERENCIA = "TRANSFERENCIA"
+
+
+class SituacaoDaLinha(StrEnum):
+    """O que aconteceu com cada linha de um extrato importado."""
+
+    NOVA = "NOVA"  # simulação: seria importada
+    IMPORTADA = "IMPORTADA"
+    JA_IMPORTADA = "JA_IMPORTADA"  # a chave da linha já existe no espaço
+    INVALIDA = "INVALIDA"  # a linha não virou lançamento (motivo em "erro")
 
 
 class CorCategoria(StrEnum):
@@ -136,9 +148,26 @@ class Lancamento:
     categoria_id: str | None = None
     conta_destino_id: str | None = None
     estorno_de: str | None = None
+    # Chave de idempotência da linha do extrato que gerou o lançamento
+    # (importacao.chaves_de_importacao). Única no espaço: a mesma linha
+    # importada de novo não vira outro lançamento.
+    chave_importacao: str | None = None
     id: str | None = None
     # Calculado na leitura (id do estorno deste lançamento); não é gravado.
     estornado_por: str | None = field(default=None, compare=False)
+
+
+@dataclass(frozen=True)
+class ResultadoDaLinha:
+    """Uma linha do extrato depois da importação (ou da simulação)."""
+
+    linha: int
+    situacao: SituacaoDaLinha
+    data: date | None = None
+    descricao: str | None = None
+    valor_centavos: int | None = None
+    lancamento_id: str | None = None
+    erro: str | None = None
 
 
 # --- Entrada (corpo das requisições) -------------------------------------------
@@ -207,6 +236,19 @@ class NovoLancamento(Entrada):
     conta_id: Identificador
     categoria_id: Identificador | None = None
     conta_destino_id: Identificador | None = None
+
+
+class NovaImportacao(Entrada):
+    """Extrato do banco em CSV (o texto do arquivo) e onde lançar cada linha:
+    saídas (valor negativo) na categoria de despesa, entradas na de receita,
+    todas na mesma conta. Com simular=true, a API só confere o arquivo e diz o
+    que entraria, sem gravar nada."""
+
+    conta_id: Identificador
+    categoria_despesa_id: Identificador
+    categoria_receita_id: Identificador
+    csv: Annotated[str, StringConstraints(min_length=1, max_length=TAMANHO_MAXIMO_DO_CSV)]
+    simular: Booleano = False
 
 
 # --- Saída ---------------------------------------------------------------------
@@ -315,4 +357,49 @@ class LancamentoResposta(BaseModel):
             estorno_de=lancamento.estorno_de,
             estornado_por=lancamento.estornado_por,
             criado_em=lancamento.criado_em,
+        )
+
+
+class LinhaImportadaResposta(BaseModel):
+    linha: int
+    situacao: SituacaoDaLinha
+    data: date | None
+    descricao: str | None
+    # Com sinal, como no extrato: negativo é saída.
+    valor_centavos: int | None
+    lancamento_id: str | None
+    erro: str | None
+
+
+class ImportacaoResposta(BaseModel):
+    simulacao: bool
+    novas: int
+    importadas: int
+    ja_importadas: int
+    invalidas: int
+    linhas: list[LinhaImportadaResposta]
+
+    @classmethod
+    def de(cls, resultados: list[ResultadoDaLinha], simulacao: bool) -> "ImportacaoResposta":
+        contagem = {situacao: 0 for situacao in SituacaoDaLinha}
+        for resultado in resultados:
+            contagem[resultado.situacao] += 1
+        return cls(
+            simulacao=simulacao,
+            novas=contagem[SituacaoDaLinha.NOVA],
+            importadas=contagem[SituacaoDaLinha.IMPORTADA],
+            ja_importadas=contagem[SituacaoDaLinha.JA_IMPORTADA],
+            invalidas=contagem[SituacaoDaLinha.INVALIDA],
+            linhas=[
+                LinhaImportadaResposta(
+                    linha=resultado.linha,
+                    situacao=resultado.situacao,
+                    data=resultado.data,
+                    descricao=resultado.descricao,
+                    valor_centavos=resultado.valor_centavos,
+                    lancamento_id=resultado.lancamento_id,
+                    erro=resultado.erro,
+                )
+                for resultado in resultados
+            ],
         )
