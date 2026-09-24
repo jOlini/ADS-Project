@@ -1,11 +1,12 @@
 # Documentação da API — Pessoal Finance
 
-API REST de gestão de usuários do Pessoal Finance, com autenticação por JWT e controle de acesso por
-perfil (RBAC).
+API REST do Pessoal Finance. Partes 1 a 5: gestão de usuários do back-office, com autenticação por JWT e
+controle de acesso por perfil (RBAC). Parte 6: livro-caixa do cliente final (contas, categorias e lançamentos),
+acessado com o ID token do Firebase.
 
 | Item | Valor |
 |---|---|
-| Tecnologia | Python 3.13 · FastAPI · PyJWT · bcrypt · MongoDB (pymongo) |
+| Tecnologia | Python 3.13 · FastAPI · PyJWT (HS256 e RS256) · bcrypt · MongoDB (pymongo) |
 | URL base (local) | `http://localhost:8081` |
 | Documentação interativa (OpenAPI) | `http://localhost:8081/docs` |
 | Painel de demonstração (HTML, CSS e JS) | `http://localhost:8081/painel/` |
@@ -359,6 +360,154 @@ sequenceDiagram
 
 ---
 
+## Parte 6 – Livro-caixa do cliente final
+
+O cliente final (área do cliente em React) registra o próprio dinheiro: contas, categorias, receitas, despesas e
+transferências. Ele não tem cadastro na API: entra pelo Firebase Authentication e manda o **ID token do
+Firebase** no cabeçalho `Authorization: Bearer <token>`. A API valida o token e usa o `uid` como identidade.
+
+Código: [`api/app/financeiro/`](api/app/financeiro) e [`api/app/firebase.py`](api/app/firebase.py).
+
+### Endpoints
+
+Todos exigem o ID token do Firebase. Tudo que é do cliente fica sob um **espaço** (o livro-caixa dele).
+
+| Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
+|---|---|---|---|---|
+| `GET` | `/espacos` | Listar meus espaços; no primeiro acesso, cria o espaço pessoal com as categorias iniciais | `200 OK` | `401`, `503` |
+| `GET` | `/espacos/{espaco_id}` | Consultar um espaço | `200 OK` | `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/contas` | Listar contas com o saldo de cada uma | `200 OK` | `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial) | `201 Created` + `Location` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/contas/{conta_id}` | Consultar conta e saldo | `200 OK` | `401`, `404` |
+| `PUT` | `/espacos/{espaco_id}/contas/{conta_id}` | Renomear, trocar o tipo, desativar ou reativar | `200 OK` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/categorias` | Listar categorias | `200 OK` | `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/categorias` | Criar categoria (nome, tipo, cor) | `201 Created` + `Location` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Consultar categoria | `200 OK` | `401`, `404` |
+| `PUT` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Renomear, recolorir, desativar ou reativar | `200 OK` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/lancamentos?de=&ate=&limite=` | Listar lançamentos do mais recente ao mais antigo (período opcional, até 1000) | `200 OK` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência | `201 Created` + `Location` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Consultar lançamento | `200 OK` | `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}/estorno` | Estornar: cria o lançamento inverso, com a data de hoje | `201 Created` + `Location` | `401`, `404`, `409` |
+
+Lançamento não tem `PUT` nem `DELETE` (`405 Method Not Allowed`): o histórico não se reescreve. Um lançamento
+errado é corrigido com **estorno**, e os dois continuam visíveis. Conta e categoria não se excluem: desativadas,
+saem das escolhas de novos lançamentos e mantêm o histórico.
+
+### Dinheiro em centavos e partidas dobradas
+
+- **Valores sempre em centavos inteiros** (`valor_centavos: 21437` = R$ 214,37), nunca `float`: em ponto
+  flutuante, `0.1 + 0.2` não dá `0.3`. A API recusa `214.37`, `"21437"`, `true`, zero e negativos no valor do
+  lançamento (`400`, com a mensagem no campo). O teto é R$ 1 bilhão por valor.
+- **Partidas dobradas:** todo lançamento tem duas partidas que somam zero. Contas e categorias são os dois lados:
+
+  | Lançamento | Partidas |
+  |---|---|
+  | Despesa de R$ 50,00 no Mercado | conta corrente `−5000` · categoria Mercado `+5000` |
+  | Receita de R$ 6.800,00 de Salário | conta corrente `+680000` · categoria Salário `−680000` |
+  | Transferência de R$ 500,00 | conta corrente `−50000` · poupança `+50000` |
+  | Estorno da despesa acima | conta corrente `+5000` · categoria Mercado `−5000` |
+
+- **O saldo não é gravado:** é o saldo inicial da conta mais a soma das partidas dela, calculada pelo MongoDB a
+  cada consulta. Nenhum saldo fica diferente do histórico que o explica.
+- **As partidas são montadas pela API**, a partir de `tipo`, `conta_id`, `categoria_id` e `conta_destino_id`.
+  O cliente não as envia (campo desconhecido é `400`), então a soma zero não depende de quem chama. Antes de
+  gravar, o serviço confere a soma mais uma vez.
+- **Gravação atômica:** cada lançamento é um documento com as partidas embutidas. No MongoDB, gravar um
+  documento é atômico: as duas partidas entram juntas ou nenhuma entra.
+
+Exemplo:
+
+```http
+POST /espacos/6ab54bfb5b2393fd604e53a0/lancamentos
+Authorization: Bearer <ID token do Firebase>
+Content-Type: application/json
+
+{ "tipo": "DESPESA", "descricao": "Supermercado Bom Preço", "data": "2026-09-19",
+  "valor_centavos": 21437, "conta_id": "6ab54c4ff2c9fd0fd74cd090", "categoria_id": "6ab54c4ff2c9fd0fd74cd085" }
+```
+
+```json
+{
+  "id": "6ab54c50f2c9fd0fd74cd093",
+  "tipo": "DESPESA",
+  "descricao": "Supermercado Bom Preço",
+  "data": "2026-09-19",
+  "valor_centavos": 21437,
+  "conta_id": "6ab54c4ff2c9fd0fd74cd090",
+  "categoria_id": "6ab54c4ff2c9fd0fd74cd085",
+  "conta_destino_id": null,
+  "partidas": [
+    { "conta_id": "6ab54c4ff2c9fd0fd74cd090", "categoria_id": null, "valor_centavos": -21437 },
+    { "conta_id": null, "categoria_id": "6ab54c4ff2c9fd0fd74cd085", "valor_centavos": 21437 }
+  ],
+  "estorno_de": null,
+  "estornado_por": null,
+  "criado_em": "2026-09-24T16:14:07.635000Z"
+}
+```
+
+Regras de coerência (resposta `400` com o erro no campo):
+
+| Situação | Campo | Mensagem |
+|---|---|---|
+| Conta inexistente ou de outro espaço | `conta_id` | Conta não encontrada. |
+| Conta desativada | `conta_id` / `conta_destino_id` | Conta desativada: reative-a para lançar nela. |
+| Receita ou despesa sem categoria | `categoria_id` | Campo obrigatório. |
+| Categoria do tipo errado (receita numa despesa) | `categoria_id` | Use uma categoria de despesa. |
+| Transferência sem destino, ou para a mesma conta | `conta_destino_id` | Campo obrigatório. / Escolha uma conta de destino diferente da de origem. |
+| Transferência com categoria, ou receita/despesa com destino | `categoria_id` / `conta_destino_id` | Transferência entre contas não tem categoria. / Só transferência tem conta de destino. |
+| Período invertido na listagem | `ate` | A data final vem antes da inicial. |
+
+Estorno: `409` para um lançamento já estornado ("Este lançamento já foi estornado.") e para o estorno de um
+estorno ("Um estorno não pode ser estornado."). Um índice único no MongoDB garante um estorno por lançamento
+mesmo com duas requisições simultâneas; a listagem mostra `estornado_por` no original.
+
+### Validação do ID token do Firebase
+
+A API é *resource server*: não emite esse token, só confere que o Google o emitiu para o projeto configurado em
+`FIREBASE_PROJECT_ID`. A dependência `cliente_autenticado`
+([`api/app/financeiro/acesso.py`](api/app/financeiro/acesso.py)) recusa com `401`:
+
+- assinatura que não confere com as **chaves públicas do Google** (JWKS, baixadas e guardadas em cache);
+- algoritmo diferente de **RS256** (um token HS256 do back-office, ou `"alg": "none"`, é recusado);
+- `aud` diferente do projeto, `iss` diferente de `https://securetoken.google.com/<projeto>`;
+- token vencido (`exp`), emitido ou autenticado no futuro (`iat`, `auth_time`), com tolerância de 60 segundos
+  de diferença entre os relógios (o Docker Desktop costuma atrasar depois que o computador dorme);
+- `sub` (o `uid`) ausente, vazio ou com mais de 128 caracteres.
+
+Sem `FIREBASE_PROJECT_ID`, ou sem acesso às chaves do Google, a resposta é `503 Service Unavailable`: a falha é
+do servidor, não de quem chamou. O back-office continua funcionando.
+
+**As duas identidades não se misturam:** o JWT do back-office não abre `/espacos` (RS256 exigido) e o ID token
+do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
+
+### Isolamento entre clientes
+
+- **Espaço alheio responde `404`, não `403`:** a dependência `espaco_do_cliente` confere se o `uid` é membro
+  do espaço da URL. Responder `403` confirmaria a quem testa ids que aquele espaço existe (IDOR). Espaço
+  inexistente e espaço de outra pessoa recebem a mesma resposta, "Espaço não encontrado.".
+- **Toda consulta ao banco leva o `espaco_id`:** uma conta, categoria ou lançamento de outro espaço não é
+  encontrado nem pelo id direto. Uma categoria de outra pessoa num lançamento vira "Categoria não encontrada.".
+- **Um espaço pessoal por pessoa:** índice único no MongoDB, mesmo com dois primeiros acessos simultâneos.
+- **Respostas sem cache:** `/espacos` recebe `Cache-Control: no-store`, como `/auth` e `/usuarios`.
+
+### Como testar o livro-caixa
+
+- **Testes automatizados:** `api/tests/test_firebase.py` (validação do ID token), `test_financeiro_regras.py`
+  (partidas, estorno e coerência) e `test_financeiro_api.py` (rotas, isolamento, saldos e estorno). Os ID
+  tokens de teste são assinados por uma chave RSA gerada na hora, no lugar das chaves do Google.
+- **Manual (Swagger):** com `FIREBASE_PROJECT_ID` no `api/.env`, obtenha um ID token de uma conta **de teste**
+  da área do cliente pela API REST do Firebase Authentication (`<VITE_FIREBASE_API_KEY>` do `web/.env`):
+
+  ```bash
+  curl -s "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=<VITE_FIREBASE_API_KEY>" -H "Content-Type: application/json" -d '{"email":"<conta de teste>","password":"<senha>","returnSecureToken":true}'
+  ```
+
+  Copie o `idToken` da resposta (vale 1 hora), clique em **Authorize** no Swagger, cole-o em
+  **IdTokenFirebase** e chame `GET /espacos`.
+
+---
+
 ## Como testar
 
 - **Painel:** `http://localhost:8081/painel/`. Faça login com o administrador inicial (`ADMIN_EMAIL` e
@@ -377,5 +526,5 @@ sequenceDiagram
   ```
 
 - **Testes automatizados:** `cd api` e `pytest -v`, com as dependências do `requirements-dev.txt` instaladas
-  (a suíte usa um repositório em memória e não precisa de MongoDB). Resultado esperado: `57 passed`. Rodam
-  também no GitHub Actions a cada commit de pull request.
+  (a suíte usa repositórios em memória e não precisa de MongoDB nem de rede). Resultado esperado:
+  `121 passed`. Rodam também no GitHub Actions a cada commit de pull request.

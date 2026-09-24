@@ -102,7 +102,7 @@ class CabecalhosDeSeguranca:
     """
 
     ROTAS_DA_DOCUMENTACAO = ("/docs", "/redoc", "/openapi.json")
-    ROTAS_DE_DADOS = ("/auth", "/usuarios")
+    ROTAS_DE_DADOS = ("/auth", "/usuarios", "/espacos")
 
     def __init__(self, app):
         self.app = app

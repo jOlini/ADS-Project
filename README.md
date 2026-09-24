@@ -47,11 +47,12 @@ disciplinas. Cada uma avalia uma parte do mesmo sistema:
 ## Status
 
 Release **0.1 - Identidade e acesso: concluída** (tag `v0.1.0`; a `v0.1.1` traz a interface final).
+Release **0.2 - Lançamentos: em construção** (a API do livro-caixa já está na `main`; as telas vêm a seguir).
 
 | Módulo | Descrição | Estado |
 |---|---|---|
 | Identidade e acesso | Cadastro, login, perfis de acesso e administração de usuários | Concluído |
-| Núcleo financeiro | Receitas e despesas, contas e categorias | Planejado (0.2) |
+| Núcleo financeiro | Receitas, despesas e transferências, contas e categorias | Em construção (0.2): API pronta |
 | Dashboard | Saldo, totais do mês e comparativo receita × despesa | Planejado (0.3) |
 | Comprovantes | Anexo de arquivo ao lançamento | Planejado (0.4) |
 
@@ -82,6 +83,12 @@ pronta. O back-office administrativo autentica contra a própria API, que emite 
 controle de acesso por perfil. Separar as duas identidades evita que uma credencial de cliente
 alcance a área administrativa.
 
+**Livro-caixa do cliente (0.2).** Contas, categorias e lançamentos ficam na API, em `/espacos`. O cliente
+não ganha outra senha: a API aceita o **ID token do Firebase** (validado com as chaves públicas do Google) e
+usa o `uid` como identidade. O token do back-office não abre o livro-caixa, e o do cliente não abre
+`/usuarios`. Os lançamentos seguem partidas dobradas, com valores em centavos inteiros e correção por estorno
+([`DOCS_API.md`, Parte 6](DOCS_API.md#parte-6--livro-caixa-do-cliente-final)).
+
 **Perfis de acesso da API**
 
 | Perfil | Pode |
@@ -97,8 +104,8 @@ alcance a área administrativa.
 | Camada | Tecnologia | Para quê |
 |---|---|---|
 | API | Python 3.13 · FastAPI · Pydantic · Uvicorn | Endpoints REST, validação da entrada e documentação OpenAPI (Swagger) gerada do código |
-| Segurança da API | PyJWT (HS256) · bcrypt | Token de acesso assinado com validade de 30 minutos; senhas guardadas só como hash |
-| Persistência da API | MongoDB 7 (pymongo) | Usuários, com índice único no e-mail |
+| Segurança da API | PyJWT (HS256 e RS256) · cryptography · bcrypt | Token do back-office assinado com validade de 30 minutos; ID token do Firebase conferido com as chaves do Google; senhas guardadas só como hash |
+| Persistência da API | MongoDB 7 (pymongo) | Usuários (índice único no e-mail) e livro-caixa (lançamento e partidas num só documento, gravação atômica) |
 | Painel da API | HTML, CSS e JavaScript puros, servidos pela própria API | Interface de demonstração: login, CRUD e respostas da API na tela |
 | Área do cliente | React 19 · Vite · React Router | SPA com as rotas `/cadastro`, `/login` e `/principal` |
 | Identidade do cliente | Firebase Authentication (e-mail/senha) · Cloud Firestore | Conta do cliente final e dados do perfil, protegidos por regras do Firestore |
@@ -174,6 +181,9 @@ Abra o `api/.env` e troque duas linhas:
 | `JWT_SECRET` | Chave aleatória com pelo menos 32 caracteres. Gere com `python -c "import secrets; print(secrets.token_urlsafe(48))"`. A API não sobe com chave menor |
 | `ADMIN_SENHA` | Senha do administrador inicial, de 8 a 64 caracteres |
 
+Para usar o livro-caixa do cliente (`/espacos`), preencha também `FIREBASE_PROJECT_ID` com o ID do projeto
+Firebase da área do cliente. Sem ele, só essas rotas respondem `503`; o painel e `/usuarios` funcionam.
+
 O administrador inicial (`ADMIN_EMAIL`, padrão `admin@pessoalfinance.com`) é criado na primeira subida, com o
 banco vazio. Os valores do modelo funcionam para uma demonstração rápida, mas são públicos: troque antes de
 qualquer uso real. O `python subir-app.py up` (próxima seção) faz este passo sozinho, com valores aleatórios.
@@ -233,7 +243,7 @@ python subir-app.py up --sem-web   # só API e MongoDB (dispensa o Node.js)
 ```
 
 O script usa só a biblioteca padrão do Python (3.11+) e faz, em ordem: cria o `api/.env` se ele faltar
-(com `JWT_SECRET` e `ADMIN_SENHA` aleatórios), instala as dependências da API no `api/.venv` (nunca no
+(com `JWT_SECRET` e `ADMIN_SENHA` aleatórios e o `FIREBASE_PROJECT_ID` copiado do `web/.env`), instala as dependências da API no `api/.venv` (nunca no
 Python da máquina), roda o `npm ci` do front-end quando o `package-lock.json` muda, abre o Docker Desktop se
 estiver fechado, sobe MongoDB + API no Docker esperando os healthchecks, sobe o Vite em segundo plano e
 imprime os links importantes. Rodar de novo com tudo no ar só confere o estado. Outros comandos:
@@ -289,6 +299,7 @@ na imagem.
 | `JWT_SECRET` | api | Chave de assinatura do token (mínimo 32 bytes) |
 | `JWT_EXPIRATION` | api | Validade do token, em minutos (padrão 30) |
 | `CORS_ORIGENS` | api | Origens de navegador autorizadas, separadas por vírgula (padrão: nenhuma) |
+| `FIREBASE_PROJECT_ID` | api | Projeto Firebase cujos ID tokens abrem o livro-caixa (o mesmo `VITE_FIREBASE_PROJECT_ID`). Vazio: `/espacos` responde `503` |
 | `ADMIN_NOME`, `ADMIN_EMAIL`, `ADMIN_SENHA` | api | Administrador criado na primeira subida, com o banco vazio |
 | `VITE_FIREBASE_*` | web | Configuração pública do app Web do Firebase |
 | `VITE_FIREBASE_EMULADOR` | web | `true` para usar os emuladores locais do Firebase |
@@ -301,7 +312,8 @@ na imagem.
 
 Tudo de uma vez, como o CI: `python subir-app.py testes`. Separadamente:
 
-**API (pytest):** em `api/`. Não precisa de MongoDB nem de Docker: a suíte usa um repositório em memória.
+**API (pytest):** em `api/`. Não precisa de MongoDB, Docker nem rede: a suíte usa repositórios em memória e
+assina os ID tokens do Firebase com uma chave RSA de teste.
 
 ```bash
 python -m venv .venv
@@ -310,7 +322,7 @@ pip install -r requirements-dev.txt
 pytest -v
 ```
 
-Resultado esperado: `57 passed`.
+Resultado esperado: `121 passed`.
 
 **Front-end (Vitest, lint e build):** em `web/`.
 
@@ -329,6 +341,9 @@ observador.
 | API | `api/tests/test_tokens.py` | JWT: payload, expiração, assinatura adulterada, `alg: none`, emissor |
 | API | `api/tests/test_servicos.py` | Regras de negócio: login, e-mail único, senha em hash, escalação de privilégio |
 | API | `api/tests/test_api.py` | Respostas HTTP, matriz completa do RBAC, 401/403/404/409 e cabeçalhos de segurança |
+| API | `api/tests/test_firebase.py` | ID token do Firebase: assinatura, RS256, `aud`, `iss`, datas, `sub`, token do back-office recusado |
+| API | `api/tests/test_financeiro_regras.py` | Partidas dobradas (soma zero), estorno, saldo e coerência dos campos do lançamento |
+| API | `api/tests/test_financeiro_api.py` | Livro-caixa pelo HTTP: identidades separadas, espaço alheio em 404, saldos, valores em centavos e estorno único |
 | Front-end | `web/src/regras/*.test.js` | Validação do cadastro, mensagens de erro do Firebase, datas, valores em reais e resumo do mês |
 | Front-end | `web/src/servicos/contas.test.js` | Cadastro no Firebase com o SDK simulado |
 | Front-end | `web/src/componentes/toast/toasts.test.js` | Regras dos avisos na tela |
@@ -419,7 +434,7 @@ Secrets do repositório: `DISCORD_WEBHOOK` (alertas) e `VITE_FIREBASE_API_KEY`, 
 
 ## API
 
-A documentação completa (endpoints, JWT, RBAC, OAuth 2.0 e análise de segurança) está em
+A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de segurança e livro-caixa) está em
 [`DOCS_API.md`](DOCS_API.md). Resumo:
 
 | Método | Endpoint | Finalidade | Quem pode | Resposta |
@@ -430,6 +445,10 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0 e análise de seguran
 | `POST` | `/usuarios` | Criar usuário | Administrador | `201 Created` |
 | `PUT` | `/usuarios/{id}` | Atualizar usuário | Administrador, Operador | `200 OK` |
 | `DELETE` | `/usuarios/{id}` | Excluir usuário | Administrador | `204 No Content` |
+| `GET` | `/espacos` | Listar os espaços do cliente (cria o pessoal no primeiro acesso) | Cliente (ID token do Firebase) | `200 OK` |
+| `GET`, `POST`, `PUT` | `/espacos/{id}/contas` e `/espacos/{id}/categorias` | Contas (com saldo) e categorias | Membro do espaço | `200 OK` / `201 Created` |
+| `GET`, `POST` | `/espacos/{id}/lancamentos` | Listar e lançar receita, despesa ou transferência | Membro do espaço | `200 OK` / `201 Created` |
+| `POST` | `/espacos/{id}/lancamentos/{id}/estorno` | Estornar lançamento | Membro do espaço | `201 Created` |
 
 ---
 

@@ -7,3 +7,8 @@ email-validator==2.3.0
 pyjwt==2.14.0
 bcrypt==5.0.0
 pymongo==4.18.1
+# RS256 do PyJWT: confere a assinatura do ID token do Firebase (cliente final).
+cryptography==50.0.1
+# Fusos horários no Windows e em imagens sem a base do sistema: "hoje" do
+# livro-caixa é o dia em America/Sao_Paulo, não em UTC.
+tzdata==2026.4

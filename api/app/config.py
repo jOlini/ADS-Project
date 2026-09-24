@@ -25,6 +25,11 @@ class Configuracoes(BaseSettings):
     # (mesma origem) e não precisa de CORS.
     cors_origens: str = ""
 
+    # Projeto do Firebase cujo ID token abre o livro-caixa do cliente final
+    # (o mesmo VITE_FIREBASE_PROJECT_ID do front-end; não é segredo). Vazio =
+    # rotas do cliente respondem 503, e o back-office segue funcionando.
+    firebase_project_id: str = ""
+
     # Primeiro administrador, criado só quando o banco está vazio.
     admin_nome: str = "Administrador"
     admin_email: str = ""
