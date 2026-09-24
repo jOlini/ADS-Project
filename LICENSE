@@ -1,21 +1,50 @@
-MIT License
+Pessoal Finance
+Copyright (c) 2026 João Pedro Olini. Todos os direitos reservados.
 
-Copyright (c) 2026 João Pedro Olini
+LICENÇA DE USO RESTRITO — SOFTWARE PROPRIETÁRIO
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Este repositório, incluindo código-fonte, documentação, interfaces, textos,
+imagens, a marca e o nome "Pessoal Finance" (em conjunto, o "Software"), é obra
+protegida pela Lei nº 9.610/1998 (direitos autorais) e pela Lei nº 9.609/1998
+(programas de computador). O repositório estar público no GitHub não o coloca
+em domínio público nem concede licença de código aberto. Nenhum direito é
+concedido além do que está escrito abaixo.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Permissões
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+   a) Visualizar o código-fonte no GitHub, nos limites dos Termos de Serviço
+      da plataforma.
+   b) Docentes e avaliadores das disciplinas do curso de Análise e
+      Desenvolvimento de Sistemas em que o Software é entregue podem baixar,
+      executar e testar o Software em suas próprias máquinas, exclusivamente
+      para avaliação acadêmica.
+
+2. Proibições
+
+   Sem autorização prévia e por escrito do titular, é proibido:
+
+   a) copiar, reproduzir ou redistribuir o Software, no todo ou em parte;
+   b) modificar, adaptar, traduzir ou criar obras derivadas do Software;
+   c) usar o Software, ou qualquer parte dele, em outro produto, serviço ou
+      trabalho, com ou sem fins comerciais;
+   d) hospedar o Software para terceiros, oferecê-lo como serviço,
+      sublicenciar, vender, alugar, emprestar ou ceder o Software;
+   e) remover ou alterar avisos de autoria, de direitos ou desta licença.
+
+3. Componentes de terceiros
+
+   Bibliotecas, fontes e demais componentes de terceiros usados pelo Software
+   (por exemplo, a fonte Figtree, sob a SIL Open Font License 1.1, e as
+   dependências listadas em api/requirements.txt e web/package.json) continuam
+   regidos por suas próprias licenças. Esta licença não se aplica a eles.
+
+4. Ausência de garantia
+
+   O Software é fornecido "no estado em que se encontra", sem garantia de
+   qualquer tipo. O titular não responde por danos decorrentes do uso do
+   Software, na extensão permitida pela lei.
+
+5. Autorizações e licenciamento
+
+   Pedidos de autorização ou de licença comercial devem ser feitos ao titular
+   pelo perfil https://github.com/jOlini.
