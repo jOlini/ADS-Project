@@ -505,6 +505,9 @@ do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
 
   Copie o `idToken` da resposta (vale 1 hora), clique em **Authorize** no Swagger, cole-o em
   **IdTokenFirebase** e chame `GET /espacos`.
+- **Pela área do cliente:** com `VITE_API_URL` no `web/.env` e `CORS_ORIGENS` no `api/.env`, as telas
+  Lançamentos, Contas e Categorias usam estas rotas com o login do Firebase. Roteiro em
+  [`README.md`, "Teste manual da área do cliente"](README.md#4-teste-manual-da-área-do-cliente).
 
 ---
 
