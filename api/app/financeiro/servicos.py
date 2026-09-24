@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
 from app.erros import ErroConflito, ErroNaoEncontrado, ErroValidacao
-from app.financeiro import regras
+from app.financeiro import importacao, regras
 from app.financeiro.modelos import (
     AtualizacaoCategoria,
     AtualizacaoConta,
@@ -19,11 +19,15 @@ from app.financeiro.modelos import (
     Membro,
     NovaCategoria,
     NovaConta,
+    NovaImportacao,
     NovoLancamento,
     Papel,
+    ResultadoDaLinha,
+    SituacaoDaLinha,
     TipoEspaco,
+    TipoLancamento,
 )
-from app.financeiro.repositorio import EspacoPessoalJaExiste, RepositorioLivroCaixa
+from app.financeiro.repositorio import EspacoPessoalJaExiste, LancamentoJaImportado, RepositorioLivroCaixa
 
 FUSO_PADRAO = "America/Sao_Paulo"
 TAMANHO_MAXIMO_DA_DESCRICAO = 120
@@ -199,6 +203,91 @@ class ServicoLivroCaixa:
             estorno_de=original.id,
         )
         return self._gravar(estorno)
+
+    # --- Importação de extrato ---
+
+    def importar(self, espaco: Espaco, dados: NovaImportacao, uid: str) -> list[ResultadoDaLinha]:
+        """Lança cada linha do extrato na conta escolhida: valor negativo vira
+        despesa, positivo vira receita. Linha já importada antes (mesma chave)
+        é pulada, e linha ilegível volta com o motivo; as outras entram mesmo
+        assim. Com dados.simular, nada é gravado.
+
+        Cada lançamento é gravado sozinho (atômico). Se a importação parar no
+        meio, rodar de novo termina o que faltou, sem duplicar o que entrou.
+        """
+        conta = self.repositorio.buscar_conta(espaco.id, dados.conta_id)
+        despesa = self.repositorio.buscar_categoria(espaco.id, dados.categoria_despesa_id)
+        receita = self.repositorio.buscar_categoria(espaco.id, dados.categoria_receita_id)
+        erros = regras.conferir_importacao(conta, despesa, receita)
+        try:
+            lidas, recusadas = importacao.ler_extrato(dados.csv)
+        except importacao.ExtratoIlegivel as erro:
+            erros["csv"] = str(erro)
+        if erros:
+            raise ErroValidacao(erros)
+
+        chaves = importacao.chaves_de_importacao(conta.id, lidas)
+        ja_importadas = self.repositorio.chaves_importadas(espaco.id, chaves)
+        resultados = [ResultadoDaLinha(r.linha, SituacaoDaLinha.INVALIDA, erro=r.erro) for r in recusadas]
+        for linha, chave in zip(lidas, chaves, strict=True):
+            situacao, lancamento_id = self._importar_linha(
+                espaco, linha, chave, chave in ja_importadas, dados, uid
+            )
+            resultados.append(
+                ResultadoDaLinha(
+                    linha.linha,
+                    situacao,
+                    data=linha.data,
+                    descricao=linha.descricao,
+                    valor_centavos=linha.valor_centavos,
+                    lancamento_id=lancamento_id,
+                )
+            )
+        return sorted(resultados, key=lambda resultado: resultado.linha)
+
+    def _importar_linha(
+        self,
+        espaco: Espaco,
+        linha: importacao.LinhaDoExtrato,
+        chave: str,
+        ja_importada: bool,
+        dados: NovaImportacao,
+        uid: str,
+    ) -> tuple[SituacaoDaLinha, str | None]:
+        if ja_importada:
+            return SituacaoDaLinha.JA_IMPORTADA, None
+        if dados.simular:
+            return SituacaoDaLinha.NOVA, None
+
+        receita = linha.valor_centavos > 0
+        # Validado como um lançamento digitado: o que vem do arquivo passa
+        # pelos mesmos limites de descrição, data e valor.
+        novo = NovoLancamento(
+            tipo=TipoLancamento.RECEITA if receita else TipoLancamento.DESPESA,
+            descricao=linha.descricao,
+            data=linha.data,
+            valor_centavos=abs(linha.valor_centavos),
+            conta_id=dados.conta_id,
+            categoria_id=dados.categoria_receita_id if receita else dados.categoria_despesa_id,
+        )
+        lancamento = Lancamento(
+            espaco_id=espaco.id,
+            tipo=novo.tipo,
+            descricao=novo.descricao,
+            data=novo.data,
+            valor_centavos=novo.valor_centavos,
+            conta_id=novo.conta_id,
+            categoria_id=novo.categoria_id,
+            partidas=regras.montar_partidas(novo),
+            criado_em=agora(),
+            criado_por=uid,
+            chave_importacao=chave,
+        )
+        try:
+            return SituacaoDaLinha.IMPORTADA, self._gravar(lancamento).id
+        except LancamentoJaImportado:
+            # Outra importação do mesmo arquivo gravou esta linha agora há pouco.
+            return SituacaoDaLinha.JA_IMPORTADA, None
 
     def _gravar(self, lancamento: Lancamento) -> Lancamento:
         # Última barreira antes do banco: nenhum caminho grava lançamento

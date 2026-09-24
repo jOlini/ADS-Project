@@ -39,6 +39,11 @@ class EspacoPessoalJaExiste(Exception):
     """Duas requisições tentaram criar o mesmo espaço pessoal ao mesmo tempo."""
 
 
+class LancamentoJaImportado(Exception):
+    """A linha do extrato já virou lançamento neste espaço (mesma chave de
+    importação), por exemplo em duas importações simultâneas do mesmo arquivo."""
+
+
 class RepositorioLivroCaixa(Protocol):
     def buscar_espaco(self, id: str) -> Espaco | None: ...
 
@@ -72,6 +77,8 @@ class RepositorioLivroCaixa(Protocol):
 
     def buscar_estornos(self, espaco_id: str, ids: list[str]) -> dict[str, str]: ...
 
+    def chaves_importadas(self, espaco_id: str, chaves: list[str]) -> set[str]: ...
+
     def somar_partidas_por_conta(self, espaco_id: str) -> dict[str, int]: ...
 
 
@@ -99,6 +106,13 @@ class LivroCaixaMongo:
         # a mensagem; o índice é a garantia contra dois estornos simultâneos.
         self._lancamentos.create_index(
             "estorno_de", unique=True, partialFilterExpression={"estorno_de": {"$type": "string"}}
+        )
+        # Uma linha de extrato vira no máximo um lançamento por espaço. O serviço
+        # pula as chaves conhecidas; o índice segura duas importações ao mesmo tempo.
+        self._lancamentos.create_index(
+            [("espaco_id", ASCENDING), ("chave_importacao", ASCENDING)],
+            unique=True,
+            partialFilterExpression={"chave_importacao": {"$type": "string"}},
         )
 
     # --- Espaços ---
@@ -220,9 +234,14 @@ class LivroCaixaMongo:
         }
         if lancamento.estorno_de:
             documento["estorno_de"] = lancamento.estorno_de
+        if lancamento.chave_importacao:
+            documento["chave_importacao"] = lancamento.chave_importacao
         try:
             lancamento.id = str(self._lancamentos.insert_one(documento).inserted_id)
         except DuplicateKeyError as erro:
+            # Dois índices únicos na coleção: o keyPattern diz qual barrou.
+            if "chave_importacao" in (erro.details or {}).get("keyPattern", {}):
+                raise LancamentoJaImportado() from erro
             raise ErroConflito(MENSAGEM_JA_ESTORNADO) from erro
         return lancamento
 
@@ -232,6 +251,13 @@ class LivroCaixaMongo:
             {"espaco_id": espaco_id, "estorno_de": {"$in": ids}}, {"_id": 1, "estorno_de": 1}
         )
         return {documento["estorno_de"]: str(documento["_id"]) for documento in documentos}
+
+    def chaves_importadas(self, espaco_id: str, chaves: list[str]) -> set[str]:
+        """As chaves pedidas que já viraram lançamento neste espaço."""
+        documentos = self._lancamentos.find(
+            {"espaco_id": espaco_id, "chave_importacao": {"$in": chaves}}, {"_id": 0, "chave_importacao": 1}
+        )
+        return {documento["chave_importacao"] for documento in documentos}
 
     def somar_partidas_por_conta(self, espaco_id: str) -> dict[str, int]:
         """{id da conta: soma das partidas}. O banco soma inteiros de 64 bits,
@@ -327,4 +353,5 @@ def _para_lancamento(documento: dict) -> Lancamento:
         criado_em=documento["criado_em"],
         criado_por=documento["criado_por"],
         estorno_de=documento.get("estorno_de"),
+        chave_importacao=documento.get("chave_importacao"),
     )
