@@ -310,6 +310,10 @@ def criar_env_da_api() -> bool:
     texto = MODELO_ENV_API.read_text(encoding="utf-8")
     texto = re.sub(r"(?m)^JWT_SECRET=.*$", f"JWT_SECRET={secrets.token_urlsafe(48)}", texto)
     texto = re.sub(r"(?m)^ADMIN_SENHA=.*$", f"ADMIN_SENHA={secrets.token_urlsafe(12)}", texto)
+    # O livro-caixa aceita o ID token do mesmo projeto Firebase da área do cliente.
+    projeto = ler_env(ENV_WEB).get("VITE_FIREBASE_PROJECT_ID", "") if ENV_WEB.is_file() else ""
+    if projeto:
+        texto = re.sub(r"(?m)^FIREBASE_PROJECT_ID=.*$", f"FIREBASE_PROJECT_ID={projeto}", texto)
     ENV_API.write_text(texto, encoding="utf-8", newline="\n")
     ok("api/.env criado a partir do api/.env.example, com JWT_SECRET e ADMIN_SENHA aleatórios.")
     passo("A senha do administrador inicial está na chave ADMIN_SENHA do api/.env.")
@@ -333,6 +337,14 @@ def garantir_configuracao() -> bool:
         aviso("JWT_SECRET no api/.env ainda é o texto do exemplo. Troque por uma chave aleatória.")
     if env_api.get("ADMIN_SENHA") == "troque-esta-senha":
         aviso("ADMIN_SENHA no api/.env ainda é o texto do exemplo. Troque antes de gravar evidências.")
+
+    # Projeto diferente do web/.env faz a API recusar todo login do cliente (401).
+    projeto_api = env_api.get("FIREBASE_PROJECT_ID", "")
+    projeto_web = ler_env(ENV_WEB).get("VITE_FIREBASE_PROJECT_ID", "") if ENV_WEB.is_file() else ""
+    if not projeto_api:
+        aviso("FIREBASE_PROJECT_ID vazio no api/.env: o livro-caixa (/espacos) responde 503.")
+    elif projeto_web and projeto_api != projeto_web:
+        aviso(f"FIREBASE_PROJECT_ID ({projeto_api}) difere do VITE_FIREBASE_PROJECT_ID ({projeto_web}) do web/.env.")
 
     if not ENV_WEB.is_file():
         aviso("web/.env não encontrado: a área do cliente abre com o aviso 'Firebase não configurado'.")
