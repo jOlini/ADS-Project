@@ -50,6 +50,21 @@ const TRACOS = {
   olhoFechado: <path d="M3 3l18 18M10.6 6.2A9.6 9.6 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.3 4M6.3 8.3A17 17 0 0 0 2 12s3.6 7 10 7c1.5 0 2.8-.3 4-.8M9.9 9.9a3 3 0 0 0 4.2 4.2" />,
   sair: <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3M16 16l4-4-4-4M20 12H10" />,
   seta: <path d="m6 9 6 6 6-6" />,
+  anterior: <path d="m15 18-6-6 6-6" />,
+  proximo: <path d="m9 18 6-6-6-6" />,
+  mais: <path d="M12 5v14M5 12h14" />,
+  editar: (
+    <>
+      <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z" />
+      <path d="m13.5 6.5 4 4" />
+    </>
+  ),
+  estornar: (
+    <>
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+    </>
+  ),
   alerta: (
     <>
       <circle cx="12" cy="12" r="9" />

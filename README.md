@@ -30,7 +30,7 @@ precisa saber quem é o usuário e o que ele pode fazer. A versão 0.1 entrega e
 - um **painel web de demonstração** da API (login, listagem, cadastro, edição, exclusão e as respostas da API
   na tela), feito para que qualquer pessoa veja e teste as regras de autenticação e autorização;
 - uma **área do cliente** em React (cadastro, login e página principal) com Firebase Authentication e Cloud
-  Firestore, publicada no GitHub Pages;
+  Firestore, publicada no GitHub Pages; na 0.2, com a API local, ela ganha lançamentos, contas e categorias;
 - **testes automatizados** que rodam a cada commit de pull request, com **CI/CD** e alertas no Discord.
 
 **Objetivo acadêmico.** Projeto do curso de Análise e Desenvolvimento de Sistemas, compartilhado entre três
@@ -47,12 +47,13 @@ disciplinas. Cada uma avalia uma parte do mesmo sistema:
 ## Status
 
 Release **0.1 - Identidade e acesso: concluída** (tag `v0.1.0`; a `v0.1.1` traz a interface final).
-Release **0.2 - Lançamentos: em construção** (a API do livro-caixa já está na `main`; as telas vêm a seguir).
+Release **0.2 - Lançamentos: em construção** (API do livro-caixa e telas de lançamentos, contas e categorias na
+`main`; a importação de extrato vem a seguir).
 
 | Módulo | Descrição | Estado |
 |---|---|---|
 | Identidade e acesso | Cadastro, login, perfis de acesso e administração de usuários | Concluído |
-| Núcleo financeiro | Receitas, despesas e transferências, contas e categorias | Em construção (0.2): API pronta |
+| Núcleo financeiro | Receitas, despesas e transferências, contas e categorias | Em construção (0.2): API e telas prontas |
 | Dashboard | Saldo, totais do mês e comparativo receita × despesa | Planejado (0.3) |
 | Comprovantes | Anexo de arquivo ao lançamento | Planejado (0.4) |
 
@@ -65,13 +66,15 @@ Release **0.2 - Lançamentos: em construção** (a API do livro-caixa já está 
 │  web/  — SPA React               │      │  api/painel/ — HTML, CSS e JS    │
 │  Área do cliente:                │      │  Back-office: login, listagem,   │
 │  /cadastro · /login · /principal │      │  cadastro, edição e exclusão     │
-└────────────────┬─────────────────┘      └────────────────┬─────────────────┘
-                 │ SDK Firebase                            │ HTTPS + JSON + JWT
-┌────────────────▼─────────────────┐      ┌────────────────▼─────────────────┐
+│  /lancamentos /contas /categorias│      │                                  │
+└───────┬──────────────────┬───────┘      └────────────────┬─────────────────┘
+        │ SDK Firebase     │ HTTPS + ID token              │ HTTPS + JWT
+        │                  └─────────────────┐             │
+┌───────▼──────────────────────────┐      ┌──▼─────────────▼─────────────────┐
 │  Firebase                        │      │  api/  — REST FastAPI (Python)   │
-│  Authentication (e-mail/senha)   │      │  CRUD de usuários · JWT · RBAC   │
-│  Cloud Firestore                 │      └────────────────┬─────────────────┘
-└──────────────────────────────────┘                       │
+│  Authentication (e-mail/senha)   │      │  Usuários · JWT · RBAC           │
+│  Cloud Firestore                 │      │  Livro-caixa (/espacos)          │
+└──────────────────────────────────┘      └────────────────┬─────────────────┘
                                           ┌────────────────▼─────────────────┐
                                           │  MongoDB                         │
                                           └──────────────────────────────────┘
@@ -197,9 +200,12 @@ Só para rodar o React na própria máquina. Para apenas usar a área do cliente
 1. Copie `web/.env.example` para `web/.env` e preencha com a configuração do app Web do projeto Firebase
    (Console do Firebase › Configurações do projeto › Seus apps). O projeto precisa ter Authentication (provedor
    e-mail/senha) e Cloud Firestore habilitados.
-2. Publique as regras de [`web/firestore.rules`](web/firestore.rules) em Firestore Database › Regras (ou
+2. Para as telas do livro-caixa (lançamentos, contas e categorias), acrescente `VITE_API_URL=http://localhost:8081`
+   ao `web/.env` e confira, no `api/.env`, o `FIREBASE_PROJECT_ID` (o mesmo `VITE_FIREBASE_PROJECT_ID`) e o
+   `CORS_ORIGENS` com `http://localhost:5173`. Sem `VITE_API_URL`, o app funciona como a versão publicada.
+3. Publique as regras de [`web/firestore.rules`](web/firestore.rules) em Firestore Database › Regras (ou
    `npx firebase-tools deploy --only firestore:rules --project <id>` dentro de `web/`).
-3. Instale as dependências:
+4. Instale as dependências:
 
    ```bash
    cd web
@@ -298,11 +304,12 @@ na imagem.
 | `MONGODB_URI` | api | String de conexão do MongoDB (no Docker Compose, aponta para o container) |
 | `JWT_SECRET` | api | Chave de assinatura do token (mínimo 32 bytes) |
 | `JWT_EXPIRATION` | api | Validade do token, em minutos (padrão 30) |
-| `CORS_ORIGENS` | api | Origens de navegador autorizadas, separadas por vírgula (padrão: nenhuma) |
+| `CORS_ORIGENS` | api | Origens de navegador autorizadas, separadas por vírgula (sem a variável: nenhuma; o `.env.example` libera a área do cliente local, portas 5173 e 8080) |
 | `FIREBASE_PROJECT_ID` | api | Projeto Firebase cujos ID tokens abrem o livro-caixa (o mesmo `VITE_FIREBASE_PROJECT_ID`). Vazio: `/espacos` responde `503` |
 | `ADMIN_NOME`, `ADMIN_EMAIL`, `ADMIN_SENHA` | api | Administrador criado na primeira subida, com o banco vazio |
 | `VITE_FIREBASE_*` | web | Configuração pública do app Web do Firebase |
 | `VITE_FIREBASE_EMULADOR` | web | `true` para usar os emuladores locais do Firebase |
+| `VITE_API_URL` | web | Endereço da API (ex.: `http://localhost:8081`). Vazio: telas do livro-caixa desligadas, como no GitHub Pages |
 
 ---
 
@@ -333,7 +340,7 @@ npm run lint
 npm run build
 ```
 
-Resultado esperado: `Test Files 7 passed (7)` e `Tests 46 passed (46)`. Sem o `--run`, o Vitest fica em modo
+Resultado esperado: `Test Files 9 passed (9)` e `Tests 95 passed (95)`. Sem o `--run`, o Vitest fica em modo
 observador.
 
 | Suíte | Arquivo | O que cobre |
@@ -344,8 +351,9 @@ observador.
 | API | `api/tests/test_firebase.py` | ID token do Firebase: assinatura, RS256, `aud`, `iss`, datas, `sub`, token do back-office recusado |
 | API | `api/tests/test_financeiro_regras.py` | Partidas dobradas (soma zero), estorno, saldo e coerência dos campos do lançamento |
 | API | `api/tests/test_financeiro_api.py` | Livro-caixa pelo HTTP: identidades separadas, espaço alheio em 404, saldos, valores em centavos e estorno único |
-| Front-end | `web/src/regras/*.test.js` | Validação do cadastro, mensagens de erro do Firebase, datas, valores em reais e resumo do mês |
+| Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro, datas, dinheiro em centavos, extrato e resumo do mês (com estorno e transferência) |
 | Front-end | `web/src/servicos/contas.test.js` | Cadastro no Firebase com o SDK simulado |
+| Front-end | `web/src/servicos/livroCaixa.test.js` | Chamadas à API com o ID token, erros em Problem Details e API fora do ar |
 | Front-end | `web/src/componentes/toast/toasts.test.js` | Regras dos avisos na tela |
 
 Os mesmos testes rodam no GitHub Actions a cada commit de pull request e a cada push na `main`
@@ -413,6 +421,20 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
 2. Em `/login`, entre com ela: `/principal` mostra nome, sobrenome e data de nascimento lidos do Firestore.
 3. Um e-mail não cadastrado ou senha errada mostram "Usuário não cadastrado ou senha incorreta.".
 4. Depois de **Sair**, abrir `/principal` direto volta para o login: a página exige sessão.
+
+**Livro-caixa (só local, com a API no ar).** Com `VITE_API_URL=http://localhost:8081` no `web/.env`,
+`FIREBASE_PROJECT_ID` e `CORS_ORIGENS` no `api/.env` e a API rodando:
+
+1. Em **Contas**, crie "Conta corrente" com saldo de hoje `1.000,00` e "Poupança" com `0`.
+2. Em **Lançamentos**, lance uma receita (`Salário`, `3.000,00`), uma despesa (`Mercado`, `214,37`) e uma
+   transferência de `500,00` da conta corrente para a poupança. O extrato mostra cada dia com o saldo de
+   todas as contas; a transferência não muda o total.
+3. **Estorne** a despesa: entra um lançamento de `+ R$ 214,37` com a data de hoje, o original fica riscado com a
+   etiqueta "Estornado" e as saídas do mês voltam a zero. O botão some das duas linhas: um lançamento só é
+   estornado uma vez.
+4. O **Resumo** mostra o saldo em contas (`R$ 3.785,63` antes do estorno), as entradas, as saídas e o extrato do
+   mês. Em **Categorias**, crie, renomeie ou desative uma categoria: desativada, ela sai do formulário de
+   lançamento.
 
 ---
 

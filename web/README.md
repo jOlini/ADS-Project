@@ -4,6 +4,10 @@ Aplicação React com três páginas (Cadastro, Login e Principal), rotas com Re
 separado, contas no Firebase Authentication (provedor e-mail/senha) e dados pessoais no Cloud Firestore.
 Entrega da **Atividade Somativa 2 de Tecnologias para Desenvolvimento Web**.
 
+Com a API do projeto ligada (`VITE_API_URL` no `.env`), o app ganha também as telas do livro-caixa:
+**Lançamentos**, **Contas** e **Categorias**. Sem ela, como na versão publicada, essas telas ficam desligadas
+e a Principal mostra os dados de exemplo.
+
 | | |
 |---|---|
 | **Versão publicada (nuvem)** | https://jolini.github.io/ADS-Project/ |
@@ -49,6 +53,9 @@ Se a porta 5173 estiver ocupada, o Vite usa a próxima livre e mostra o endereç
 Esses valores vão para o bundle do navegador, ou seja, são públicos por natureza. Quem protege os dados são
 as regras do Firestore ([`firestore.rules`](firestore.rules)).
 
+`VITE_API_URL` é opcional: com o endereço da API (ex.: `http://localhost:8081`, ver o `README.md` da raiz do
+repositório), as telas do livro-caixa passam a funcionar com o login do Firebase.
+
 ---
 
 ## Como testar
@@ -62,7 +69,7 @@ as regras do Firestore ([`firestore.rules`](firestore.rules)).
    nascimento lidos do Firestore.
 4. Clique em **Sair** e abra `/principal` direto na barra de endereço: sem sessão, o app volta para o login.
 
-Testes automatizados (Vitest): `npm test -- --run` (resultado esperado: `Tests 46 passed (46)`).
+Testes automatizados (Vitest): `npm test -- --run` (resultado esperado: `Tests 95 passed (95)`).
 
 ---
 
@@ -75,7 +82,10 @@ envolve o app com o `BrowserRouter`.
 |---|---|---|
 | `/cadastro` | Cadastro (5 campos e o botão Criar conta) | Público |
 | `/login` | Login (e-mail, senha e o botão Entrar) | Público |
-| `/principal` | Principal (nome, sobrenome e data de nascimento) | Só com sessão; sem sessão volta ao login |
+| `/principal` | Principal (nome, sobrenome e data de nascimento; saldo e extrato com a API) | Só com sessão; sem sessão volta ao login |
+| `/lancamentos` | Extrato do mês, novo lançamento e estorno | Só com sessão; precisa da API |
+| `/contas` | Contas com saldo, criar e editar | Só com sessão; precisa da API |
+| `/categorias` | Categorias de despesa e receita, criar e editar | Só com sessão; precisa da API |
 | `/` e qualquer outro | Redireciona para `/login` | — |
 
 ## Estrutura
@@ -85,9 +95,10 @@ src/
   routes.jsx            arquivo de rotas (React Router Dom)
   main.jsx              BrowserRouter e provedor de avisos
   firebase.js           inicialização do Firebase (Authentication e Firestore)
-  paginas/              Cadastro.jsx, Login.jsx e Principal.jsx
+  paginas/              Cadastro, Login, Principal, Lancamentos, Contas e Categorias
   servicos/contas.js    cadastro, login, sessão e leitura dos dados no Firebase
-  regras/               regras puras e testadas (validação, mensagens de erro, datas)
+  servicos/livroCaixa.js chamadas à API do livro-caixa com o ID token do Firebase
+  regras/               regras puras e testadas (validação, dinheiro em centavos, extrato, datas)
   componentes/          layout, campos, ícones e avisos (toasts)
 firestore.rules         regras de segurança do Firestore
 iniciar.bat, iniciar.sh atalhos de avaliação

@@ -32,8 +32,11 @@
 
   --positivo: #0f7a4f;
   --erro: #b3261e;
+  --sobre-erro: #fdfcfb;
   --aviso: #92590b;
   --info: #2a6b8f;
+  /* Véu atrás do diálogo de confirmação. */
+  --veu: rgb(20 32 28 / 0.45);
 
   /* Cores de categoria: enfeite de leitura, sempre com o nome ao lado. */
   --cat-moradia: #3d5a80;
@@ -82,8 +85,10 @@
 
     --positivo: #4fd49a;
     --erro: #f2877c;
+    --sobre-erro: #12100f;
     --aviso: #f0b45a;
     --info: #8bbdd8;
+    --veu: rgb(0 0 0 / 0.6);
 
     --cat-moradia: #7fa6d6;
     --cat-mercado: #4fd49a;
@@ -1093,7 +1098,8 @@ form {
   font-weight: 600;
 }
 
-.campo input {
+.campo input,
+.campo select {
   width: 100%;
   min-width: 0;
   height: 46px;
@@ -1137,22 +1143,44 @@ form {
   }
 }
 
-.campo input:hover {
+.campo input:hover,
+.campo select:hover {
   border-color: var(--suave);
 }
 
-.campo input:focus-visible {
+.campo input:focus-visible,
+.campo select:focus-visible {
   outline: none;
   border-color: var(--marca);
   box-shadow: 0 0 0 3px var(--marca-suave);
 }
 
-.campo input[aria-invalid='true'] {
+.campo input[aria-invalid='true'],
+.campo select[aria-invalid='true'] {
   border-color: var(--erro);
 }
 
-.campo input[aria-invalid='true']:focus-visible {
+.campo input[aria-invalid='true']:focus-visible,
+.campo select[aria-invalid='true']:focus-visible {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--erro) 18%, transparent);
+}
+
+/* A seta do <select> é desenhada aqui, no mesmo traço dos ícones, igual ao
+   painel; a lista aberta segue o tema, inclusive no escuro. */
+.campo select {
+  appearance: none;
+  padding-right: 40px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 20px) calc(50% + 2px), calc(100% - 14px) calc(50% + 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.campo select option {
+  background: var(--superficie);
+  color: var(--texto);
 }
 
 .dica-do-campo {
@@ -1245,6 +1273,275 @@ button.discreto-botao:hover:not(:disabled) {
 
 button.largo {
   width: 100%;
+}
+
+/* Link com cara de botão principal: navegar é link, mesmo quando é a ação
+   principal do card ("Cadastrar conta", "Novo lançamento"). */
+a.botao {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--raio);
+  background: var(--marca);
+  color: var(--sobre-marca);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color var(--transicao);
+}
+
+a.botao:hover {
+  background: var(--marca-forte);
+}
+
+/* ------------------------------------------------------------ Livro-caixa */
+
+.navegacao-do-mes {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.navegacao-do-mes .mes {
+  min-width: 11.5rem;
+  justify-content: center;
+}
+
+.totais-do-mes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding: 0 20px 12px;
+  color: var(--suave);
+  font-size: 0.8125rem;
+}
+
+.totais-do-mes b {
+  margin-left: 4px;
+  color: var(--texto);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.totais-do-mes b.entrada {
+  color: var(--positivo);
+}
+
+/* Linha do extrato com uma ação no fim (Estornar). */
+.lancamento.com-acoes {
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
+}
+
+.acao-da-linha {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 36px;
+}
+
+/* O original estornado continua visível, riscado: o histórico não some. */
+.lancamento.estornado .valor {
+  color: var(--suave);
+  text-decoration: line-through;
+}
+
+.etiqueta {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 8px;
+  border: 1px solid var(--linha-forte);
+  border-radius: 99px;
+  color: var(--suave);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.6;
+  vertical-align: 1px;
+}
+
+/* Abas que ocupam a largura toda (tipo do lançamento no formulário). */
+.abas.largas button {
+  flex: 1;
+  min-height: 36px;
+}
+
+/* Listas de contas e categorias: a mesma linha do extrato, com o botão
+   de editar no lugar do valor quando não há valor. */
+.cartao.lista {
+  overflow: hidden;
+}
+
+.cartao.lista > .cabecalho-do-painel {
+  margin: 0;
+  padding: 16px 20px 12px;
+}
+
+.itens {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 20px;
+}
+
+.itens .item + .item {
+  border-top: 1px solid var(--linha);
+}
+
+p.item {
+  display: block;
+}
+
+.item[aria-current='true'] {
+  background: color-mix(in srgb, var(--marca-suave) 55%, transparent);
+}
+
+.item .descricao {
+  min-width: 0;
+}
+
+.item .descricao b {
+  display: block;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item .descricao small {
+  display: block;
+  color: var(--suave);
+  font-size: 0.8125rem;
+}
+
+.item .valor {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.item .valor.negativo {
+  color: var(--erro);
+}
+
+.item.desativado .descricao b,
+.item.desativado .valor {
+  color: var(--suave);
+}
+
+/* Lista de categorias sem coluna de valor. */
+.item:has(> .descricao + button) {
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+}
+
+.acoes-do-formulario {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.acoes-do-formulario button[type='submit'] {
+  flex: 1;
+}
+
+.caixa-de-marcar {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.caixa-de-marcar input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+}
+
+.caixa-de-marcar b {
+  display: block;
+  font-size: 0.875rem;
+}
+
+.caixa-de-marcar small {
+  display: block;
+  color: var(--suave);
+  font-size: 0.8125rem;
+}
+
+.campo-com-amostra {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.amostra-de-cor {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--raio);
+  border: 1px solid var(--linha);
+}
+
+.vazio.compacto {
+  padding: 0;
+}
+
+/* Diálogo de confirmação, igual ao do painel. */
+.dialogo {
+  width: min(460px, 100vw - 32px);
+  padding: 24px;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 0;
+  border-radius: var(--raio-grande);
+  box-shadow: var(--sombra-flutuante);
+}
+
+.dialogo::backdrop {
+  background: var(--veu);
+}
+
+.dialogo form {
+  gap: 12px;
+}
+
+.dialogo h2 {
+  font-size: 1.1875rem;
+  overflow-wrap: anywhere;
+}
+
+.dialogo .acoes {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+@media (max-width: 1080px) {
+  /* No celular o formulário vem antes da lista: é o que se usa na hora. */
+  .pagina-de-lancamentos .lado,
+  .pagina-de-cadastro .lado {
+    order: -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .rotulo-da-acao {
+    display: none;
+  }
+
+  .lancamento.com-acoes {
+    gap: 8px;
+    padding-right: 12px;
+  }
 }
 
 /* ------------------------------------------------------------ Mensagens */

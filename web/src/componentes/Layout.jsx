@@ -3,25 +3,35 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import Icone from './Icone';
 import { useToast } from './toast/useToast';
 import { firebaseConfigurado } from '../firebase';
+import { mensagemDeErro } from '../regras/erros';
 import { buscarDadosPessoais, observarSessao, sair } from '../servicos/contas';
+import { apiConfigurada, espacoPessoal } from '../servicos/livroCaixa';
 
-// Itens que só existem a partir da release 0.2: aparecem desligados, com a
-// versão ao lado, para a pessoa saber o que vem — e não clicar em nada morto.
+// Telas do livro-caixa. Sem a API (versão publicada no Pages), aparecem
+// desligadas, com a versão ao lado, como antes.
+const ITENS_DO_LIVRO_CAIXA = [
+  { para: '/lancamentos', icone: 'lancamentos', rotulo: 'Lançamentos' },
+  { para: '/contas', icone: 'contas', rotulo: 'Contas' },
+  { para: '/categorias', icone: 'categorias', rotulo: 'Categorias' },
+];
 const ITENS_FUTUROS = [
-  { icone: 'lancamentos', rotulo: 'Lançamentos', versao: '0.2' },
-  { icone: 'contas', rotulo: 'Contas', versao: '0.2' },
-  { icone: 'categorias', rotulo: 'Categorias', versao: '0.2' },
+  ...(apiConfigurada ? [] : ITENS_DO_LIVRO_CAIXA.map((item) => ({ ...item, versao: '0.2' }))),
   { icone: 'relatorios', rotulo: 'Relatórios', versao: '0.3' },
 ];
 
+const CARREGANDO = { carregando: true, dados: null, erro: '' };
+
 // Moldura das rotas. Com sessão, o app ganha a barra lateral; sem sessão, a
 // página de acesso ocupa a tela inteira (cada página desenha a sua vitrine).
+// A sessão, os dados pessoais (Firestore) e o espaço do livro-caixa (API)
+// são buscados aqui uma vez e chegam às páginas pelo contexto da rota.
 export default function Layout() {
   const navigate = useNavigate();
   const toast = useToast();
   // undefined enquanto o Firebase ainda não disse se há sessão.
   const [usuario, setUsuario] = useState(firebaseConfigurado ? undefined : null);
-  const [pessoa, setPessoa] = useState(null);
+  const [pessoa, setPessoa] = useState(CARREGANDO);
+  const [espaco, setEspaco] = useState(CARREGANDO);
 
   useEffect(() => {
     if (!firebaseConfigurado) {
@@ -30,14 +40,20 @@ export default function Layout() {
     return observarSessao(async (atual) => {
       setUsuario(atual);
       if (!atual) {
-        setPessoa(null);
+        setPessoa(CARREGANDO);
+        setEspaco(CARREGANDO);
         return;
       }
-      try {
-        // O nome do espaço vem do cadastro; sem ele, o e-mail assume.
-        setPessoa(await buscarDadosPessoais(atual.uid));
-      } catch {
-        setPessoa(null);
+      buscarDadosPessoais(atual.uid).then(
+        (dados) =>
+          setPessoa({ carregando: false, dados, erro: dados ? '' : 'Não há dados pessoais gravados para esta conta.' }),
+        (erro) => setPessoa({ carregando: false, dados: null, erro: mensagemDeErro(erro.code) }),
+      );
+      if (apiConfigurada) {
+        espacoPessoal().then(
+          (dados) => setEspaco({ carregando: false, dados, erro: '' }),
+          (erro) => setEspaco({ carregando: false, dados: null, erro: erro.message }),
+        );
       }
     });
   }, []);
@@ -48,13 +64,16 @@ export default function Layout() {
     navigate('/login', { replace: true });
   }
 
+  const contexto = { usuario, pessoa, espaco };
+
   if (!usuario) {
-    return <Outlet />;
+    return <Outlet context={contexto} />;
   }
 
-  const nomeDoEspaco = pessoa ? `${pessoa.nome} ${pessoa.sobrenome}`.trim() : (usuario.email ?? '');
-  const iniciais = pessoa
-    ? `${pessoa.nome[0] ?? ''}${pessoa.sobrenome[0] ?? ''}`.toUpperCase()
+  const dados = pessoa.dados;
+  const nomeDoEspaco = dados ? `${dados.nome} ${dados.sobrenome}`.trim() : (usuario.email ?? '');
+  const iniciais = dados
+    ? `${dados.nome[0] ?? ''}${dados.sobrenome[0] ?? ''}`.toUpperCase()
     : (usuario.email ?? '').slice(0, 2).toUpperCase();
 
   return (
@@ -80,6 +99,13 @@ export default function Layout() {
             <Icone nome="resumo" />
             <span className="rotulo-do-item">Resumo</span>
           </NavLink>
+          {apiConfigurada &&
+            ITENS_DO_LIVRO_CAIXA.map((item) => (
+              <NavLink key={item.para} to={item.para}>
+                <Icone nome={item.icone} />
+                <span className="rotulo-do-item">{item.rotulo}</span>
+              </NavLink>
+            ))}
           {ITENS_FUTUROS.map((item) => (
             <span key={item.rotulo} className="futuro-item" aria-disabled="true">
               <Icone nome={item.icone} />
@@ -110,7 +136,7 @@ export default function Layout() {
       </aside>
 
       <main className="area">
-        <Outlet />
+        <Outlet context={contexto} />
       </main>
     </div>
   );

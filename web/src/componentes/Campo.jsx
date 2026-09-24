@@ -1,9 +1,11 @@
 import { useId } from 'react';
 
-// Rótulo + input + dica + mensagem de erro, ligados por id para leitores de
+// Rótulo + controle + dica + mensagem de erro, ligados por id para leitores de
 // tela. A dica (ex.: regra da senha) aparece antes do erro, para a pessoa
-// acertar de primeira. As demais props vão direto para o input.
-export default function Campo({ rotulo, dica, erro, ...propsDoInput }) {
+// acertar de primeira. O controle é um <input> ou, com elemento="select", um
+// <select> com as <option> passadas como filhas. As demais props vão direto
+// para o controle.
+export default function Campo({ rotulo, dica, erro, elemento: Controle = 'input', ...propsDoControle }) {
   const id = useId();
   const idDaDica = `${id}-dica`;
   const idDoErro = `${id}-erro`;
@@ -12,11 +14,11 @@ export default function Campo({ rotulo, dica, erro, ...propsDoInput }) {
   return (
     <div className="campo">
       <label htmlFor={id}>{rotulo}</label>
-      <input
+      <Controle
         id={id}
         aria-invalid={Boolean(erro)}
         aria-describedby={descricao || undefined}
-        {...propsDoInput}
+        {...propsDoControle}
       />
       {dica && (
         <span id={idDaDica} className="dica-do-campo">

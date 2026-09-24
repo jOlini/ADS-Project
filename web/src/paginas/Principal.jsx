@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import AvisoFirebase from '../componentes/AvisoFirebase';
+import { useMemo, useState } from 'react';
+import { Link, useOutletContext } from 'react-router-dom';
+import Carregando from '../componentes/Carregando';
+import Extrato from '../componentes/Extrato';
 import Icone from '../componentes/Icone';
-import { firebaseConfigurado } from '../firebase';
+import { useCarga } from '../componentes/useCarga';
 import { formatarBRL, formatarComSinal, VALOR_VAZIO } from '../regras/dinheiro';
 import { formatarData } from '../regras/datas';
-import { mensagemDeErro } from '../regras/erros';
 import {
   A_VENCER_DE_EXEMPLO,
   CONTAS_DE_EXEMPLO,
@@ -13,8 +13,15 @@ import {
   LANCAMENTOS_DE_EXEMPLO,
   SALDO_DE_EXEMPLO,
 } from '../regras/exemplo';
-import { agruparPorDia, gastoPorCategoria, somarMes, usoDaRenda } from '../regras/resumo';
-import { buscarDadosPessoais, observarSessao } from '../servicos/contas';
+import { estaNoMes, intervaloDoMes, mesDe, paraExtrato, saldoTotal } from '../regras/livroCaixa';
+import { agruparPorDia, filtrarDias, gastoPorCategoria, somarMes, usoDaRenda } from '../regras/resumo';
+import {
+  apiConfigurada,
+  LIMITE_DE_LANCAMENTOS,
+  listarCategorias,
+  listarContas,
+  listarLancamentos,
+} from '../servicos/livroCaixa';
 
 const FILTROS = [
   { id: 'tudo', rotulo: 'Tudo' },
@@ -23,95 +30,105 @@ const FILTROS = [
 ];
 
 const MES = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' });
-const DIA_LONGO = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
+const NOME_DO_MES = new Intl.DateTimeFormat('pt-BR', { month: 'long' });
 const DIA_CURTO = new Intl.DateTimeFormat('pt-BR', { day: '2-digit' });
 const MES_CURTO = new Intl.DateTimeFormat('pt-BR', { month: 'short' });
 
-// 'AAAA-MM-DD' vira Date sem o fuso mudar o dia (o Date do ISO puro é UTC).
 const comoData = (iso) => new Date(`${iso}T12:00:00`);
-const corDaCategoria = (categoria) => `var(--cat-${COR_DA_CATEGORIA[categoria] ?? 'neutro'})`;
+const corVisual = (cor) => `var(--cat-${cor ?? 'neutro'})`;
 
-// Página 3: mostra os dados pessoais gravados no Firestore e a estrutura do
-// app financeiro. Enquanto não existir lançamento (release 0.2), a tela fica
-// vazia de propósito; "Ver com dados de exemplo" enche a tela com dados
-// fictícios, sempre marcados como exemplo, para conhecer o caminho.
+// Contas, categorias e lançamentos do mês atual em diante. Os posteriores ao
+// mês entram só para o saldo de cada dia sair certo, andando para trás a
+// partir do saldo de hoje.
+async function carregarResumo(espacoId, mes) {
+  const [contas, categorias, lancamentos] = await Promise.all([
+    listarContas(espacoId),
+    listarCategorias(espacoId),
+    listarLancamentos(espacoId, { de: intervaloDoMes(mes).de }),
+  ]);
+  return { contas, categorias, lancamentos };
+}
+
+// Monta os números da tela a partir das linhas do extrato. Mesmo cálculo
+// para os dados reais e para os de exemplo.
+function resumir({ linhasDoMes, todasAsLinhas, saldo, contas, corPorCategoria, saldoDoDiaConfiavel }) {
+  const totais = somarMes(linhasDoMes);
+  return {
+    saldo,
+    contas,
+    totais,
+    uso: usoDaRenda(totais),
+    categorias: gastoPorCategoria(linhasDoMes).map((item) => ({ ...item, cor: corPorCategoria[item.categoria] })),
+    dias: agruparPorDia(todasAsLinhas, saldo).filter((dia) => linhasDoMes.some((linha) => linha.data === dia.data)),
+    saldoDoDiaConfiavel,
+  };
+}
+
+// Página 3 (Principal): saldo, números do mês e extrato. Com a API do
+// livro-caixa, mostra os dados de verdade do espaço pessoal. Sem ela (versão
+// publicada no Pages), a tela fica vazia de propósito, e "Ver com dados de
+// exemplo" a enche com dados fictícios, sempre marcados como exemplo.
 export default function Principal() {
-  const navigate = useNavigate();
-  const [estado, setEstado] = useState({ carregando: true, dados: null, erro: '' });
-  // ?exemplo na URL já abre a tela com os dados fictícios: serve para
-  // mostrar o caminho a alguém sem precisar clicar no botão.
-  const [exemplo, setExemplo] = useState(() => new URLSearchParams(window.location.search).has('exemplo'));
-  // Filtro do extrato: 'tudo', 'entradas' ou 'saidas'. Trabalha sobre o que
-  // já está na tela, sem nova consulta.
+  const { pessoa, espaco } = useOutletContext();
+  // ?exemplo na URL já abre a tela com os dados fictícios.
+  const [exemplo, setExemplo] = useState(
+    () => !apiConfigurada && new URLSearchParams(window.location.search).has('exemplo'),
+  );
+  // Filtro do extrato: trabalha sobre o que já está na tela, sem nova consulta.
   const [filtro, setFiltro] = useState('tudo');
+  const [mes] = useState(() => mesDe(new Date()));
 
-  useEffect(() => {
-    if (!firebaseConfigurado) {
-      return undefined;
-    }
-
-    // O Firebase restaura a sessão de forma assíncrona depois de recarregar a
-    // página; por isso espera o aviso em vez de ler auth.currentUser direto.
-    return observarSessao(async (usuario) => {
-      if (!usuario) {
-        navigate('/login', { replace: true });
-        return;
-      }
-      try {
-        const dados = await buscarDadosPessoais(usuario.uid);
-        setEstado({
-          carregando: false,
-          dados,
-          erro: dados ? '' : 'Não há dados pessoais gravados para esta conta.',
-        });
-      } catch (erro) {
-        setEstado({ carregando: false, dados: null, erro: mensagemDeErro(erro.code) });
-      }
-    });
-  }, [navigate]);
+  const espacoId = espaco.dados?.id;
+  const buscarResumo = useMemo(
+    () => (apiConfigurada && espacoId ? () => carregarResumo(espacoId, mes) : null),
+    [espacoId, mes],
+  );
+  const livro = useCarga(buscarResumo);
 
   const resumo = useMemo(() => {
-    if (!exemplo) {
+    if (exemplo) {
+      return resumir({
+        linhasDoMes: LANCAMENTOS_DE_EXEMPLO,
+        todasAsLinhas: LANCAMENTOS_DE_EXEMPLO,
+        saldo: SALDO_DE_EXEMPLO,
+        contas: CONTAS_DE_EXEMPLO,
+        corPorCategoria: COR_DA_CATEGORIA,
+        saldoDoDiaConfiavel: true,
+      });
+    }
+    if (!livro.dados) {
       return null;
     }
-    const totais = somarMes(LANCAMENTOS_DE_EXEMPLO);
-    return {
-      totais,
-      uso: usoDaRenda(totais),
-      categorias: gastoPorCategoria(LANCAMENTOS_DE_EXEMPLO),
-      dias: agruparPorDia(LANCAMENTOS_DE_EXEMPLO, CONTAS_DE_EXEMPLO[0].saldo),
-    };
-  }, [exemplo]);
+    const { contas, categorias, lancamentos } = livro.dados;
+    const todasAsLinhas = paraExtrato(lancamentos, contas, categorias);
+    return resumir({
+      linhasDoMes: todasAsLinhas.filter((linha) => estaNoMes(linha.data, mes)),
+      todasAsLinhas,
+      saldo: saldoTotal(contas),
+      // Conta desativada só aparece se ainda tiver dinheiro.
+      contas: contas
+        .filter((conta) => conta.ativa || conta.saldo_centavos !== 0)
+        .map((conta) => ({ nome: conta.nome, saldo: conta.saldo_centavos })),
+      corPorCategoria: Object.fromEntries(categorias.map((categoria) => [categoria.nome, categoria.cor])),
+      // No teto da consulta, pode faltar lançamento: o saldo do dia sai da tela.
+      saldoDoDiaConfiavel: lancamentos.length < LIMITE_DE_LANCAMENTOS,
+    });
+  }, [exemplo, livro.dados, mes]);
 
-  if (!firebaseConfigurado) {
-    return <AvisoFirebase />;
+  // Dados de verdade: API ligada e exemplo desligado.
+  const real = apiConfigurada && !exemplo;
+  const carregandoLivro = real && (espaco.carregando || (Boolean(espacoId) && livro.carregando && !livro.dados));
+  if (pessoa.carregando || carregandoLivro) {
+    return <Carregando />;
   }
 
-  if (estado.carregando) {
-    return (
-      <div className="carregando" aria-busy="true" aria-label="Carregando seus dados">
-        <span className="esqueleto titulo" />
-        <span className="esqueleto bloco" />
-        <span className="esqueleto linha" />
-      </div>
-    );
-  }
-
-  const { dados } = estado;
+  const dados = pessoa.dados;
   const mesAtual = MES.format(new Date());
-  // O filtro esconde linhas, nunca muda o saldo: com filtro ligado, o saldo
-  // do dia sai do cabeçalho para não sugerir uma conta diferente.
-  const diasVisiveis = (resumo?.dias ?? [])
-    .map((dia) => ({
-      ...dia,
-      lancamentos: dia.lancamentos.filter(
-        (lancamento) =>
-          filtro === 'tudo' ||
-          (filtro === 'entradas' ? lancamento.valor > 0 : lancamento.valor < 0),
-      ),
-    }))
-    .filter((dia) => dia.lancamentos.length > 0);
+  const erroDoLivro = real ? espaco.erro || livro.erro?.message : '';
+  const semContas = real && Boolean(livro.dados) && livro.dados.contas.length === 0;
+  const diasVisiveis = filtrarDias(resumo?.dias ?? [], filtro);
   const totalGasto = resumo?.categorias.reduce((soma, item) => soma + item.valor, 0) ?? 0;
+  const comNumeros = Boolean(resumo) && !semContas;
 
   return (
     <>
@@ -137,13 +154,21 @@ export default function Principal() {
             </button>
           </div>
         )}
+        {real && comNumeros && (
+          <div className="acoes-da-pagina">
+            <Link className="botao" to="/lancamentos">
+              <Icone nome="mais" tamanho={16} />
+              Novo lançamento
+            </Link>
+          </div>
+        )}
       </header>
 
-      {estado.erro && (
+      {(pessoa.erro || erroDoLivro) && (
         <div className="cartao painel">
           <p className="mensagem erro" role="alert">
             <Icone nome="alerta" tamanho={16} />
-            {estado.erro}
+            {erroDoLivro || pessoa.erro}
           </p>
           <button type="button" className="secundario" onClick={() => window.location.reload()}>
             Tentar de novo
@@ -157,17 +182,17 @@ export default function Principal() {
             Saldo em contas
           </h2>
           <p className="valor">
-            {exemplo ? (
+            {comNumeros ? (
               <>
                 <span className="moeda">R$</span>
-                {formatarBRL(SALDO_DE_EXEMPLO).replace('R$ ', '')}
+                {formatarBRL(resumo.saldo).replace('R$ ', '')}
               </>
             ) : (
               <span className="vazio-valor">{VALOR_VAZIO}</span>
             )}
           </p>
           <dl className="contas">
-            {(exemplo ? CONTAS_DE_EXEMPLO : [{ nome: 'Conta corrente' }, { nome: 'Poupança' }, { nome: 'Carteira' }]).map(
+            {(comNumeros ? resumo.contas : [{ nome: 'Conta corrente' }, { nome: 'Poupança' }, { nome: 'Carteira' }]).map(
               (conta) => (
                 <div key={conta.nome}>
                   <dt>{conta.nome}</dt>
@@ -184,25 +209,25 @@ export default function Principal() {
               <Icone nome="entrada" tamanho={14} />
               Entradas
             </dt>
-            <dd>{exemplo ? formatarComSinal(resumo.totais.entradas) : <span className="vazio-valor">{VALOR_VAZIO}</span>}</dd>
+            <dd>{comNumeros ? formatarComSinal(resumo.totais.entradas) : <span className="vazio-valor">{VALOR_VAZIO}</span>}</dd>
           </div>
           <div>
             <dt>
               <Icone nome="saida" tamanho={14} />
               Saídas
             </dt>
-            <dd>{exemplo ? formatarComSinal(-resumo.totais.saidas) : <span className="vazio-valor">{VALOR_VAZIO}</span>}</dd>
+            <dd>{comNumeros ? formatarComSinal(-resumo.totais.saidas) : <span className="vazio-valor">{VALOR_VAZIO}</span>}</dd>
           </div>
           <div>
             <dt>Sobra do mês</dt>
-            <dd>{exemplo ? formatarBRL(resumo.totais.sobra) : <span className="vazio-valor">{VALOR_VAZIO}</span>}</dd>
+            <dd>{comNumeros ? formatarBRL(resumo.totais.sobra) : <span className="vazio-valor">{VALOR_VAZIO}</span>}</dd>
           </div>
           <div className="uso">
             <div className="trilho">
-              <i style={{ width: `${exemplo ? resumo.uso : 0}%` }} />
+              <i style={{ width: `${comNumeros ? resumo.uso : 0}%` }} />
             </div>
             <p>
-              {exemplo
+              {comNumeros
                 ? `Você usou ${resumo.uso}% do que entrou neste mês.`
                 : 'A barra mostra quanto do que entrou já foi gasto.'}
             </p>
@@ -214,54 +239,55 @@ export default function Principal() {
         <section className="cartao extrato" aria-labelledby="titulo-extrato">
           <div className="cabecalho-do-painel">
             <h2 id="titulo-extrato">Extrato</h2>
-            {exemplo && (
+            {diasVisiveis.length > 0 || filtro !== 'tudo' ? (
               <div className="abas" role="group" aria-label="Filtrar o extrato">
                 {FILTROS.map((opcao) => (
-                  <button
-                    key={opcao.id}
-                    type="button"
-                    aria-pressed={filtro === opcao.id}
-                    onClick={() => setFiltro(opcao.id)}
-                  >
+                  <button key={opcao.id} type="button" aria-pressed={filtro === opcao.id} onClick={() => setFiltro(opcao.id)}>
                     {opcao.rotulo}
                   </button>
                 ))}
               </div>
-            )}
+            ) : null}
           </div>
 
-          {exemplo ? (
-            diasVisiveis.map((dia) => (
-              <div key={dia.data}>
-                <p className="dia">
-                  <span>{DIA_LONGO.format(comoData(dia.data))}</span>
-                  {filtro === 'tudo' && <span>Saldo do dia {formatarBRL(dia.saldo)}</span>}
-                </p>
-                {dia.lancamentos.map((lancamento) => (
-                  <article className="lancamento" key={`${lancamento.data}-${lancamento.descricao}`}>
-                    <span
-                      className="marca-da-categoria"
-                      style={{ '--cor-da-categoria': corDaCategoria(lancamento.categoria) }}
-                      aria-hidden="true"
-                    >
-                      <Icone
-                        nome={lancamento.tipo === 'transferencia' ? 'transferencia' : lancamento.valor > 0 ? 'entrada' : 'saida'}
-                        tamanho={16}
-                      />
-                    </span>
-                    <span className="descricao">
-                      <b>{lancamento.descricao}</b>
-                      <small>
-                        {lancamento.categoria} · {lancamento.conta}
-                      </small>
-                    </span>
-                    <span className={`valor${lancamento.valor > 0 ? ' entrada' : ''}`}>
-                      {formatarComSinal(lancamento.valor)}
-                    </span>
-                  </article>
-                ))}
-              </div>
-            ))
+          {diasVisiveis.length > 0 ? (
+            <Extrato dias={diasVisiveis} mostrarSaldo={filtro === 'tudo' && resumo.saldoDoDiaConfiavel} />
+          ) : semContas ? (
+            <div className="vazio">
+              <span className="simbolo" aria-hidden="true">
+                <Icone nome="contas" tamanho={20} />
+              </span>
+              <h3>Comece pelas suas contas</h3>
+              <p>
+                Cadastre onde o seu dinheiro está (conta corrente, poupança, carteira) com o saldo de hoje. Depois, cada
+                receita, despesa ou transferência entra aqui com data, categoria e valor.
+              </p>
+              <Link className="botao" to="/contas">
+                <Icone nome="mais" tamanho={16} />
+                Cadastrar conta
+              </Link>
+            </div>
+          ) : comNumeros ? (
+            <div className="vazio">
+              <span className="simbolo" aria-hidden="true">
+                <Icone nome="lancamentos" tamanho={20} />
+              </span>
+              <h3>{filtro === 'tudo' ? `Nenhum lançamento em ${NOME_DO_MES.format(new Date())}` : 'Nada com esse filtro'}</h3>
+              <p>
+                {filtro === 'tudo'
+                  ? 'Registre o que entrou e o que saiu: o extrato mostra cada dia com o saldo de todas as contas.'
+                  : 'Troque o filtro para ver os outros lançamentos do mês.'}
+              </p>
+              {filtro === 'tudo' && (
+                <Link className="botao" to="/lancamentos">
+                  <Icone nome="mais" tamanho={16} />
+                  Lançar
+                </Link>
+              )}
+            </div>
+          ) : real ? (
+            // A API não respondeu: o aviso com "Tentar de novo" está no topo.
+            <p className="vazio discreto">O extrato aparece aqui quando o servidor responder.</p>
           ) : (
             <div className="vazio">
               <span className="simbolo" aria-hidden="true">
@@ -269,8 +295,9 @@ export default function Principal() {
               </span>
               <h3>Nenhum lançamento ainda</h3>
               <p>
-                Receitas, despesas e transferências entre contas chegam na versão 0.2. Cada lançamento entra aqui com
-                data, categoria, conta e valor, e o extrato mostra o saldo de cada dia.
+                Receitas, despesas e transferências ficam na API do livro-caixa, que não está ligada a esta versão do
+                site. Cada lançamento entra aqui com data, categoria, conta e valor, e o extrato mostra o saldo de cada
+                dia.
               </p>
               <button type="button" onClick={() => setExemplo(true)}>
                 <Icone nome="olho" tamanho={16} />
@@ -284,22 +311,19 @@ export default function Principal() {
           <section className="cartao painel" aria-labelledby="titulo-categorias">
             <div className="cabecalho-do-painel">
               <h2 id="titulo-categorias">Para onde foi</h2>
-              {exemplo && <small>{formatarBRL(totalGasto)}</small>}
+              {comNumeros && resumo.categorias.length > 0 && <small>{formatarBRL(totalGasto)}</small>}
             </div>
-            {exemplo ? (
+            {comNumeros && resumo.categorias.length > 0 ? (
               <>
                 <div className="pilha" aria-hidden="true">
                   {resumo.categorias.map((item) => (
-                    <i
-                      key={item.categoria}
-                      style={{ flex: item.valor, background: corDaCategoria(item.categoria) }}
-                    />
+                    <i key={item.categoria} style={{ flex: item.valor, background: corVisual(item.cor) }} />
                   ))}
                 </div>
                 <dl className="categorias">
                   {resumo.categorias.map((item) => (
                     <div key={item.categoria}>
-                      <span className="ponto" style={{ background: corDaCategoria(item.categoria) }} aria-hidden="true" />
+                      <span className="ponto" style={{ background: corVisual(item.cor) }} aria-hidden="true" />
                       <dt>{item.categoria}</dt>
                       <dd>{formatarBRL(item.valor)}</dd>
                       <span className="fatia">{item.fatia}%</span>
