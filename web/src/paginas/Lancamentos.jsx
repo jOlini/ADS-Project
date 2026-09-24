@@ -6,11 +6,13 @@ import Carregando from '../componentes/Carregando';
 import Confirmacao from '../componentes/Confirmacao';
 import Extrato from '../componentes/Extrato';
 import Icone from '../componentes/Icone';
+import ImportarExtrato from '../componentes/ImportarExtrato';
 import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
 import { primeiroCampoComErro } from '../regras/cadastro';
 import { formatarBRL, lerValor } from '../regras/dinheiro';
 import { formatarData, hojeIso } from '../regras/datas';
+import { dataMaisRecente } from '../regras/importacao';
 import {
   corpoDoLancamento,
   errosDaApi,
@@ -72,8 +74,8 @@ async function carregarMes(espacoId, mes) {
 }
 
 // Lançamentos: extrato de um mês por vez, formulário para lançar receita,
-// despesa ou transferência, e estorno de um lançamento (a correção do
-// livro-caixa: nada é editado nem apagado).
+// despesa ou transferência, importação do extrato do banco (CSV) e estorno de
+// um lançamento (a correção do livro-caixa: nada é editado nem apagado).
 export default function Lancamentos() {
   const { espaco } = useOutletContext();
   const toast = useToast();
@@ -204,6 +206,17 @@ export default function Lancamentos() {
     } finally {
       setEstornando(false);
     }
+  }
+
+  // Depois da importação, o extrato abre no mês do lançamento mais recente
+  // que entrou, se ele não for o mês na tela.
+  function aposImportar(resposta) {
+    const ultima = dataMaisRecente(resposta.linhas);
+    if (ultima && !estaNoMes(ultima, mes)) {
+      setMes(mesDe(ultima));
+    }
+    cadastros.recarregar();
+    extrato.recarregar();
   }
 
   const transferencia = formulario.tipo === 'TRANSFERENCIA';
@@ -369,6 +382,10 @@ export default function Lancamentos() {
               </form>
             )}
           </section>
+
+          {contasAtivas.length > 0 && (
+            <ImportarExtrato espacoId={espacoId} contas={contasAtivas} categorias={categorias} aoImportar={aposImportar} />
+          )}
         </div>
       </div>
 
