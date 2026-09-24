@@ -5,7 +5,7 @@
 // Esses valores são públicos por natureza, pois vão para o bundle do navegador.
 // Quem protege os dados são as regras do Firestore (web/firestore.rules).
 import { initializeApp } from 'firebase/app';
-import { connectAuthEmulator, getAuth } from 'firebase/auth';
+import { browserSessionPersistence, connectAuthEmulator, getAuth, setPersistence } from 'firebase/auth';
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 
 // Com VITE_FIREBASE_EMULADOR=true o app usa os emuladores locais do Firebase
@@ -35,4 +35,16 @@ export const db = app ? getFirestore(app) : null;
 if (app && usarEmulador) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8088);
+}
+
+// Sessão só enquanto a aba estiver aberta (sessionStorage), e não mais guardada
+// no IndexedDB do navegador. Fechar o navegador encerra a sessão e, ao reabrir,
+// o app começa pela tela de login: num app de finanças, um computador
+// compartilhado não pode reabrir a conta de quem usou antes. A recarga da
+// página (F5) continua com a sessão. Uma sessão que a versão anterior deixou no
+// IndexedDB passa para a aba e é apagada de lá (é o que o setPersistence faz).
+if (auth) {
+  setPersistence(auth, browserSessionPersistence).catch(() => {
+    // Navegador sem sessionStorage (modo restrito): fica a persistência padrão.
+  });
 }

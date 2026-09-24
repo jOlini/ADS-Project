@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useOutletContext } from 'react-router-dom';
 import AvisoFirebase from '../componentes/AvisoFirebase';
 import Campo from '../componentes/Campo';
 import { useToast } from '../componentes/toast/useToast';
@@ -12,6 +12,7 @@ import { entrar } from '../servicos/contas';
 export default function Login() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { usuario } = useOutletContext();
 
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -41,7 +42,8 @@ export default function Login() {
     try {
       await entrar(email, senha);
       toast.sucesso('Sessão iniciada.', { titulo: 'Login realizado' });
-      navigate('/principal');
+      // replace: o botão Voltar não traz o formulário de login de volta.
+      navigate('/principal', { replace: true });
     } catch (falha) {
       // A mensagem fica fixa no formulário, como pede o enunciado.
       setErro(mensagemDeErro(falha.code));
@@ -51,6 +53,11 @@ export default function Login() {
 
   if (!firebaseConfigurado) {
     return <AvisoFirebase />;
+  }
+  // Sessão ainda aberta nesta aba (recarga da página): vai direto para a área
+  // logada, sem mostrar o formulário.
+  if (usuario) {
+    return <Navigate to="/principal" replace />;
   }
 
   return (
