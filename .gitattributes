@@ -1,0 +1,3 @@
+# Fim de linha fixo por tipo: o bash quebra com CRLF e o cmd prefere CRLF.
+*.sh text eol=lf
+*.bat text eol=crlf
