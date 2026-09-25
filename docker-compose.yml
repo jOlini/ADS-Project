@@ -24,6 +24,10 @@ services:
       # Sobrescreve o MONGODB_URI do .env: dentro do compose o banco é o
       # serviço "mongo", não o localhost.
       MONGODB_URI: mongodb://mongo:27017/pessoal-finance
+      # Origem da área do cliente aberta pela rede local (http://<ip>:5173),
+      # somada ao CORS_ORIGENS. O "python subir-app.py up" preenche com o IP
+      # desta máquina; num "docker compose up" direto, fica vazia.
+      CORS_ORIGENS_REDE: ${CORS_ORIGENS_REDE:-}
     ports:
       - "8081:8081"
     # A API só sobe depois que o MongoDB responde ao ping.

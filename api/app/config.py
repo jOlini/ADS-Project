@@ -25,6 +25,11 @@ class Configuracoes(BaseSettings):
     # (mesma origem) e não precisa de CORS.
     cors_origens: str = ""
 
+    # Origem da área do cliente aberta pela rede local (http://<ip>:5173). Não
+    # vai no api/.env: o subir-app.py passa pelo docker compose a cada subida,
+    # porque o IP muda de uma rede para outra.
+    cors_origens_rede: str = ""
+
     # Projeto do Firebase cujo ID token abre o livro-caixa do cliente final
     # (o mesmo VITE_FIREBASE_PROJECT_ID do front-end; não é segredo). Vazio =
     # rotas do cliente respondem 503, e o back-office segue funcionando.
@@ -46,4 +51,5 @@ class Configuracoes(BaseSettings):
 
     @property
     def lista_cors(self) -> list[str]:
-        return [origem.strip() for origem in self.cors_origens.split(",") if origem.strip()]
+        origens = f"{self.cors_origens},{self.cors_origens_rede}".split(",")
+        return list(dict.fromkeys(origem.strip() for origem in origens if origem.strip()))

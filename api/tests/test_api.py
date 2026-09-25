@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app.config import Configuracoes
 from app.modelos import Perfil
 from app.tokens import gerar_token
 from tests.conftest import SENHA_DE_TESTE
@@ -183,6 +184,17 @@ def test_cors_libera_so_as_origens_configuradas(api):
     assert liberada.headers["Access-Control-Allow-Origin"] == "http://localhost:5173"
     assert desconhecida.status_code == 400
     assert "Access-Control-Allow-Origin" not in desconhecida.headers
+
+
+def test_cors_soma_a_origem_da_rede_local_sem_repetir():
+    config = Configuracoes(
+        _env_file=None,
+        jwt_secret="s" * 40,
+        cors_origens="http://localhost:5173, http://localhost:8080",
+        cors_origens_rede="http://10.0.0.5:5173,http://localhost:5173",
+    )
+
+    assert config.lista_cors == ["http://localhost:5173", "http://localhost:8080", "http://10.0.0.5:5173"]
 
 
 def test_respostas_levam_cabecalhos_de_seguranca(api, cabecalho_de):
