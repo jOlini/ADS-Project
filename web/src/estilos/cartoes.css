@@ -1,0 +1,334 @@
+/*
+ * Cartões de crédito: a lista em Contas & Cartões, o medidor do limite e a
+ * tela do cartão (painel com os números e o extrato da fatura). Só tokens,
+ * como o resto da área do cliente.
+ */
+
+/* ---------------------------------------------- Contas & Cartões (lista) */
+
+/* As duas listas (contas e cartões), uma embaixo da outra. */
+.colunas-de-cadastro {
+  display: grid;
+  gap: var(--espaco-8);
+  min-width: 0;
+}
+
+/* Linha do cartão: marca, nome, fatura atual e editar; o medidor ocupa a
+   linha de baixo inteira. */
+.item.item-de-cartao {
+  grid-template-columns: var(--tamanho-marca-categoria) minmax(0, 1fr) auto auto;
+  row-gap: var(--espaco-4);
+}
+
+.item-de-cartao .medidor-do-limite {
+  grid-column: 2 / -1;
+}
+
+a.nome-do-cartao {
+  display: block;
+  overflow: hidden;
+  color: var(--texto);
+  font-weight: var(--peso-semi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-color: var(--linha-forte);
+  text-underline-offset: var(--espaco-2);
+}
+
+a.nome-do-cartao:hover {
+  text-decoration-color: currentColor;
+}
+
+.fatura-do-item {
+  display: grid;
+  justify-items: end;
+  line-height: var(--altura-de-linha-justa);
+}
+
+.fatura-do-item small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.fatura-do-item b {
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .item.item-de-cartao {
+    grid-template-columns: var(--tamanho-marca-categoria) minmax(0, 1fr) auto;
+  }
+
+  .item-de-cartao .fatura-do-item {
+    grid-column: 2;
+    justify-items: start;
+  }
+}
+
+/* ------------------------------------------------------ Medidor do limite */
+
+/* A cor do preenchimento carrega a situação (normal, quase no fim,
+   esgotado); o trilho é um tom claro da mesma cor, e o texto ao lado repete
+   a situação com ícone (a cor nunca fica sozinha). */
+.medidor-do-limite {
+  --cor-do-medidor: var(--marca);
+  display: grid;
+  gap: var(--espaco-4);
+}
+
+.medidor-do-limite.atencao {
+  --cor-do-medidor: var(--aviso);
+}
+
+.medidor-do-limite.esgotado {
+  --cor-do-medidor: var(--erro);
+}
+
+.medidor-do-limite .trilho {
+  height: var(--espaco-4);
+  border-radius: var(--raio-pilula);
+  background: color-mix(in srgb, var(--cor-do-medidor) 16%, var(--superficie));
+  overflow: hidden;
+}
+
+.medidor-do-limite .trilho i {
+  display: block;
+  height: 100%;
+  border-radius: var(--raio-pilula);
+  background: var(--cor-do-medidor);
+  transition: width var(--transicao);
+}
+
+.medidor-do-limite p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2) var(--espaco-5);
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.situacao-do-limite {
+  display: inline-flex;
+  gap: var(--espaco-2);
+  align-items: center;
+  color: var(--texto);
+  font-weight: var(--peso-semi);
+}
+
+.medidor-do-limite.compacto .trilho {
+  height: var(--espaco-3);
+}
+
+/* --------------------------------------------------------- Tela do cartão */
+
+.pagina-do-cartao {
+  display: grid;
+  gap: var(--espaco-8);
+}
+
+.titulo-do-cartao {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+}
+
+.titulo-do-cartao small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+a.voltar {
+  display: inline-flex;
+  gap: var(--espaco-2);
+  align-items: center;
+  justify-self: start;
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-medio);
+  text-decoration: none;
+}
+
+a.voltar:hover {
+  color: var(--texto);
+}
+
+.painel-do-cartao {
+  display: grid;
+  gap: var(--espaco-8);
+  padding: var(--espaco-10) var(--espaco-11);
+}
+
+/* Fileira de números do cartão: mesmo desenho dos números do mês na
+   Principal (rótulo em cima, valor grande, nota embaixo). */
+.numeros-do-cartao {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.numeros-do-cartao > div {
+  display: grid;
+  align-content: start;
+  gap: var(--espaco-2);
+  padding-right: var(--espaco-6);
+}
+
+.numeros-do-cartao > div + div {
+  padding-left: var(--espaco-7);
+  border-left: var(--borda);
+}
+
+.numeros-do-cartao dt {
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-medio);
+}
+
+.numeros-do-cartao dd {
+  margin: 0;
+  font-size: var(--fonte-numero);
+  font-weight: var(--peso-forte);
+  letter-spacing: var(--letra-titulo);
+  white-space: nowrap;
+}
+
+.numeros-do-cartao small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.a-pagar-do-cartao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4);
+  align-items: center;
+  padding: var(--espaco-5) var(--espaco-6);
+  border: var(--espessura) solid color-mix(in srgb, var(--aviso) 40%, var(--linha));
+  border-radius: var(--raio);
+  background: color-mix(in srgb, var(--aviso) 8%, var(--superficie));
+  font-size: var(--fonte-apoio);
+}
+
+.a-pagar-do-cartao > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.a-pagar-do-cartao b {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1080px) {
+  .numeros-do-cartao {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--espaco-8);
+  }
+
+  .numeros-do-cartao > div:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .painel-do-cartao {
+    padding: var(--espaco-8);
+  }
+
+  .numeros-do-cartao {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--espaco-6);
+  }
+
+  .numeros-do-cartao > div + div {
+    padding-left: 0;
+    padding-top: var(--espaco-6);
+    border-left: 0;
+    border-top: var(--borda);
+  }
+}
+
+/* ------------------------------------------------------------- Fatura */
+
+.fatura .totais-do-mes {
+  padding: var(--espaco-5) var(--espaco-10);
+  border-bottom: var(--borda);
+}
+
+.periodo-da-fatura {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-3) var(--espaco-5);
+  align-items: center;
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+/* Situação da fatura em texto dentro de uma pílula; a cor só reforça. */
+.situacao-da-fatura {
+  padding: 0 var(--espaco-5);
+  border: var(--borda-forte);
+  border-radius: var(--raio-pilula);
+  color: var(--texto);
+  font-size: var(--fonte-caps);
+  font-weight: var(--peso-semi);
+  line-height: 1.8;
+}
+
+.situacao-da-fatura.aberta {
+  border-color: var(--marca);
+  background: var(--marca-suave);
+  color: var(--marca-forte);
+}
+
+.lista-da-fatura {
+  position: relative;
+}
+
+@media (max-width: 560px) {
+  .fatura .totais-do-mes {
+    padding: var(--espaco-4) var(--espaco-6);
+  }
+}
+
+/* -------------------------------------------------- Pagar fatura (modal) */
+
+.resumo-do-pagamento {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espaco-6);
+  margin: 0;
+  padding: var(--espaco-6);
+  border: var(--borda);
+  border-radius: var(--raio);
+  background: var(--fundo);
+}
+
+.resumo-do-pagamento > div {
+  display: grid;
+  gap: var(--espaco-1);
+}
+
+.resumo-do-pagamento dt {
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+}
+
+.resumo-do-pagamento dd {
+  margin: 0;
+  font-weight: var(--peso-forte);
+  font-variant-numeric: tabular-nums;
+}
+
+.resumo-do-pagamento small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+/* "A vencer" da Principal: o nome da fatura leva à tela do cartão. */
+.a-vencer dt a {
+  color: inherit;
+}

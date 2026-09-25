@@ -6,12 +6,27 @@ import { lerValor } from './dinheiro';
 import { dataExiste } from './datas';
 import { camposDaDivisao, corpoDaDivisao, validarDivisao } from './divisao';
 
+// Tipos de conta onde o dinheiro está. O cartão de crédito também é uma
+// conta na API (CARTAO_CREDITO), mas de dívida: tem cadastro, extrato e
+// painel próprios, e fica fora do saldo em contas.
 export const TIPOS_DE_CONTA = [
   { valor: 'CORRENTE', rotulo: 'Conta corrente' },
   { valor: 'POUPANCA', rotulo: 'Poupança' },
   { valor: 'CARTEIRA', rotulo: 'Carteira' },
   { valor: 'INVESTIMENTO', rotulo: 'Investimento' },
 ];
+export const TIPO_CARTAO = 'CARTAO_CREDITO';
+
+export const ehCartao = (conta) => conta?.tipo === TIPO_CARTAO;
+export const contasBancarias = (contas) => contas.filter((conta) => !ehCartao(conta));
+export const cartoesDe = (contas) => contas.filter(ehCartao);
+
+// Dias do mês para o fechamento e o vencimento da fatura. 29 a 31 viram o
+// último dia nos meses mais curtos (a API faz a conta).
+export const DIAS_DO_MES = Array.from({ length: 31 }, (_, indice) => ({
+  valor: String(indice + 1),
+  rotulo: `Dia ${indice + 1}`,
+}));
 
 export const TIPOS_DE_LANCAMENTO = [
   { valor: 'DESPESA', rotulo: 'Despesa' },
@@ -33,43 +48,78 @@ export const CORES_DE_CATEGORIA = [
 ];
 
 export function rotuloDoTipoDeConta(tipo) {
+  if (tipo === TIPO_CARTAO) {
+    return 'Cartão de crédito';
+  }
   return TIPOS_DE_CONTA.find((item) => item.valor === tipo)?.rotulo ?? tipo;
 }
 
 // ------------------------------------------------------------ Extrato
 
 // Lançamentos da API viram linhas do extrato (o formato de resumo.js):
-// valor em centavos com o sinal do que aconteceu na conta de origem,
-// nome da categoria e da conta no lugar dos ids e as pessoas do racha.
-export function paraExtrato(lancamentos, contas, categorias) {
-  const nomeDaConta = new Map(contas.map((conta) => [conta.id, conta.nome]));
+// valor em centavos com o sinal do que aconteceu na conta, nome da categoria
+// e da conta no lugar dos ids e as pessoas do racha.
+//
+// pontoDeVista é a conta cujo extrato está na tela; sem ele, vale a conta de
+// origem de cada lançamento. Na fatura de um cartão, o pagamento (que sai de
+// uma conta) entra positivo, porque libera o limite; no extrato da conta, o
+// mesmo pagamento é uma saída.
+export function paraExtrato(lancamentos, contas, categorias, { pontoDeVista } = {}) {
+  const contaPorId = new Map(contas.map((conta) => [conta.id, conta]));
   const categoriaPorId = new Map(categorias.map((categoria) => [categoria.id, categoria]));
-  const nome = (id) => nomeDaConta.get(id) ?? 'Conta removida';
+  const nome = (id) => contaPorId.get(id)?.nome ?? 'Conta removida';
 
   return lancamentos.map((lancamento) => {
     const transferencia = lancamento.tipo === 'TRANSFERENCIA';
+    const pagamento = transferencia && ehCartao(contaPorId.get(lancamento.conta_destino_id));
     const categoria = categoriaPorId.get(lancamento.categoria_id);
-    const partidaDaConta = lancamento.partidas.find((partida) => partida.conta_id === lancamento.conta_id);
+    const daConta = pontoDeVista ?? lancamento.conta_id;
+    const partidaDaConta = lancamento.partidas.find((partida) => partida.conta_id === daConta);
+    const naFatura = pagamento && pontoDeVista === lancamento.conta_destino_id;
+    let rotuloDaCategoria = categoria?.nome ?? 'Sem categoria';
+    let conta = nome(lancamento.conta_id);
+    if (pagamento) {
+      rotuloDaCategoria = 'Pagamento de fatura';
+      conta = naFatura ? `Da conta ${nome(lancamento.conta_id)}` : `${nome(lancamento.conta_id)} → ${nome(lancamento.conta_destino_id)}`;
+    } else if (transferencia) {
+      rotuloDaCategoria = 'Transferência';
+      conta = `${nome(lancamento.conta_id)} → ${nome(lancamento.conta_destino_id)}`;
+    } else if (pontoDeVista) {
+      // Na fatura, o nome do cartão seria repetido em toda linha: no lugar
+      // dele, a parcela da compra (quando houver).
+      conta = lancamento.compra_id ? `Parcela ${lancamento.parcela} de ${lancamento.parcelas}` : '';
+    }
     return {
       id: lancamento.id,
       data: lancamento.data,
       descricao: lancamento.descricao,
-      tipo: transferencia ? 'transferencia' : lancamento.tipo.toLowerCase(),
-      categoria: transferencia ? 'Transferência' : (categoria?.nome ?? 'Sem categoria'),
+      // O pagamento da fatura não é transferência neutra no extrato da conta:
+      // o dinheiro sai do saldo em contas (a dívida do cartão fica fora dele).
+      tipo: pagamento ? 'pagamento' : transferencia ? 'transferencia' : lancamento.tipo.toLowerCase(),
+      categoria: rotuloDaCategoria,
       cor: transferencia ? 'neutro' : (categoria?.cor ?? 'neutro'),
-      conta: transferencia ? `${nome(lancamento.conta_id)} → ${nome(lancamento.conta_destino_id)}` : nome(lancamento.conta_id),
+      conta,
       valor: partidaDaConta?.valor_centavos ?? 0,
       pessoas: (lancamento.divisao ?? []).map((parte) => ({ pessoa: parte.pessoa, valor: parte.valor_centavos })),
       estorno: Boolean(lancamento.estorno_de),
       estornado: Boolean(lancamento.estornado_por),
+      parcela: lancamento.compra_id ? { numero: lancamento.parcela, total: lancamento.parcelas } : null,
+      noCartao: ehCartao(contaPorId.get(lancamento.conta_id)),
     };
   });
 }
 
-// Saldo de todas as contas, inclusive as desativadas: o dinheiro delas
-// continua existindo.
+// Só o que mexe no dinheiro das contas: compras no crédito ficam na fatura
+// do cartão, e o pagamento dela (que sai de uma conta) fica aqui.
+export function lancamentosDasContas(lancamentos, contas) {
+  const cartoes = new Set(cartoesDe(contas).map((cartao) => cartao.id));
+  return lancamentos.filter((lancamento) => !cartoes.has(lancamento.conta_id));
+}
+
+// Saldo em contas, inclusive as desativadas (o dinheiro delas continua
+// existindo). Cartão de crédito fica fora: o saldo dele é dívida.
 export function saldoTotal(contas) {
-  return contas.reduce((soma, conta) => soma + conta.saldo_centavos, 0);
+  return contasBancarias(contas).reduce((soma, conta) => soma + conta.saldo_centavos, 0);
 }
 
 // ------------------------------------------------------------- Meses
@@ -113,6 +163,7 @@ export function ordemDoLancamento(formulario) {
 // tem o que dividir.
 const temDivisao = (formulario) => formulario.tipo !== 'TRANSFERENCIA' && (formulario.divisao?.length ?? 0) > 0;
 export const ORDEM_DA_CONTA = ['nome', 'tipo', 'saldoInicial'];
+export const ORDEM_DO_CARTAO = ['nome', 'limite', 'diaFechamento', 'diaVencimento'];
 export const ORDEM_DA_CATEGORIA = ['nome', 'tipo', 'cor'];
 
 const TAMANHO_DO_NOME = 60;
@@ -204,6 +255,41 @@ export function validarConta(formulario) {
   return erros;
 }
 
+// Cartão: nome, limite e os dias de fechamento e vencimento (diferentes).
+export function validarCartao(formulario) {
+  const erros = {};
+  validarNome(formulario.nome, erros);
+  const limite = lerValor(formulario.limite);
+  if (!formulario.limite?.trim()) {
+    erros.limite = 'Informe o limite do cartão.';
+  } else if (limite === null) {
+    erros.limite = 'Valor inválido. Use o formato 5.000,00.';
+  } else if (limite === 0) {
+    erros.limite = 'O limite precisa ser maior que zero.';
+  }
+  if (!formulario.diaFechamento) {
+    erros.diaFechamento = 'Escolha o dia em que a fatura fecha.';
+  }
+  if (!formulario.diaVencimento) {
+    erros.diaVencimento = 'Escolha o dia em que a fatura vence.';
+  } else if (formulario.diaVencimento === formulario.diaFechamento) {
+    erros.diaVencimento = 'A fatura vence depois de fechar: escolha outro dia.';
+  }
+  return erros;
+}
+
+// Corpo do POST (sem ativa) ou do PUT (com ativa) de um cartão validado.
+export function corpoDoCartao(formulario, { comAtiva = false } = {}) {
+  const corpo = {
+    nome: formulario.nome.trim(),
+    tipo: TIPO_CARTAO,
+    limite_centavos: lerValor(formulario.limite),
+    dia_fechamento: Number(formulario.diaFechamento),
+    dia_vencimento: Number(formulario.diaVencimento),
+  };
+  return comAtiva ? { ...corpo, ativa: formulario.ativa } : corpo;
+}
+
 export function validarCategoria(formulario) {
   const erros = {};
   validarNome(formulario.nome, erros);
@@ -213,7 +299,13 @@ export function validarCategoria(formulario) {
 // Os erros de campo da API (400) usam os nomes do JSON; os formulários usam
 // "valor" e "saldoInicial" para o texto digitado, também dentro da divisão
 // ("divisao.0.valor_centavos" vira "divisao.0.valor").
-const CAMPO_DO_FORMULARIO = { valor_centavos: 'valor', saldo_inicial_centavos: 'saldoInicial' };
+const CAMPO_DO_FORMULARIO = {
+  valor_centavos: 'valor',
+  saldo_inicial_centavos: 'saldoInicial',
+  limite_centavos: 'limite',
+  dia_fechamento: 'diaFechamento',
+  dia_vencimento: 'diaVencimento',
+};
 
 function campoDoFormulario(campo) {
   const partes = campo.split('.');

@@ -13,15 +13,18 @@ import {
   LANCAMENTOS_DE_EXEMPLO,
   SALDO_DE_EXEMPLO,
 } from '../regras/exemplo';
-import { estaNoMes, intervaloDoMes, mesDe, paraExtrato, saldoTotal } from '../regras/livroCaixa';
+import { faturasAVencer } from '../regras/cartoes';
+import { contasBancarias, estaNoMes, intervaloDoMes, lancamentosDasContas, mesDe, paraExtrato, saldoTotal } from '../regras/livroCaixa';
 import { agruparPorDia, filtrarDias, gastoPorCategoria, somarMes, usoDaRenda } from '../regras/resumo';
 import {
   apiConfigurada,
   LIMITE_DE_LANCAMENTOS,
+  listarCartoes,
   listarCategorias,
   listarContas,
   listarLancamentos,
 } from '../servicos/livroCaixa';
+import '../estilos/cartoes.css';
 
 const FILTROS = [
   { id: 'tudo', rotulo: 'Tudo' },
@@ -39,26 +42,31 @@ const corVisual = (cor) => `var(--cat-${cor ?? 'neutro'})`;
 
 // Contas, categorias e lançamentos do mês atual em diante. Os posteriores ao
 // mês entram só para o saldo de cada dia sair certo, andando para trás a
-// partir do saldo de hoje.
+// partir do saldo de hoje. Os cartões trazem as faturas a vencer (sem eles,
+// a tela abre do mesmo jeito).
 async function carregarResumo(espacoId, mes) {
-  const [contas, categorias, lancamentos] = await Promise.all([
+  const [contas, categorias, lancamentos, cartoes] = await Promise.all([
     listarContas(espacoId),
     listarCategorias(espacoId),
     listarLancamentos(espacoId, { de: intervaloDoMes(mes).de }),
+    listarCartoes(espacoId).catch(() => []),
   ]);
-  return { contas, categorias, lancamentos };
+  return { contas, categorias, lancamentos, cartoes };
 }
 
-// Monta os números da tela a partir das linhas do extrato. Mesmo cálculo
-// para os dados reais e para os de exemplo.
-function resumir({ linhasDoMes, todasAsLinhas, saldo, contas, corPorCategoria, saldoDoDiaConfiavel }) {
-  const totais = somarMes(linhasDoMes);
+// Monta os números da tela. Mesmo cálculo para os dados reais e para os de
+// exemplo. O extrato e o saldo de cada dia são só das contas; as entradas,
+// as saídas e o "Para onde foi" do mês contam também as compras no cartão,
+// na data de cada parcela (linhasDosNumeros), e deixam de fora o pagamento
+// da fatura, que só quita o que já foi contado na compra.
+function resumir({ linhasDoMes, todasAsLinhas, linhasDosNumeros, saldo, contas, corPorCategoria, saldoDoDiaConfiavel }) {
+  const totais = somarMes(linhasDosNumeros);
   return {
     saldo,
     contas,
     totais,
     uso: usoDaRenda(totais),
-    categorias: gastoPorCategoria(linhasDoMes).map((item) => ({ ...item, cor: corPorCategoria[item.categoria] })),
+    categorias: gastoPorCategoria(linhasDosNumeros).map((item) => ({ ...item, cor: corPorCategoria[item.categoria] })),
     dias: agruparPorDia(todasAsLinhas, saldo).filter((dia) => linhasDoMes.some((linha) => linha.data === dia.data)),
     saldoDoDiaConfiavel,
   };
@@ -90,6 +98,7 @@ export default function Principal() {
       return resumir({
         linhasDoMes: LANCAMENTOS_DE_EXEMPLO,
         todasAsLinhas: LANCAMENTOS_DE_EXEMPLO,
+        linhasDosNumeros: LANCAMENTOS_DE_EXEMPLO,
         saldo: SALDO_DE_EXEMPLO,
         contas: CONTAS_DE_EXEMPLO,
         corPorCategoria: COR_DA_CATEGORIA,
@@ -100,13 +109,16 @@ export default function Principal() {
       return null;
     }
     const { contas, categorias, lancamentos } = livro.dados;
-    const todasAsLinhas = paraExtrato(lancamentos, contas, categorias);
+    const todasAsLinhas = paraExtrato(lancamentosDasContas(lancamentos, contas), contas, categorias);
+    const comCartoes = paraExtrato(lancamentos, contas, categorias);
     return resumir({
       linhasDoMes: todasAsLinhas.filter((linha) => estaNoMes(linha.data, mes)),
       todasAsLinhas,
+      linhasDosNumeros: comCartoes.filter((linha) => estaNoMes(linha.data, mes) && linha.tipo !== 'pagamento'),
       saldo: saldoTotal(contas),
-      // Conta desativada só aparece se ainda tiver dinheiro.
-      contas: contas
+      // Conta desativada só aparece se ainda tiver dinheiro. Cartão não é
+      // saldo: a fatura dele aparece em "A vencer".
+      contas: contasBancarias(contas)
         .filter((conta) => conta.ativa || conta.saldo_centavos !== 0)
         .map((conta) => ({ nome: conta.nome, saldo: conta.saldo_centavos })),
       corPorCategoria: Object.fromEntries(categorias.map((categoria) => [categoria.nome, categoria.cor])),
@@ -126,6 +138,7 @@ export default function Principal() {
   const mesAtual = MES.format(new Date());
   const erroDoLivro = real ? espaco.erro || livro.erro?.message : '';
   const semContas = real && Boolean(livro.dados) && livro.dados.contas.length === 0;
+  const faturas = real && livro.dados ? faturasAVencer(livro.dados.cartoes) : [];
   const diasVisiveis = filtrarDias(resumo?.dias ?? [], filtro);
   const totalGasto = resumo?.categorias.reduce((soma, item) => soma + item.valor, 0) ?? 0;
   const comNumeros = Boolean(resumo) && !semContas;
@@ -341,7 +354,23 @@ export default function Principal() {
               <h2 id="titulo-a-vencer">A vencer</h2>
               {exemplo && <small>próximos 15 dias</small>}
             </div>
-            {exemplo ? (
+            {faturas.length > 0 ? (
+              <dl className="a-vencer">
+                {faturas.map((fatura) => (
+                  <div key={fatura.id}>
+                    <span className="data" aria-hidden="true">
+                      <b>{DIA_CURTO.format(comoData(fatura.data))}</b>
+                      <small>{MES_CURTO.format(comoData(fatura.data)).replace('.', '')}</small>
+                    </span>
+                    <dt>
+                      <Link to={`/contas/cartoes/${fatura.id}`}>{fatura.descricao}</Link>
+                      {fatura.vencida && <span className="etiqueta">Vencida</span>}
+                    </dt>
+                    <dd>{formatarBRL(fatura.valor)}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : exemplo ? (
               <dl className="a-vencer">
                 {A_VENCER_DE_EXEMPLO.map((conta) => (
                   <div key={conta.descricao}>
@@ -355,7 +384,7 @@ export default function Principal() {
                 ))}
               </dl>
             ) : (
-              <p className="discreto">Contas com data de vencimento aparecem aqui antes de vencer.</p>
+              <p className="discreto">Faturas de cartão fechadas e ainda não pagas aparecem aqui, com o vencimento.</p>
             )}
           </section>
 

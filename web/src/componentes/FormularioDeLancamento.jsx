@@ -26,10 +26,11 @@ const formularioVazio = (contas) => ({
 const opcoesDeConta = (contas) => contas.map((conta) => ({ valor: conta.id, rotulo: conta.nome }));
 
 // Formulário do "+ Novo lançamento" (dentro do modal): receita, despesa ou
-// transferência, com o racha entre pessoas nas duas primeiras. Confere tudo
-// antes de ir à API e põe o foco no primeiro campo com erro. aoLancar recebe
-// o lançamento criado.
-export default function FormularioDeLancamento({ espacoId, contas, categorias, pessoasConhecidas, aoLancar, aoCancelar, aoMudarOcupado }) {
+// transferência entre contas, com o racha entre pessoas nas duas primeiras.
+// Confere tudo antes de ir à API e põe o foco no primeiro campo com erro.
+// aoLancar recebe o lançamento criado. Compras no crédito não entram aqui: com
+// cartões cadastrados, o formulário aponta a fatura (temCartoes).
+export default function FormularioDeLancamento({ espacoId, contas, temCartoes = false, categorias, pessoasConhecidas, aoLancar, aoCancelar, aoMudarOcupado }) {
   const toast = useToast();
   const [formulario, setFormulario] = useState(() => formularioVazio(contas));
   const [erros, setErros] = useState({});
@@ -101,6 +102,11 @@ export default function FormularioDeLancamento({ espacoId, contas, categorias, p
 
   return (
     <form onSubmit={enviar} noValidate>
+      {temCartoes && (
+        <AvisoComAtalho icone="cartao" compacto atalho={{ para: '/contas#cartoes', rotulo: 'Abrir cartões', icone: 'cartao' }}>
+          Compra no crédito entra na fatura do cartão, não aqui.
+        </AvisoComAtalho>
+      )}
       <div className="abas largas" role="group" aria-label="Tipo de lançamento">
         {TIPOS_DE_LANCAMENTO.map((tipo) => (
           <button key={tipo.valor} type="button" aria-pressed={formulario.tipo === tipo.valor} onClick={() => mudar('tipo', tipo.valor)}>
