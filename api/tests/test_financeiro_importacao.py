@@ -11,6 +11,7 @@ import pytest
 
 from app.financeiro.importacao import (
     MAXIMO_DE_LINHAS,
+    MENSAGEM_SEM_FORMATO,
     ExtratoIlegivel,
     LinhaDoExtrato,
     chaves_de_importacao,
@@ -99,8 +100,8 @@ def test_limpa_a_descricao_e_corta_no_tamanho_de_um_lancamento():
 @pytest.mark.parametrize(
     ("texto", "mensagem"),
     [
-        ("", "Não achei o cabeçalho com as colunas Data, Descrição e Valor."),
-        ("Data;Valor\n01/09/2026;-1,00\n", "Não achei o cabeçalho com as colunas Data, Descrição e Valor."),
+        ("", MENSAGEM_SEM_FORMATO),
+        ("Data;Valor\n01/09/2026;-1,00\n", MENSAGEM_SEM_FORMATO),
         ("Data;Descrição;Valor\n\n", "O arquivo não tem lançamentos depois do cabeçalho."),
         (
             "Data;Descrição;Valor\n" + "01/09/2026;Café;-5,00\n" * (MAXIMO_DE_LINHAS + 1),
@@ -127,6 +128,11 @@ def test_recusa_o_arquivo_que_nao_serve(texto, mensagem):
         ("12,345", None),
         ("abc", None),
         ("1.000.000.001,00", None),
+        # Sinal no fim e letra D ou C depois do número, comuns em extrato de banco.
+        ("80,00-", -8000),
+        ("1.234,56 D", -123456),
+        ("15,00 C", 1500),
+        ("D", None),
     ],
 )
 def test_le_valor_sem_float(texto, centavos):
@@ -138,10 +144,13 @@ def test_le_valor_sem_float(texto, centavos):
     [
         ("05/09/2026", date(2026, 9, 5)),
         ("05-09-2026", date(2026, 9, 5)),
+        ("05.09.2026", date(2026, 9, 5)),
+        ("5/9/2026", date(2026, 9, 5)),
         ("2026-09-05", date(2026, 9, 5)),
         ("2026-09-05 10:22:33", date(2026, 9, 5)),
-        ("09/05/26", None),
+        ("09/05/26", date(2026, 5, 9)),
         ("32/01/2026", None),
+        ("09/2026", None),
     ],
 )
 def test_le_data(texto, data):
@@ -223,6 +232,7 @@ def test_simular_mostra_o_que_entraria_sem_gravar(ana):
         "data": "2026-09-05",
         "descricao": "Salário",
         "valor_centavos": 680000,
+        "categoria_id": ana.categorias["Outras receitas"],
         "lancamento_id": None,
         "erro": None,
     }
@@ -299,7 +309,7 @@ def test_arquivo_sem_cabecalho_e_destino_errado_dao_400_por_campo(ana):
 
     assert resposta.status_code == 400
     assert resposta.json()["campos"] == {
-        "csv": "Não achei o cabeçalho com as colunas Data, Descrição e Valor.",
+        "csv": MENSAGEM_SEM_FORMATO,
         "categoria_despesa_id": "Use uma categoria de despesa.",
         "categoria_receita_id": "Use uma categoria de receita.",
     }

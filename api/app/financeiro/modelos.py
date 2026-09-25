@@ -7,7 +7,7 @@ ponto flutuante, e um centavo perdido num saldo é erro de verdade.
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, Field, StringConstraints
 
@@ -19,6 +19,8 @@ LIMITE_EM_CENTAVOS = 100_000_000_000
 # Teto do texto de um extrato em CSV (caracteres). Um mês de extrato fica bem
 # abaixo; o limite barra requisição enorme antes de qualquer leitura.
 TAMANHO_MAXIMO_DO_CSV = 500_000
+# Pessoas numa divisão (racha) de um lançamento.
+MAXIMO_DE_PESSOAS = 20
 
 
 class TipoEspaco(StrEnum):
@@ -131,10 +133,20 @@ class Partida:
     categoria_id: str | None = None
 
 
+@dataclass(frozen=True)
+class Parte:
+    """Quanto de um lançamento cabe a uma pessoa (racha). A soma das partes
+    vai até o valor do lançamento; o que sobra é a parte de quem lançou."""
+
+    pessoa: str
+    valor_centavos: int
+
+
 @dataclass
 class Lancamento:
-    """Imutável depois de gravado: correção é feita com estorno, nunca com
-    edição ou exclusão. As partidas somam zero."""
+    """Não se edita depois de gravado. Correção de valor é o estorno
+    (lançamento inverso; o original fica no histórico); erro de digitação e
+    lançamento duplicado saem com a exclusão. As partidas somam zero."""
 
     espaco_id: str
     tipo: TipoLancamento
@@ -152,6 +164,7 @@ class Lancamento:
     # (importacao.chaves_de_importacao). Única no espaço: a mesma linha
     # importada de novo não vira outro lançamento.
     chave_importacao: str | None = None
+    divisao: list[Parte] = field(default_factory=list)
     id: str | None = None
     # Calculado na leitura (id do estorno deste lançamento); não é gravado.
     estornado_por: str | None = field(default=None, compare=False)
@@ -166,6 +179,7 @@ class ResultadoDaLinha:
     data: date | None = None
     descricao: str | None = None
     valor_centavos: int | None = None
+    categoria_id: str | None = None
     lancamento_id: str | None = None
     erro: str | None = None
 
@@ -223,11 +237,18 @@ class AtualizacaoCategoria(Entrada):
     ativa: Booleano
 
 
+class NovaParte(Entrada):
+    pessoa: Nome
+    valor_centavos: CentavosPositivos
+
+
 class NovoLancamento(Entrada):
     """Receita e despesa pedem conta e categoria; transferência pede conta de
     origem (conta_id) e de destino. A coerência entre os campos é conferida em
     regras.conferir_lancamento. As partidas são montadas pela API, nunca
-    enviadas pelo cliente: assim a soma zero não depende de quem chama."""
+    enviadas pelo cliente: assim a soma zero não depende de quem chama.
+
+    divisao (opcional, só receita e despesa) reparte o valor entre pessoas."""
 
     tipo: TipoLancamento
     descricao: Descricao
@@ -236,19 +257,54 @@ class NovoLancamento(Entrada):
     conta_id: Identificador
     categoria_id: Identificador | None = None
     conta_destino_id: Identificador | None = None
+    divisao: Annotated[list[NovaParte], Field(max_length=MAXIMO_DE_PESSOAS)] = []
+
+
+TextoDoCsv = Annotated[str, StringConstraints(min_length=1, max_length=TAMANHO_MAXIMO_DO_CSV)]
+Delimitador = Literal[";", ",", "\t", "|"]
+# Coluna do arquivo, contada a partir de 0.
+Coluna = Annotated[int, Field(strict=True, ge=0, lt=50)]
+
+
+class MapeamentoDoExtrato(Entrada):
+    """Onde está cada informação no CSV (importacao.Mapeamento). A coerência
+    entre as colunas é conferida em importacao.conferir_mapeamento."""
+
+    delimitador: Delimitador
+    # Linha do cabeçalho (1 = primeira); 0 quando o arquivo não tem cabeçalho.
+    cabecalho: Annotated[int, Field(strict=True, ge=0, le=50)]
+    data: Coluna
+    descricao: Coluna
+    valor: Coluna | None = None
+    credito: Coluna | None = None
+    debito: Coluna | None = None
+    tipo: Coluna | None = None
+    categoria: Coluna | None = None
+    inverter_sinal: Booleano = False
 
 
 class NovaImportacao(Entrada):
     """Extrato do banco em CSV (o texto do arquivo) e onde lançar cada linha:
     saídas (valor negativo) na categoria de despesa, entradas na de receita,
-    todas na mesma conta. Com simular=true, a API só confere o arquivo e diz o
-    que entraria, sem gravar nada."""
+    todas na mesma conta. Linha com o nome de uma categoria ativa do espaço
+    na coluna de categoria vai para ela. Sem mapeamento, as colunas são
+    reconhecidas pelo nome. Com simular=true, a API só confere o arquivo e diz
+    o que entraria, sem gravar nada."""
 
     conta_id: Identificador
     categoria_despesa_id: Identificador
     categoria_receita_id: Identificador
-    csv: Annotated[str, StringConstraints(min_length=1, max_length=TAMANHO_MAXIMO_DO_CSV)]
+    csv: TextoDoCsv
+    mapeamento: MapeamentoDoExtrato | None = None
     simular: Booleano = False
+
+
+class PedidoDeEstrutura(Entrada):
+    """CSV para a API mostrar o começo do arquivo e sugerir as colunas. O
+    delimitador, se vier, troca o que a API adivinharia."""
+
+    csv: TextoDoCsv
+    delimitador: Delimitador | None = None
 
 
 # --- Saída ---------------------------------------------------------------------
@@ -321,6 +377,11 @@ class PartidaResposta(BaseModel):
     valor_centavos: int
 
 
+class ParteResposta(BaseModel):
+    pessoa: str
+    valor_centavos: int
+
+
 class LancamentoResposta(BaseModel):
     id: str
     tipo: TipoLancamento
@@ -331,6 +392,7 @@ class LancamentoResposta(BaseModel):
     categoria_id: str | None
     conta_destino_id: str | None
     partidas: list[PartidaResposta]
+    divisao: list[ParteResposta]
     estorno_de: str | None
     estornado_por: str | None
     criado_em: datetime
@@ -354,6 +416,7 @@ class LancamentoResposta(BaseModel):
                 )
                 for partida in lancamento.partidas
             ],
+            divisao=[ParteResposta(pessoa=parte.pessoa, valor_centavos=parte.valor_centavos) for parte in lancamento.divisao],
             estorno_de=lancamento.estorno_de,
             estornado_por=lancamento.estornado_por,
             criado_em=lancamento.criado_em,
@@ -367,6 +430,8 @@ class LinhaImportadaResposta(BaseModel):
     descricao: str | None
     # Com sinal, como no extrato: negativo é saída.
     valor_centavos: int | None
+    # Categoria em que a linha entra (ou entraria, na simulação).
+    categoria_id: str | None
     lancamento_id: str | None
     erro: str | None
 
@@ -397,9 +462,24 @@ class ImportacaoResposta(BaseModel):
                     data=resultado.data,
                     descricao=resultado.descricao,
                     valor_centavos=resultado.valor_centavos,
+                    categoria_id=resultado.categoria_id,
                     lancamento_id=resultado.lancamento_id,
                     erro=resultado.erro,
                 )
                 for resultado in resultados
             ],
         )
+
+
+class LinhaDoArquivoResposta(BaseModel):
+    numero: int
+    celulas: list[str]
+
+
+class EstruturaResposta(BaseModel):
+    """Começo do arquivo em células e o mapeamento sugerido (null quando as
+    colunas não foram reconhecidas pelo nome)."""
+
+    delimitador: str
+    linhas: list[LinhaDoArquivoResposta]
+    mapeamento: MapeamentoDoExtrato | None

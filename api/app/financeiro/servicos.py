@@ -22,8 +22,11 @@ from app.financeiro.modelos import (
     NovaImportacao,
     NovoLancamento,
     Papel,
+    Parte,
+    PedidoDeEstrutura,
     ResultadoDaLinha,
     SituacaoDaLinha,
+    TipoCategoria,
     TipoEspaco,
     TipoLancamento,
 )
@@ -176,12 +179,35 @@ class ServicoLivroCaixa:
             partidas=regras.montar_partidas(dados),
             criado_em=agora(),
             criado_por=uid,
+            divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
         )
         return self._gravar(lancamento)
 
+    def excluir(self, espaco: Espaco, id: str) -> None:
+        """Apaga o lançamento de vez (erro de digitação, lançamento duplicado).
+        O estorno dele, se houver, sai junto: sozinho, ele mudaria o saldo sem
+        nada para anular. Excluir um estorno devolve o original ao normal.
+
+        O estorno sai antes do original: se a operação parar no meio, sobra o
+        original sem estorno, que é um estado válido. A segunda passada pega
+        um estorno gravado entre a leitura e a exclusão."""
+        lancamento = self.lancamento(espaco, id)
+        self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
+        self.repositorio.excluir_lancamento(espaco.id, lancamento.id)
+        self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
+
+    def pessoas(self, espaco: Espaco) -> list[str]:
+        """Nomes já usados em divisões, para a tela sugerir. Nomes que só
+        mudam na caixa ou nos espaços aparecem uma vez."""
+        unicos: dict[str, str] = {}
+        for nome in self.repositorio.listar_pessoas(espaco.id):
+            unicos.setdefault(" ".join(nome.split()).casefold(), nome)
+        return sorted(unicos.values(), key=str.casefold)
+
     def estornar(self, espaco: Espaco, id: str, uid: str) -> Lancamento:
         """Anula um lançamento com outro de sinal trocado, na data de hoje. O
-        original continua no histórico: nada é editado nem apagado."""
+        original continua no histórico, e a divisão entre pessoas vem junto
+        (o racha também é desfeito)."""
         original = self.lancamento(espaco, id)
         if original.estorno_de:
             raise ErroConflito("Um estorno não pode ser estornado.")
@@ -201,16 +227,29 @@ class ServicoLivroCaixa:
             criado_em=agora(),
             criado_por=uid,
             estorno_de=original.id,
+            divisao=list(original.divisao),
         )
         return self._gravar(estorno)
 
     # --- Importação de extrato ---
+
+    def estrutura(self, dados: PedidoDeEstrutura) -> importacao.Estrutura:
+        """Começo do arquivo em células e as colunas reconhecidas pelo nome,
+        para a tela confirmar ou pedir que a pessoa indique cada uma."""
+        try:
+            return importacao.estrutura(dados.csv, dados.delimitador)
+        except importacao.ExtratoIlegivel as erro:
+            raise ErroValidacao({"csv": str(erro)}) from erro
 
     def importar(self, espaco: Espaco, dados: NovaImportacao, uid: str) -> list[ResultadoDaLinha]:
         """Lança cada linha do extrato na conta escolhida: valor negativo vira
         despesa, positivo vira receita. Linha já importada antes (mesma chave)
         é pulada, e linha ilegível volta com o motivo; as outras entram mesmo
         assim. Com dados.simular, nada é gravado.
+
+        Sem dados.mapeamento, as colunas são reconhecidas pelo nome. Com a
+        coluna de categoria, a linha vai para a categoria ativa de mesmo nome;
+        sem nome conhecido, para a categoria padrão do tipo.
 
         Cada lançamento é gravado sozinho (atômico). Se a importação parar no
         meio, rodar de novo termina o que faltou, sem duplicar o que entrou.
@@ -219,19 +258,28 @@ class ServicoLivroCaixa:
         despesa = self.repositorio.buscar_categoria(espaco.id, dados.categoria_despesa_id)
         receita = self.repositorio.buscar_categoria(espaco.id, dados.categoria_receita_id)
         erros = regras.conferir_importacao(conta, despesa, receita)
-        try:
-            lidas, recusadas = importacao.ler_extrato(dados.csv)
-        except importacao.ExtratoIlegivel as erro:
-            erros["csv"] = str(erro)
+
+        mapeamento = importacao.Mapeamento(**dados.mapeamento.model_dump()) if dados.mapeamento else None
+        erros_do_mapeamento = importacao.conferir_mapeamento(mapeamento) if mapeamento else {}
+        erros.update({f"mapeamento.{papel}": mensagem for papel, mensagem in erros_do_mapeamento.items()})
+        if not erros_do_mapeamento:
+            try:
+                lidas, recusadas = importacao.ler_extrato(dados.csv, mapeamento)
+            except importacao.ExtratoIlegivel as erro:
+                erros["csv"] = str(erro)
         if erros:
             raise ErroValidacao(erros)
 
+        categorias = self.repositorio.listar_categorias(espaco.id)
         chaves = importacao.chaves_de_importacao(conta.id, lidas)
         ja_importadas = self.repositorio.chaves_importadas(espaco.id, chaves)
         resultados = [ResultadoDaLinha(r.linha, SituacaoDaLinha.INVALIDA, erro=r.erro) for r in recusadas]
         for linha, chave in zip(lidas, chaves, strict=True):
+            tipo = TipoCategoria.RECEITA if linha.valor_centavos > 0 else TipoCategoria.DESPESA
+            padrao = receita if tipo == TipoCategoria.RECEITA else despesa
+            categoria = regras.categoria_pelo_nome(categorias, linha.categoria, tipo) or padrao
             situacao, lancamento_id = self._importar_linha(
-                espaco, linha, chave, chave in ja_importadas, dados, uid
+                espaco, linha, chave, chave in ja_importadas, categoria.id, dados, uid
             )
             resultados.append(
                 ResultadoDaLinha(
@@ -240,6 +288,7 @@ class ServicoLivroCaixa:
                     data=linha.data,
                     descricao=linha.descricao,
                     valor_centavos=linha.valor_centavos,
+                    categoria_id=categoria.id,
                     lancamento_id=lancamento_id,
                 )
             )
@@ -251,6 +300,7 @@ class ServicoLivroCaixa:
         linha: importacao.LinhaDoExtrato,
         chave: str,
         ja_importada: bool,
+        categoria_id: str,
         dados: NovaImportacao,
         uid: str,
     ) -> tuple[SituacaoDaLinha, str | None]:
@@ -268,7 +318,7 @@ class ServicoLivroCaixa:
             data=linha.data,
             valor_centavos=abs(linha.valor_centavos),
             conta_id=dados.conta_id,
-            categoria_id=dados.categoria_receita_id if receita else dados.categoria_despesa_id,
+            categoria_id=categoria_id,
         )
         lancamento = Lancamento(
             espaco_id=espaco.id,

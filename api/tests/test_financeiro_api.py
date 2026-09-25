@@ -266,14 +266,13 @@ def test_data_em_numero_nao_vira_timestamp(ana):
     assert resposta.json()["campos"] == {"data": "Data inválida. Use o formato AAAA-MM-DD."}
 
 
-def test_lancamento_nao_se_edita_nem_se_apaga(ana):
+def test_lancamento_nao_se_edita(ana):
     corrente = ana.criar_conta("Conta corrente")
     id = ana.lancar("DESPESA", 1000, corrente, categoria="Lazer").json()["id"]
 
     edicao = ana.api.put(f"{ana.base}/lancamentos/{id}", headers=ana.cabecalho, json={"valor_centavos": 1})
-    exclusao = ana.api.delete(f"{ana.base}/lancamentos/{id}", headers=ana.cabecalho)
 
-    assert edicao.status_code == exclusao.status_code == 405
+    assert edicao.status_code == 405
     assert ana.saldos() == {"Conta corrente": -1000}
 
 
