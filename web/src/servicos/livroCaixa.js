@@ -6,8 +6,10 @@
 // VITE_API_URL vazio (caso do GitHub Pages, que não tem API hospedada):
 // apiConfigurada é false e as telas do livro-caixa mostram o aviso.
 import { auth } from '../firebase';
+import { enderecoDaApi } from './enderecoDaApi';
 
-const URL_DA_API = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
+// Aberta pela rede local, a página chama a API no IP de onde veio.
+const URL_DA_API = enderecoDaApi(import.meta.env.VITE_API_URL, globalThis.location?.hostname);
 
 export const apiConfigurada = Boolean(URL_DA_API);
 
