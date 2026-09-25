@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import Campo from '../componentes/Campo';
 import Carregando from '../componentes/Carregando';
@@ -7,6 +7,7 @@ import Icone from '../componentes/Icone';
 import Seletor from '../componentes/Seletor';
 import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
+import { useFocoAoChegar } from '../componentes/useFocoAoChegar';
 import { primeiroCampoComErro } from '../regras/cadastro';
 import { formatarBRL, lerValor } from '../regras/dinheiro';
 import { errosDaApi, ORDEM_DA_CONTA, rotuloDoTipoDeConta, saldoTotal, TIPOS_DE_CONTA, validarConta } from '../regras/livroCaixa';
@@ -16,10 +17,12 @@ const NOVA = { nome: '', tipo: 'CORRENTE', saldoInicial: '', ativa: true };
 
 // Contas: onde o dinheiro está (corrente, poupança, carteira, investimento),
 // com o saldo de cada uma. O saldo inicial é o dinheiro que já estava lá antes
-// do primeiro lançamento e não muda depois; renomear e desativar, sim.
+// do primeiro lançamento e não muda depois; renomear e desativar, sim. Um
+// atalho de outra tela chega com ?cadastrar=conta: o foco vai para o nome.
 export default function Contas() {
   const { espaco } = useOutletContext();
   const toast = useToast();
+  const [parametros] = useSearchParams();
   // null = criando uma conta nova; senão, a conta em edição.
   const [emEdicao, setEmEdicao] = useState(null);
   const [formulario, setFormulario] = useState(NOVA);
@@ -29,6 +32,7 @@ export default function Contas() {
   const espacoId = espaco.dados?.id;
   const buscarContas = useMemo(() => (espacoId ? () => listarContas(espacoId) : null), [espacoId]);
   const contas = useCarga(buscarContas);
+  useFocoAoChegar(parametros.get('cadastrar') === 'conta', 'formulario-da-conta');
 
   if (!apiConfigurada) {
     return (

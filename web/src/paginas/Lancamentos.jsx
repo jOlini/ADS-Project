@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
+import AvisoComAtalho from '../componentes/AvisoComAtalho';
 import CampoDeBusca from '../componentes/CampoDeBusca';
 import Carregando from '../componentes/Carregando';
 import Confirmacao from '../componentes/Confirmacao';
@@ -301,6 +302,12 @@ export default function Lancamentos() {
                     ? 'Os lançamentos aparecem aqui depois que você cadastrar uma conta.'
                     : 'Use "Novo lançamento" para registrar o que entrou ou saiu, ou traga o extrato do banco com "Importar CSV".'}
               </p>
+              {!filtrado && contasAtivas.length === 0 && (
+                <Link className="botao" to="/contas?cadastrar=conta">
+                  <Icone nome="contas" tamanho={16} />
+                  Cadastrar conta
+                </Link>
+              )}
             </div>
           )}
         </div>
@@ -321,7 +328,14 @@ export default function Lancamentos() {
       <Modal aberta={modal === 'importar'} titulo="Importar CSV" largura="larga" aoFechar={fecharModal} ocupado={modalOcupado}
         descricao="Traga o extrato exportado pelo banco. Nada é gravado antes de você conferir.">
         {contasAtivas.length === 0 ? (
-          <p className="discreto">Cadastre uma conta antes de importar: o extrato entra numa conta.</p>
+          <AvisoComAtalho
+            icone="contas"
+            titulo="Nenhuma conta para receber o extrato"
+            atalho={{ para: '/contas?cadastrar=conta', rotulo: 'Cadastrar conta', icone: 'contas' }}
+            aoFechar={fecharModal}
+          >
+            O extrato do banco entra numa conta. Cadastre a conta (com o saldo de hoje) e volte para importar.
+          </AvisoComAtalho>
         ) : (
           <ImportarExtrato
             espacoId={espacoId}

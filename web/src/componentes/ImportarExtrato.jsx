@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import AvisoComAtalho from './AvisoComAtalho';
 import Campo from './Campo';
 import Icone from './Icone';
 import MapeamentoDeColunas from './MapeamentoDeColunas';
@@ -193,6 +194,7 @@ export default function ImportarExtrato({ espacoId, contas, categorias, aoImport
 
   const novas = previa?.resposta.novas ?? 0;
   const indiceDaEtapa = ETAPAS.findIndex((item) => item.id === etapa);
+  const semCategorias = opcoesDoTipo(categorias, 'DESPESA').length === 0 || opcoesDoTipo(categorias, 'RECEITA').length === 0;
 
   return (
     <div className="importacao">
@@ -256,6 +258,11 @@ export default function ImportarExtrato({ espacoId, contas, categorias, aoImport
           <p className="dica-do-campo">
             Se o arquivo tiver uma coluna de categoria com o nome de uma categoria sua, a linha vai para ela.
           </p>
+          {semCategorias && (
+            <AvisoComAtalho compacto atalho={{ para: '/categorias', rotulo: 'Abrir categorias', icone: 'categorias' }}>
+              A importação precisa de uma categoria ativa de despesa e outra de receita.
+            </AvisoComAtalho>
+          )}
 
           <div className="acoes-do-formulario">
             <button type="button" className="secundario" onClick={aoCancelar} disabled={Boolean(ocupado)}>
