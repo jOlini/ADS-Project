@@ -70,7 +70,9 @@ class RepositorioLivroCaixa(Protocol):
 
     def atualizar_categoria(self, categoria: Categoria) -> Categoria: ...
 
-    def listar_lancamentos(self, espaco_id: str, de: date | None, ate: date | None, limite: int) -> list[Lancamento]: ...
+    def listar_lancamentos(
+        self, espaco_id: str, de: date | None, ate: date | None, limite: int, conta_id: str | None = None
+    ) -> list[Lancamento]: ...
 
     def buscar_lancamento(self, espaco_id: str, id: str) -> Lancamento | None: ...
 
@@ -79,6 +81,8 @@ class RepositorioLivroCaixa(Protocol):
     def excluir_lancamento(self, espaco_id: str, id: str) -> bool: ...
 
     def excluir_estornos_de(self, espaco_id: str, id: str) -> int: ...
+
+    def excluir_compra(self, espaco_id: str, compra_id: str) -> int: ...
 
     def buscar_estornos(self, espaco_id: str, ids: list[str]) -> dict[str, str]: ...
 
@@ -109,6 +113,11 @@ class LivroCaixaMongo:
         self._contas.create_index([("espaco_id", ASCENDING), ("criada_em", ASCENDING)])
         self._categorias.create_index([("espaco_id", ASCENDING), ("tipo", ASCENDING), ("nome", ASCENDING)])
         self._lancamentos.create_index([("espaco_id", ASCENDING), ("data", DESCENDING), ("criado_em", DESCENDING)])
+        # Extrato de uma conta ou fatura de um cartão.
+        self._lancamentos.create_index([("espaco_id", ASCENDING), ("partidas.conta_id", ASCENDING), ("data", DESCENDING)])
+        self._lancamentos.create_index(
+            [("espaco_id", ASCENDING), ("compra_id", ASCENDING)], partialFilterExpression={"compra_id": {"$type": "string"}}
+        )
         # Um lançamento só pode ser estornado uma vez. A checagem do serviço dá
         # a mensagem; o índice é a garantia contra dois estornos simultâneos.
         self._lancamentos.create_index(
@@ -199,8 +208,13 @@ class LivroCaixaMongo:
 
     # --- Lançamentos ---
 
-    def listar_lancamentos(self, espaco_id: str, de: date | None, ate: date | None, limite: int) -> list[Lancamento]:
+    def listar_lancamentos(
+        self, espaco_id: str, de: date | None, ate: date | None, limite: int, conta_id: str | None = None
+    ) -> list[Lancamento]:
         filtro: dict = {"espaco_id": espaco_id}
+        # A conta aparece nas partidas tanto como origem quanto como destino.
+        if conta_id:
+            filtro["partidas.conta_id"] = conta_id
         # A data fica gravada como texto AAAA-MM-DD: a ordem do texto é a ordem
         # das datas, então $gte/$lte e a ordenação funcionam direto.
         periodo = {}
@@ -247,6 +261,10 @@ class LivroCaixaMongo:
             documento["divisao"] = [
                 {"pessoa": parte.pessoa, "valor_centavos": parte.valor_centavos} for parte in lancamento.divisao
             ]
+        if lancamento.compra_id:
+            documento["compra_id"] = lancamento.compra_id
+            documento["parcela"] = lancamento.parcela
+            documento["parcelas"] = lancamento.parcelas
         try:
             lancamento.id = str(self._lancamentos.insert_one(documento).inserted_id)
         except DuplicateKeyError as erro:
@@ -262,6 +280,10 @@ class LivroCaixaMongo:
 
     def excluir_estornos_de(self, espaco_id: str, id: str) -> int:
         return self._lancamentos.delete_many({"espaco_id": espaco_id, "estorno_de": id}).deleted_count
+
+    def excluir_compra(self, espaco_id: str, compra_id: str) -> int:
+        """Todas as parcelas de uma compra no cartão."""
+        return self._lancamentos.delete_many({"espaco_id": espaco_id, "compra_id": compra_id}).deleted_count
 
     def buscar_estornos(self, espaco_id: str, ids: list[str]) -> dict[str, str]:
         """{id do lançamento original: id do estorno}, para os ids pedidos."""
@@ -312,7 +334,7 @@ def _para_espaco(documento: dict) -> Espaco:
 
 
 def _documento_da_conta(conta: Conta) -> dict:
-    return {
+    documento = {
         "espaco_id": conta.espaco_id,
         "nome": conta.nome,
         "tipo": conta.tipo.value,
@@ -320,6 +342,11 @@ def _documento_da_conta(conta: Conta) -> dict:
         "ativa": conta.ativa,
         "criada_em": conta.criada_em,
     }
+    if conta.cartao:
+        documento["limite_centavos"] = conta.limite_centavos
+        documento["dia_fechamento"] = conta.dia_fechamento
+        documento["dia_vencimento"] = conta.dia_vencimento
+    return documento
 
 
 def _para_conta(documento: dict) -> Conta:
@@ -331,6 +358,9 @@ def _para_conta(documento: dict) -> Conta:
         saldo_inicial_centavos=documento["saldo_inicial_centavos"],
         ativa=documento["ativa"],
         criada_em=documento["criada_em"],
+        limite_centavos=documento.get("limite_centavos"),
+        dia_fechamento=documento.get("dia_fechamento"),
+        dia_vencimento=documento.get("dia_vencimento"),
     )
 
 
@@ -377,4 +407,7 @@ def _para_lancamento(documento: dict) -> Lancamento:
         estorno_de=documento.get("estorno_de"),
         chave_importacao=documento.get("chave_importacao"),
         divisao=[Parte(p["pessoa"], p["valor_centavos"]) for p in documento.get("divisao", [])],
+        compra_id=documento.get("compra_id"),
+        parcela=documento.get("parcela"),
+        parcelas=documento.get("parcelas"),
     )

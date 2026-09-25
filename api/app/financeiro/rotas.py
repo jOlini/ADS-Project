@@ -4,31 +4,39 @@ Tudo fica sob /espacos/{espaco_id}: o espaço é o dono dos dados, e a
 dependência espaco_do_cliente barra quem não é membro antes de qualquer
 consulta. Lançamento não tem PUT: correção de valor é por estorno, que deixa
 o histórico; DELETE apaga de vez (erro de digitação, duplicata). O extrato do
-banco (CSV) entra por /importacoes, sem duplicar linha já importada.
+banco (CSV) entra por /importacoes, sem duplicar linha já importada. O cartão
+de crédito é uma conta de dívida: painel, faturas, compras e pagamento ficam
+em /cartoes.
 """
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 
+from app.financeiro import cartoes
 from app.financeiro.acesso import cliente_autenticado, espaco_do_cliente, obter_livro_caixa
 from app.financeiro.modelos import (
     AtualizacaoCategoria,
     AtualizacaoConta,
+    CartaoResposta,
     CategoriaResposta,
     ContaResposta,
     Espaco,
     EspacoResposta,
     EstruturaResposta,
+    FaturaResposta,
     ImportacaoResposta,
     LancamentoResposta,
     LinhaDoArquivoResposta,
     MapeamentoDoExtrato,
     NovaCategoria,
+    NovaCompra,
     NovaConta,
     NovaImportacao,
     NovoLancamento,
+    NovoPagamento,
     PedidoDeEstrutura,
+    PeriodoDaFaturaResposta,
 )
 from app.financeiro.repositorio import RepositorioLivroCaixa
 from app.financeiro.servicos import ServicoLivroCaixa
@@ -131,6 +139,104 @@ def atualizar_conta(
     return ContaResposta.de(*servico.conta_com_saldo(espaco, conta_id))
 
 
+# --- Cartões de crédito ---------------------------------------------------------
+# O cartão é uma conta do tipo CARTAO_CREDITO (criada e editada em /contas).
+# Aqui ficam o painel, as faturas, a compra (parcelada ou não) e o pagamento.
+
+
+@rotas_livro_caixa.get(
+    "/{espaco_id}/cartoes",
+    response_model=list[CartaoResposta],
+    summary="Listar cartões de crédito com limite, fatura atual e parcelamentos futuros",
+    responses=ERRO_404,
+)
+def listar_cartoes(espaco: Espaco = Depends(espaco_do_cliente), servico: ServicoLivroCaixa = Depends(obter_servico)):
+    return [CartaoResposta.de(*cartao) for cartao in servico.cartoes(espaco)]
+
+
+@rotas_livro_caixa.get(
+    "/{espaco_id}/cartoes/{cartao_id}",
+    response_model=CartaoResposta,
+    summary="Consultar o painel de um cartão de crédito",
+    responses=ERRO_404,
+)
+def buscar_cartao(
+    cartao_id: str, espaco: Espaco = Depends(espaco_do_cliente), servico: ServicoLivroCaixa = Depends(obter_servico)
+):
+    return CartaoResposta.de(*servico.cartao(espaco, cartao_id))
+
+
+@rotas_livro_caixa.get(
+    "/{espaco_id}/cartoes/{cartao_id}/faturas/{referencia}",
+    response_model=FaturaResposta,
+    summary="Consultar uma fatura do cartão (referência = mês do vencimento)",
+    responses={**ERRO_400, **ERRO_404},
+)
+def buscar_fatura(
+    cartao_id: str,
+    referencia: str = Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="Ano e mês do vencimento (AAAA-MM)"),
+    espaco: Espaco = Depends(espaco_do_cliente),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
+):
+    """Compras, créditos e pagamentos do período da fatura. A compra feita no dia do
+    fechamento já é da fatura seguinte."""
+    ano, mes = map(int, referencia.split("-"))
+    cartao, periodo, situacao, lancamentos = servico.fatura(espaco, cartao_id, (ano, mes))
+    return FaturaResposta(
+        **PeriodoDaFaturaResposta.de(periodo).model_dump(),
+        cartao_id=cartao.id,
+        situacao=situacao,
+        total_centavos=cartoes.total_da_fatura(lancamentos, cartao.id, periodo),
+        pagamentos_centavos=sum(cartoes.pagamento(lancamento, cartao.id) for lancamento in lancamentos),
+        lancamentos=[LancamentoResposta.de(lancamento) for lancamento in lancamentos],
+    )
+
+
+@rotas_livro_caixa.post(
+    "/{espaco_id}/cartoes/{cartao_id}/compras",
+    response_model=list[LancamentoResposta],
+    status_code=status.HTTP_201_CREATED,
+    summary="Lançar compra no cartão, à vista ou parcelada",
+    responses={**ERRO_400, **ERRO_404},
+)
+def comprar_no_cartao(
+    cartao_id: str,
+    dados: NovaCompra,
+    espaco: Espaco = Depends(espaco_do_cliente),
+    cliente: ClienteFirebase = Depends(cliente_autenticado),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
+):
+    """Uma despesa por parcela, cada uma na fatura seguinte à da anterior (a primeira na
+    fatura da data da compra). O total ocupa o limite desde já. Excluir qualquer parcela
+    exclui a compra inteira."""
+    return [LancamentoResposta.de(parcela) for parcela in servico.comprar(espaco, cartao_id, dados, cliente.uid)]
+
+
+@rotas_livro_caixa.post(
+    "/{espaco_id}/cartoes/{cartao_id}/pagamentos",
+    response_model=LancamentoResposta,
+    status_code=status.HTTP_201_CREATED,
+    summary="Pagar a fatura: sai da conta indicada e libera o limite do cartão",
+    responses={**ERRO_400, **ERRO_404},
+)
+def pagar_fatura(
+    cartao_id: str,
+    dados: NovoPagamento,
+    requisicao: Request,
+    resposta: Response,
+    espaco: Espaco = Depends(espaco_do_cliente),
+    cliente: ClienteFirebase = Depends(cliente_autenticado),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
+):
+    """Grava uma transferência da conta (`conta_id`) para o cartão: aparece como saída no
+    extrato da conta e como pagamento na fatura."""
+    pagamento = servico.pagar_fatura(espaco, cartao_id, dados, cliente.uid)
+    resposta.headers["Location"] = str(
+        requisicao.url_for("buscar_lancamento", espaco_id=espaco.id, lancamento_id=pagamento.id)
+    )
+    return LancamentoResposta.de(pagamento)
+
+
 # --- Categorias ----------------------------------------------------------------
 
 
@@ -204,10 +310,13 @@ def listar_lancamentos(
     de: date | None = Query(None, description="Data inicial (AAAA-MM-DD), inclusive"),
     ate: date | None = Query(None, description="Data final (AAAA-MM-DD), inclusive"),
     limite: int = Query(200, ge=1, le=1000, description="Máximo de lançamentos na resposta"),
+    conta_id: str | None = Query(None, description="Só os lançamentos que mexem nesta conta (origem ou destino)"),
     espaco: Espaco = Depends(espaco_do_cliente),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
-    return [LancamentoResposta.de(lancamento) for lancamento in servico.lancamentos(espaco, de, ate, limite)]
+    return [
+        LancamentoResposta.de(lancamento) for lancamento in servico.lancamentos(espaco, de, ate, limite, conta_id)
+    ]
 
 
 @rotas_livro_caixa.post(

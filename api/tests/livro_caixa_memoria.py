@@ -84,11 +84,14 @@ class LivroCaixaMemoria:
 
     # --- Lançamentos ---
 
-    def listar_lancamentos(self, espaco_id, de, ate, limite):
+    def listar_lancamentos(self, espaco_id, de, ate, limite, conta_id=None):
         lancamentos = [
             l
             for l in self.lancamentos.values()
-            if l.espaco_id == espaco_id and (de is None or l.data >= de) and (ate is None or l.data <= ate)
+            if l.espaco_id == espaco_id
+            and (de is None or l.data >= de)
+            and (ate is None or l.data <= ate)
+            and (conta_id is None or any(p.conta_id == conta_id for p in l.partidas))
         ]
         # ObjectId cresce com o tempo: desempata lançamentos do mesmo instante.
         lancamentos.sort(key=lambda l: (l.data, l.criado_em, l.id), reverse=True)
@@ -121,6 +124,12 @@ class LivroCaixaMemoria:
         for estorno in estornos:
             del self.lancamentos[estorno]
         return len(estornos)
+
+    def excluir_compra(self, espaco_id, compra_id):
+        parcelas = [l.id for l in self.lancamentos.values() if l.espaco_id == espaco_id and l.compra_id == compra_id]
+        for parcela in parcelas:
+            del self.lancamentos[parcela]
+        return len(parcelas)
 
     def listar_pessoas(self, espaco_id):
         return list(
