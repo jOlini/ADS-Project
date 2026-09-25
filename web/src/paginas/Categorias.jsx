@@ -4,6 +4,7 @@ import AvisoApi from '../componentes/AvisoApi';
 import Campo from '../componentes/Campo';
 import Carregando from '../componentes/Carregando';
 import Icone from '../componentes/Icone';
+import Seletor from '../componentes/Seletor';
 import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
 import { primeiroCampoComErro } from '../regras/cadastro';
@@ -11,6 +12,11 @@ import { CORES_DE_CATEGORIA, errosDaApi, ORDEM_DA_CATEGORIA, validarCategoria } 
 import { apiConfigurada, atualizarCategoria, criarCategoria, listarCategorias } from '../servicos/livroCaixa';
 
 const NOVA = { nome: '', tipo: 'DESPESA', cor: 'neutro', ativa: true };
+
+const TIPOS_DE_CATEGORIA = [
+  { valor: 'DESPESA', rotulo: 'Despesa', descricao: 'Dinheiro que sai' },
+  { valor: 'RECEITA', rotulo: 'Receita', descricao: 'Dinheiro que entra' },
+];
 
 const GRUPOS = [
   { tipo: 'DESPESA', titulo: 'Despesas', icone: 'saida' },
@@ -173,24 +179,13 @@ export default function Categorias() {
                   Categoria de {emEdicao.tipo === 'DESPESA' ? 'despesa' : 'receita'}. O tipo não muda depois de criado.
                 </p>
               ) : (
-                <Campo elemento="select" rotulo="Tipo" name="tipo" value={formulario.tipo}
-                  onChange={(evento) => mudar('tipo', evento.target.value)} erro={erros.tipo}>
-                  <option value="DESPESA">Despesa (dinheiro que sai)</option>
-                  <option value="RECEITA">Receita (dinheiro que entra)</option>
-                </Campo>
+                <Campo elemento={Seletor} rotulo="Tipo" name="tipo" value={formulario.tipo} opcoes={TIPOS_DE_CATEGORIA}
+                  onChange={(evento) => mudar('tipo', evento.target.value)} erro={erros.tipo} />
               )}
 
-              <div className="campo-com-amostra">
-                <Campo elemento="select" rotulo="Cor" name="cor" value={formulario.cor}
-                  onChange={(evento) => mudar('cor', evento.target.value)} erro={erros.cor}>
-                  {CORES_DE_CATEGORIA.map((cor) => (
-                    <option key={cor.valor} value={cor.valor}>
-                      {cor.rotulo}
-                    </option>
-                  ))}
-                </Campo>
-                <span className="amostra-de-cor" style={{ background: `var(--cat-${formulario.cor})` }} aria-hidden="true" />
-              </div>
+              <Campo elemento={Seletor} rotulo="Cor" name="cor" value={formulario.cor}
+                opcoes={CORES_DE_CATEGORIA.map((cor) => ({ ...cor, cor: cor.valor }))}
+                onChange={(evento) => mudar('cor', evento.target.value)} erro={erros.cor} />
 
               {emEdicao && (
                 <label className="caixa-de-marcar">

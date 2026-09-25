@@ -4,7 +4,11 @@ import { BrowserRouter } from 'react-router-dom';
 // Fonte Figtree (eixo de peso) hospedada junto com o app, sem chamar o
 // Google Fonts. A mesma fonte está no painel (api/painel/fontes/).
 import '@fontsource-variable/figtree';
+// Ordem dos estilos: os tokens (todo valor visual), a base do app e os
+// componentes próprios, que sobrepõem o botão e o campo da base.
+import './estilos/tokens.css';
 import './index.css';
+import './estilos/componentes.css';
 import ToastProvider from './componentes/toast/ToastProvider';
 import AppRoutes from './routes';
 

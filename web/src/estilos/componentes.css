@@ -1,0 +1,576 @@
+/*
+ * Componentes próprios que substituem os controles do navegador: seletor
+ * (no lugar do <select>), campo de data e calendário (no lugar do
+ * <input type="date">), seletor de mês, janela modal, menu de ações e campo
+ * de busca. Nenhum deles usa o desenho nativo: tudo sai dos tokens, e o
+ * mesmo controle fica igual em qualquer navegador e nos dois temas.
+ *
+ * Os botões do app têm um estilo base (index.css, botão verde); aqui os
+ * seletores levam "button." e ":not(:disabled)" para vencer aquela regra.
+ */
+
+/* ---------------------------------------------------- Botão só com ícone */
+
+button.botao-icone {
+  flex: none;
+  width: var(--tamanho-icone-botao);
+  min-height: var(--tamanho-icone-botao);
+  height: var(--tamanho-icone-botao);
+  padding: 0;
+  color: var(--suave);
+  background: transparent;
+  border-color: transparent;
+  border-radius: var(--raio-pequeno);
+}
+
+button.botao-icone:hover:not(:disabled) {
+  color: var(--texto);
+  background: var(--lateral);
+}
+
+/* Botão destrutivo: o único vermelho cheio, só na confirmação. */
+button.perigo {
+  color: var(--sobre-erro);
+  background: var(--erro);
+}
+
+button.perigo:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--erro) 85%, var(--texto));
+}
+
+/* ------------------------------------------------ Seletor (lista própria) */
+
+.seletor {
+  min-width: 0;
+}
+
+/* O botão tem a moldura de um campo de texto. */
+button.controle-do-seletor {
+  width: 100%;
+  min-width: 0;
+  height: var(--altura-controle);
+  min-height: var(--altura-controle);
+  gap: var(--espaco-4);
+  justify-content: flex-start;
+  padding: 0 var(--espaco-6) 0 var(--espaco-7);
+  font-size: var(--fonte-corpo);
+  font-weight: var(--peso-regular);
+  text-align: left;
+  color: var(--texto);
+  background: var(--superficie);
+  border: var(--borda-forte);
+  border-radius: var(--raio);
+  transition: border-color var(--transicao), box-shadow var(--transicao);
+}
+
+button.controle-do-seletor:hover:not(:disabled) {
+  background: var(--superficie);
+  border-color: var(--suave);
+}
+
+button.controle-do-seletor:focus-visible {
+  outline: none;
+  border-color: var(--marca);
+  box-shadow: var(--anel-de-foco);
+}
+
+button.controle-do-seletor[aria-invalid='true'] {
+  border-color: var(--erro);
+}
+
+button.controle-do-seletor[aria-invalid='true']:focus-visible {
+  box-shadow: var(--anel-de-erro);
+}
+
+.controle-do-seletor > .icone {
+  margin-left: auto;
+  color: var(--suave);
+  transition: rotate var(--transicao);
+}
+
+.controle-do-seletor[aria-expanded='true'] > .icone {
+  rotate: 180deg;
+}
+
+.valor-do-seletor {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.valor-do-seletor.sem-valor {
+  color: var(--suave);
+}
+
+.ponto-de-cor {
+  flex: none;
+  width: var(--tamanho-ponto);
+  height: var(--tamanho-ponto);
+  border-radius: var(--raio-foco);
+  background: var(--cor-do-ponto, var(--cat-neutro));
+}
+
+/* Painel das listas (seletor e menu): flutua preso ao botão, com rolagem
+   própria quando a lista é maior que o espaço da tela. */
+.lista-flutuante {
+  position: fixed;
+  z-index: var(--camada-flutuante);
+  display: grid;
+  gap: var(--espaco-1);
+  align-content: start;
+  max-height: min(var(--altura-lista-flutuante), var(--espaco-disponivel, 100vh));
+  margin: 0;
+  padding: var(--espaco-2);
+  overflow-y: auto;
+  list-style: none;
+  background: var(--superficie);
+  border: var(--borda);
+  border-radius: var(--raio);
+  box-shadow: var(--sombra-flutuante);
+  scrollbar-width: thin;
+  scrollbar-color: var(--cor-da-rolagem) transparent;
+}
+
+.lista-flutuante [role='option'] {
+  display: flex;
+  gap: var(--espaco-5);
+  align-items: center;
+  padding: var(--espaco-4) var(--espaco-5);
+  border-radius: var(--raio-pequeno);
+  font-size: var(--fonte-corpo);
+  cursor: pointer;
+  transition: background-color var(--transicao);
+}
+
+.lista-flutuante [role='option'].ativa {
+  background: var(--lateral);
+}
+
+.lista-flutuante [role='option'][aria-selected='true'] {
+  font-weight: var(--peso-semi);
+}
+
+.lista-flutuante [role='option'] > .icone {
+  margin-left: auto;
+  color: var(--marca);
+}
+
+.lista-flutuante [role='option'][aria-disabled='true'] {
+  opacity: var(--opacidade-desligado);
+  cursor: not-allowed;
+}
+
+.rotulo-da-opcao {
+  display: grid;
+  min-width: 0;
+}
+
+.rotulo-da-opcao small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-regular);
+}
+
+.sem-opcoes {
+  padding: var(--espaco-4) var(--espaco-5);
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+}
+
+/* -------------------------------------------------------- Campo de data */
+
+.seletor-de-data {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  min-width: 0;
+  height: var(--altura-controle);
+  padding-right: var(--espaco-2);
+  background: var(--superficie);
+  border: var(--borda-forte);
+  border-radius: var(--raio);
+  transition: border-color var(--transicao), box-shadow var(--transicao);
+}
+
+.seletor-de-data:hover {
+  border-color: var(--suave);
+}
+
+.seletor-de-data:focus-within {
+  border-color: var(--marca);
+  box-shadow: var(--anel-de-foco);
+}
+
+.seletor-de-data:has(input[aria-invalid='true']) {
+  border-color: var(--erro);
+}
+
+.seletor-de-data:has(input[aria-invalid='true']):focus-within {
+  box-shadow: var(--anel-de-erro);
+}
+
+.seletor-de-data.desligado {
+  opacity: var(--opacidade-desligado);
+}
+
+/* O campo de dentro não tem moldura própria: a moldura é a do conjunto. */
+.seletor-de-data input,
+.seletor-de-data input:hover,
+.seletor-de-data input:focus-visible,
+.seletor-de-data input[aria-invalid='true'],
+.seletor-de-data input[aria-invalid='true']:focus-visible {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0 0 0 var(--espaco-7);
+  font: inherit;
+  font-size: var(--fonte-corpo);
+  font-variant-numeric: tabular-nums;
+  color: var(--texto);
+  background: transparent;
+  border: 0;
+  border-radius: var(--raio);
+  outline: none;
+  box-shadow: none;
+}
+
+.seletor-de-data input::placeholder {
+  color: var(--suave);
+}
+
+/* ------------------------------------------------------------ Calendário */
+
+.painel-flutuante {
+  position: fixed;
+  z-index: var(--camada-flutuante);
+  width: var(--largura-calendario);
+  max-width: calc(100vw - var(--espaco-8));
+  max-height: var(--espaco-disponivel, 100vh);
+  padding: var(--espaco-6);
+  overflow-y: auto;
+  color: var(--texto);
+  background: var(--superficie);
+  border: var(--borda);
+  border-radius: var(--raio-grande);
+  box-shadow: var(--sombra-flutuante);
+}
+
+.calendario {
+  display: grid;
+  gap: var(--espaco-4);
+}
+
+.topo-do-calendario {
+  display: flex;
+  gap: var(--espaco-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.atalhos-do-calendario {
+  display: flex;
+  gap: var(--espaco-1);
+  align-items: center;
+}
+
+/* Nome do mês e ano no topo: um clique leva à grade de meses ou de anos. */
+button.atalho,
+.atalho.parado {
+  gap: var(--espaco-2);
+  min-height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-4);
+  color: var(--texto);
+  background: transparent;
+  border-color: transparent;
+  border-radius: var(--raio-pequeno);
+  font-size: var(--fonte-botao);
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+button.atalho {
+  text-transform: capitalize;
+}
+
+button.atalho:hover:not(:disabled) {
+  background: var(--lateral);
+}
+
+.atalho.parado {
+  display: inline-flex;
+  align-items: center;
+}
+
+.grade-do-calendario {
+  display: grid;
+  gap: var(--espaco-1);
+}
+
+.linha-da-grade {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--espaco-1);
+}
+
+.grade-do-calendario:is(.meses, .anos) .linha-da-grade {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dia-da-semana {
+  display: grid;
+  place-items: center;
+  height: var(--espaco-14);
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+}
+
+button:is(.dia-do-calendario, .mes-da-grade, .ano-da-grade) {
+  width: 100%;
+  min-height: var(--tamanho-dia);
+  padding: 0;
+  color: var(--texto);
+  background: transparent;
+  border-color: transparent;
+  border-radius: var(--raio-pequeno);
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-medio);
+  font-variant-numeric: tabular-nums;
+}
+
+button:is(.mes-da-grade, .ano-da-grade) {
+  min-height: var(--altura-controle);
+  text-transform: capitalize;
+}
+
+button:is(.dia-do-calendario, .mes-da-grade, .ano-da-grade):hover:not(:disabled) {
+  background: var(--lateral);
+}
+
+button.dia-do-calendario.fora-do-mes {
+  color: var(--suave);
+}
+
+/* Hoje: moldura fina. O verde fica para a data escolhida (o item atual). */
+button:is(.dia-do-calendario, .mes-da-grade, .ano-da-grade)[aria-current='date'] {
+  font-weight: var(--peso-forte);
+  box-shadow: inset 0 0 0 var(--espessura) var(--linha-forte);
+}
+
+button:is(.dia-do-calendario, .mes-da-grade, .ano-da-grade).escolhido,
+button:is(.dia-do-calendario, .mes-da-grade, .ano-da-grade).escolhido:hover:not(:disabled) {
+  color: var(--sobre-marca);
+  background: var(--marca);
+  box-shadow: none;
+}
+
+button:is(.dia-do-calendario, .mes-da-grade, .ano-da-grade):disabled {
+  background: transparent;
+}
+
+.rodape-do-calendario {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: var(--espaco-4);
+  border-top: var(--borda);
+}
+
+/* ------------------------------------------------------- Seletor de mês */
+
+.seletor-de-mes {
+  display: flex;
+  gap: var(--espaco-2);
+  align-items: center;
+}
+
+.seletor-de-mes button.mes {
+  gap: var(--espaco-3);
+  min-width: var(--largura-nome-do-mes);
+  min-height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-5);
+  color: var(--texto);
+  background: var(--superficie);
+  border: var(--borda);
+  border-radius: var(--raio-pequeno);
+  font-size: var(--fonte-botao);
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+.seletor-de-mes button.mes:hover:not(:disabled) {
+  background: var(--lateral);
+  border-color: var(--linha-forte);
+}
+
+.seletor-de-mes button.mes > span {
+  display: inline-block;
+}
+
+.seletor-de-mes button.mes > span::first-letter {
+  text-transform: uppercase;
+}
+
+.seletor-de-mes button.mes > .icone {
+  color: var(--suave);
+}
+
+/* ----------------------------------------------------------- Janela modal */
+
+.modal {
+  width: var(--largura-modal);
+  max-height: calc(100dvh - var(--espaco-16));
+  padding: 0;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 0;
+  border-radius: var(--raio-grande);
+  box-shadow: var(--sombra-flutuante);
+}
+
+.modal.larga {
+  width: var(--largura-modal-larga);
+}
+
+.modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal::backdrop {
+  background: var(--veu);
+}
+
+.cabecalho-do-modal {
+  display: flex;
+  gap: var(--espaco-6);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--espaco-10) var(--espaco-10) var(--espaco-4) var(--espaco-12);
+}
+
+.cabecalho-do-modal h2 {
+  font-size: var(--fonte-dialogo);
+  overflow-wrap: anywhere;
+}
+
+.cabecalho-do-modal p {
+  margin-top: var(--espaco-2);
+  font-size: var(--fonte-rotulo);
+}
+
+.corpo-do-modal {
+  flex: 1;
+  min-height: 0;
+  padding: var(--espaco-4) var(--espaco-12) var(--espaco-12);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cor-da-rolagem) transparent;
+}
+
+@media (max-width: 560px) {
+  .cabecalho-do-modal {
+    padding: var(--espaco-8) var(--espaco-6) var(--espaco-2) var(--espaco-8);
+  }
+
+  .corpo-do-modal {
+    padding: var(--espaco-4) var(--espaco-8) var(--espaco-8);
+  }
+}
+
+/* ------------------------------------------------------- Menu de ações */
+
+.menu-flutuante {
+  width: var(--largura-menu);
+  max-width: calc(100vw - var(--espaco-8));
+}
+
+button.item-do-menu {
+  gap: var(--espaco-6);
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 0;
+  padding: var(--espaco-5) var(--espaco-6);
+  text-align: left;
+  color: var(--texto);
+  background: transparent;
+  border-color: transparent;
+  border-radius: var(--raio-pequeno);
+  font-size: var(--fonte-botao);
+  font-weight: var(--peso-semi);
+}
+
+button.item-do-menu > .icone {
+  margin-top: var(--espaco-1);
+  color: var(--suave);
+}
+
+button.item-do-menu:is(:hover, :focus):not(:disabled) {
+  background: var(--lateral);
+}
+
+button.item-do-menu:focus-visible {
+  outline-offset: calc(var(--espaco-1) * -1);
+}
+
+button.item-do-menu.perigo,
+button.item-do-menu.perigo > .icone {
+  color: var(--erro);
+}
+
+/* ------------------------------------------------------- Campo de busca */
+
+.campo-de-busca {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  min-width: 0;
+  height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-2) 0 var(--espaco-6);
+  color: var(--suave);
+  background: var(--superficie);
+  border: var(--borda-forte);
+  border-radius: var(--raio);
+  transition: border-color var(--transicao), box-shadow var(--transicao);
+}
+
+.campo-de-busca:hover {
+  border-color: var(--suave);
+}
+
+.campo-de-busca:focus-within {
+  border-color: var(--marca);
+  box-shadow: var(--anel-de-foco);
+}
+
+.campo-de-busca input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font: inherit;
+  font-size: var(--fonte-botao);
+  color: var(--texto);
+  background: transparent;
+  border: 0;
+  outline: none;
+  appearance: none;
+}
+
+.campo-de-busca input::placeholder {
+  color: var(--suave);
+}
+
+/* Sem o "x" nativo do type="search": o botão de limpar é o do projeto. */
+.campo-de-busca input::-webkit-search-cancel-button,
+.campo-de-busca input::-webkit-search-decoration {
+  appearance: none;
+}
+
+.campo-de-busca button.botao-icone {
+  width: var(--tamanho-icone-botao-compacto);
+  height: var(--tamanho-icone-botao-compacto);
+  min-height: var(--tamanho-icone-botao-compacto);
+}

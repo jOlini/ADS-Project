@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef } from 'react';
 
 // Diálogo de confirmação com o <dialog> nativo: prende o foco, fecha no Esc
-// e devolve o foco a quem abriu. Mesmo desenho do diálogo do painel.
-export default function Confirmacao({ aberta, titulo, children, rotuloDeConfirmar, ocupado = false, aoConfirmar, aoCancelar }) {
+// e devolve o foco a quem abriu. Mesmo desenho do diálogo do painel. Com
+// perigo, o botão de confirmar fica vermelho (ação sem volta, como excluir).
+export default function Confirmacao({ aberta, titulo, children, rotuloDeConfirmar, ocupado = false, perigo = false, aoConfirmar, aoCancelar }) {
   const dialogo = useRef(null);
   const idDoTitulo = useId();
 
@@ -30,7 +31,7 @@ export default function Confirmacao({ aberta, titulo, children, rotuloDeConfirma
           <button type="button" className="secundario" onClick={aoCancelar} disabled={ocupado}>
             Cancelar
           </button>
-          <button type="submit" disabled={ocupado} aria-busy={ocupado}>
+          <button type="submit" className={perigo ? 'perigo' : undefined} disabled={ocupado} aria-busy={ocupado}>
             {rotuloDeConfirmar}
           </button>
         </div>
