@@ -1,58 +1,135 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import Campo from './Campo';
 import Icone from './Icone';
+import MapeamentoDeColunas from './MapeamentoDeColunas';
+import Seletor from './Seletor';
 import { useToast } from './toast/useToast';
 import { primeiroCampoComErro } from '../regras/cadastro';
 import { formatarData } from '../regras/datas';
 import { formatarComSinal } from '../regras/dinheiro';
 import {
+  cabecalhoProvavel,
   categoriaSugerida,
   decodificarExtrato,
+  descreverMapeamento,
   errosDaImportacao,
+  mapeamentoDosPapeis,
+  nomesDasColunas,
   ORDEM_DA_IMPORTACAO,
+  papeisDoMapeamento,
   resumoDaImportacao,
   ROTULO_DA_SITUACAO,
+  trocarPapel,
   validarImportacao,
+  validarMapeamento,
 } from '../regras/importacao';
-import { importarExtrato } from '../servicos/livroCaixa';
+import { estruturaDoExtrato, importarExtrato } from '../servicos/livroCaixa';
 
-// Importação do extrato do banco (CSV) em dois passos: "Conferir" manda o
-// arquivo com simular=true e mostra o que entraria, linha por linha;
-// "Importar" grava. Linha já importada antes aparece como tal e não entra de
-// novo (a API guarda uma chave por linha).
-export default function ImportarExtrato({ espacoId, contas, categorias, aoImportar }) {
+const ETAPAS = [
+  { id: 'arquivo', rotulo: 'Arquivo' },
+  { id: 'colunas', rotulo: 'Colunas' },
+  { id: 'previa', rotulo: 'Conferir' },
+];
+const CAMPOS_DO_DESTINO = ['conta_id', 'categoria_despesa_id', 'categoria_receita_id'];
+
+const opcoesDoTipo = (categorias, tipo) =>
+  categorias
+    .filter((categoria) => categoria.ativa && categoria.tipo === tipo)
+    .map((categoria) => ({ valor: categoria.id, rotulo: categoria.nome, cor: categoria.cor }));
+
+// Importação do extrato do banco (CSV), dentro do modal "Importar CSV", em
+// três etapas:
+// 1. Arquivo, conta e categorias padrão. A API lê o começo do arquivo e tenta
+//    reconhecer as colunas pelo nome (vários bancos, vários formatos).
+// 2. Colunas: só aparece se o formato não foi reconhecido, ou se a pessoa
+//    pede para ajustar. Ela diz o que é cada coluna.
+// 3. Conferir: a API simula e mostra linha por linha o que entraria (linha
+//    já importada antes aparece e não entra de novo); "Importar" grava.
+export default function ImportarExtrato({ espacoId, contas, categorias, aoImportar, aoCancelar, aoMudarOcupado }) {
   const toast = useToast();
-  const [formulario, setFormulario] = useState(() => ({
+  const idDoArquivo = useId();
+  const [etapa, setEtapa] = useState('arquivo');
+  const [destino, setDestino] = useState(() => ({
     conta_id: contas.length === 1 ? contas[0].id : '',
     categoria_despesa_id: categoriaSugerida(categorias, 'DESPESA'),
     categoria_receita_id: categoriaSugerida(categorias, 'RECEITA'),
   }));
   const [arquivo, setArquivo] = useState(null);
-  // Trocar a key remonta o <input type="file">: é o jeito de limpá-lo.
-  const [versaoDoSeletor, setVersaoDoSeletor] = useState(0);
+  const [csv, setCsv] = useState('');
+  const [linhas, setLinhas] = useState([]);
+  const [colunas, setColunas] = useState({ delimitador: ';', cabecalho: 0, papeis: {}, inverterSinal: false });
+  const [reconhecido, setReconhecido] = useState(false);
   const [previa, setPrevia] = useState(null);
   const [erros, setErros] = useState({});
-  const [ocupado, setOcupado] = useState(null);
+  const [ocupado, setOcupadoLocal] = useState(null);
 
-  const doTipo = (tipo) => categorias.filter((categoria) => categoria.ativa && categoria.tipo === tipo);
+  function setOcupado(valor) {
+    setOcupadoLocal(valor);
+    aoMudarOcupado?.(Boolean(valor));
+  }
 
-  // Qualquer mudança invalida a prévia: ela vale para aquele arquivo e aquela conta.
-  function mudar(campo, valor) {
-    setFormulario((atual) => ({ ...atual, [campo]: valor }));
+  const mapeamento = mapeamentoDosPapeis(colunas.papeis, {
+    delimitador: colunas.delimitador,
+    cabecalho: colunas.cabecalho,
+    inverter_sinal: colunas.inverterSinal,
+  });
+  const nomeDaCategoria = new Map(categorias.map((categoria) => [categoria.id, categoria.nome]));
+
+  function mudarDestino(campo, valor) {
+    setDestino((atual) => ({ ...atual, [campo]: valor }));
     setErros((atuais) => ({ ...atuais, [campo]: undefined }));
-    setPrevia(null);
   }
 
   function escolherArquivo(evento) {
     setArquivo(evento.target.files?.[0] ?? null);
     setErros((atuais) => ({ ...atuais, arquivo: undefined }));
-    setPrevia(null);
   }
 
-  async function conferir(evento) {
+  // Colunas vindas da API: as reconhecidas, ou um palpite para a pessoa ajustar.
+  function aplicarEstrutura(estrutura) {
+    setLinhas(estrutura.linhas);
+    setReconhecido(Boolean(estrutura.mapeamento));
+    setColunas({
+      delimitador: estrutura.delimitador,
+      cabecalho: estrutura.mapeamento?.cabecalho ?? cabecalhoProvavel(estrutura.linhas),
+      papeis: papeisDoMapeamento(estrutura.mapeamento),
+      inverterSinal: estrutura.mapeamento?.inverter_sinal ?? false,
+    });
+  }
+
+  // Erro da API: cada um volta para a etapa onde a pessoa pode corrigi-lo.
+  // Conta e categorias ficam na etapa do arquivo. Um erro do arquivo que
+  // aparece depois de indicar as colunas ("nada depois do cabeçalho") se
+  // corrige nas colunas, e é lá que ele aparece.
+  function mostrarErro(erro, titulo, etapaDeOrigem) {
+    const campos = errosDaImportacao(erro.campos);
+    setErros(campos);
+    toast.erro(erro.message, { titulo });
+    if (CAMPOS_DO_DESTINO.some((campo) => campos[campo]) || (campos.arquivo && etapaDeOrigem === 'arquivo')) {
+      setEtapa('arquivo');
+    } else if (Object.keys(campos).length > 0) {
+      setEtapa('colunas');
+    }
+  }
+
+  async function conferir(comMapeamento, etapaDeOrigem) {
+    setOcupado('conferindo');
+    try {
+      const resposta = await importarExtrato(espacoId, { ...destino, csv: comMapeamento.csv, mapeamento: comMapeamento.mapeamento, simular: true });
+      setPrevia({ resposta, mapeamento: comMapeamento.mapeamento });
+      setErros({});
+      setEtapa('previa');
+    } catch (erro) {
+      mostrarErro(erro, 'Extrato não conferido', etapaDeOrigem);
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  async function continuar(evento) {
     evento.preventDefault();
     const elementos = evento.currentTarget.elements;
-    const encontrados = validarImportacao({ arquivo, ...formulario });
+    const encontrados = validarImportacao({ arquivo, ...destino });
     setErros(encontrados);
     const primeiro = primeiroCampoComErro(encontrados, ORDEM_DA_IMPORTACAO);
     if (primeiro) {
@@ -60,95 +137,187 @@ export default function ImportarExtrato({ espacoId, contas, categorias, aoImport
       return;
     }
 
-    setOcupado('conferindo');
+    setOcupado('lendo');
+    let estrutura;
+    let texto;
     try {
-      const csv = decodificarExtrato(await arquivo.arrayBuffer());
-      const resposta = await importarExtrato(espacoId, { ...formulario, csv, simular: true });
-      setPrevia({ csv, resposta });
+      texto = decodificarExtrato(await arquivo.arrayBuffer());
+      estrutura = await estruturaDoExtrato(espacoId, { csv: texto });
     } catch (erro) {
-      const campos = errosDaImportacao(erro.campos);
-      setErros(campos);
-      toast.erro(erro.message, { titulo: 'Extrato não conferido' });
-      elementos[primeiroCampoComErro(campos, ORDEM_DA_IMPORTACAO)]?.focus();
+      setOcupado(null);
+      mostrarErro(erro, 'Arquivo não lido', 'arquivo');
+      return;
+    }
+    setCsv(texto);
+    aplicarEstrutura(estrutura);
+    if (estrutura.mapeamento) {
+      await conferir({ csv: texto, mapeamento: estrutura.mapeamento }, 'arquivo');
+    } else {
+      setOcupado(null);
+      setEtapa('colunas');
+    }
+  }
+
+  async function trocarDelimitador(delimitador) {
+    setOcupado('lendo');
+    try {
+      aplicarEstrutura(await estruturaDoExtrato(espacoId, { csv, delimitador }));
+      setErros({});
+    } catch (erro) {
+      mostrarErro(erro, 'Arquivo não lido', 'colunas');
     } finally {
       setOcupado(null);
+    }
+  }
+
+  function conferirColunas() {
+    const encontrados = validarMapeamento(mapeamento);
+    setErros(encontrados);
+    if (Object.keys(encontrados).length === 0) {
+      conferir({ csv, mapeamento }, 'colunas');
     }
   }
 
   async function importar() {
     setOcupado('importando');
     try {
-      const resposta = await importarExtrato(espacoId, { ...formulario, csv: previa.csv, simular: false });
+      const resposta = await importarExtrato(espacoId, { ...destino, csv, mapeamento: previa.mapeamento, simular: false });
       toast.sucesso(resumoDaImportacao(resposta), { titulo: 'Extrato importado' });
-      setPrevia(null);
-      setArquivo(null);
-      setVersaoDoSeletor((versao) => versao + 1);
+      setOcupado(null);
       aoImportar(resposta);
     } catch (erro) {
-      setErros(errosDaImportacao(erro.campos));
-      toast.erro(erro.message, { titulo: 'Extrato não importado' });
-    } finally {
       setOcupado(null);
+      mostrarErro(erro, 'Extrato não importado', 'previa');
     }
   }
 
   const novas = previa?.resposta.novas ?? 0;
+  const indiceDaEtapa = ETAPAS.findIndex((item) => item.id === etapa);
 
   return (
-    <section className="cartao painel" aria-labelledby="titulo-importar-extrato">
-      <div className="cabecalho-do-painel">
-        <h2 id="titulo-importar-extrato">Importar extrato</h2>
-      </div>
+    <div className="importacao">
+      <ol className="etapas" aria-label="Etapas da importação">
+        {ETAPAS.map((item, indice) => (
+          <li key={item.id} aria-current={item.id === etapa ? 'step' : undefined} className={indice < indiceDaEtapa ? 'feita' : undefined}>
+            <span className="numero-da-etapa" aria-hidden="true">
+              {indice < indiceDaEtapa ? <Icone nome="certo" tamanho={14} /> : indice + 1}
+            </span>
+            {item.rotulo}
+          </li>
+        ))}
+      </ol>
 
-      <form onSubmit={conferir} noValidate>
-        <Campo key={versaoDoSeletor} rotulo="Arquivo CSV do banco" type="file" name="arquivo" accept=".csv,text/csv"
-          onChange={escolherArquivo} erro={erros.arquivo}
-          dica="Colunas Data, Descrição e Valor, com as saídas negativas." />
+      {etapa === 'arquivo' && (
+        <form onSubmit={continuar} noValidate>
+          <div className="campo">
+            <span className="rotulo-do-campo" id={`${idDoArquivo}-rotulo`}>
+              Arquivo CSV do banco
+            </span>
+            <label className={`zona-de-arquivo${erros.arquivo ? ' com-erro' : ''}`}>
+              <input
+                id={idDoArquivo}
+                type="file"
+                name="arquivo"
+                accept=".csv,text/csv,text/plain"
+                className="apenas-leitor"
+                aria-labelledby={`${idDoArquivo}-rotulo`}
+                aria-describedby={`${idDoArquivo}-dica${erros.arquivo ? ` ${idDoArquivo}-erro` : ''}`}
+                aria-invalid={Boolean(erros.arquivo)}
+                onChange={escolherArquivo}
+              />
+              <Icone nome="importar" tamanho={20} />
+              <span className="texto-da-zona">
+                <b>{arquivo ? arquivo.name : 'Escolher arquivo'}</b>
+                <small>{arquivo ? 'Clique para trocar' : 'O extrato exportado pelo banco, em .csv'}</small>
+              </span>
+            </label>
+            <span id={`${idDoArquivo}-dica`} className="dica-do-campo">
+              As colunas são reconhecidas sozinhas; se não forem, você indica cada uma no próximo passo.
+            </span>
+            {erros.arquivo && (
+              <span id={`${idDoArquivo}-erro`} className="erro-do-campo">
+                {erros.arquivo}
+              </span>
+            )}
+          </div>
 
-        <Campo elemento="select" rotulo="Conta do extrato" name="conta_id"
-          value={formulario.conta_id} onChange={(evento) => mudar('conta_id', evento.target.value)} erro={erros.conta_id}>
-          <option value="">Escolha a conta</option>
-          {contas.map((conta) => (
-            <option key={conta.id} value={conta.id}>
-              {conta.nome}
-            </option>
-          ))}
-        </Campo>
+          <Campo elemento={Seletor} rotulo="Conta do extrato" name="conta_id" placeholder="Escolha a conta"
+            opcoes={contas.map((conta) => ({ valor: conta.id, rotulo: conta.nome }))}
+            value={destino.conta_id} onChange={(evento) => mudarDestino('conta_id', evento.target.value)} erro={erros.conta_id} />
 
-        <Campo elemento="select" rotulo="Categoria das saídas" name="categoria_despesa_id"
-          value={formulario.categoria_despesa_id} onChange={(evento) => mudar('categoria_despesa_id', evento.target.value)}
-          erro={erros.categoria_despesa_id}>
-          <option value="">Escolha a categoria</option>
-          {doTipo('DESPESA').map((categoria) => (
-            <option key={categoria.id} value={categoria.id}>
-              {categoria.nome}
-            </option>
-          ))}
-        </Campo>
+          <div className="duas-colunas">
+            <Campo elemento={Seletor} rotulo="Categoria das saídas" name="categoria_despesa_id" placeholder="Escolha"
+              opcoes={opcoesDoTipo(categorias, 'DESPESA')} value={destino.categoria_despesa_id}
+              onChange={(evento) => mudarDestino('categoria_despesa_id', evento.target.value)} erro={erros.categoria_despesa_id} />
+            <Campo elemento={Seletor} rotulo="Categoria das entradas" name="categoria_receita_id" placeholder="Escolha"
+              opcoes={opcoesDoTipo(categorias, 'RECEITA')} value={destino.categoria_receita_id}
+              onChange={(evento) => mudarDestino('categoria_receita_id', evento.target.value)} erro={erros.categoria_receita_id} />
+          </div>
+          <p className="dica-do-campo">
+            Se o arquivo tiver uma coluna de categoria com o nome de uma categoria sua, a linha vai para ela.
+          </p>
 
-        <Campo elemento="select" rotulo="Categoria das entradas" name="categoria_receita_id"
-          value={formulario.categoria_receita_id} onChange={(evento) => mudar('categoria_receita_id', evento.target.value)}
-          erro={erros.categoria_receita_id}>
-          <option value="">Escolha a categoria</option>
-          {doTipo('RECEITA').map((categoria) => (
-            <option key={categoria.id} value={categoria.id}>
-              {categoria.nome}
-            </option>
-          ))}
-        </Campo>
+          <div className="acoes-do-formulario">
+            <button type="button" className="secundario" onClick={aoCancelar} disabled={Boolean(ocupado)}>
+              Cancelar
+            </button>
+            <button type="submit" disabled={Boolean(ocupado)} aria-busy={Boolean(ocupado)}>
+              {ocupado ? 'Lendo o arquivo…' : 'Continuar'}
+            </button>
+          </div>
+        </form>
+      )}
 
-        {!previa && (
-          <button type="submit" className="largo secundario" disabled={Boolean(ocupado)} aria-busy={ocupado === 'conferindo'}>
-            {ocupado === 'conferindo' ? 'Conferindo…' : 'Conferir extrato'}
-          </button>
-        )}
-      </form>
+      {etapa === 'colunas' && (
+        <div className="etapa-de-colunas">
+          <p className={`aviso-da-etapa${reconhecido ? '' : ' destaque'}`}>
+            <Icone nome="colunas" tamanho={18} />
+            {reconhecido
+              ? 'Confira o que é cada coluna e ajuste o que precisar.'
+              : 'Não reconheci as colunas deste arquivo. Diga o que é cada uma: a data, a descrição e o valor (ou as colunas de entrada e saída).'}
+          </p>
+          <MapeamentoDeColunas
+            linhas={linhas}
+            delimitador={colunas.delimitador}
+            cabecalho={colunas.cabecalho}
+            papeis={colunas.papeis}
+            inverterSinal={colunas.inverterSinal}
+            erros={erros}
+            ocupado={Boolean(ocupado)}
+            aoMudarDelimitador={trocarDelimitador}
+            aoMudarCabecalho={(cabecalho) => setColunas((atual) => ({ ...atual, cabecalho }))}
+            aoMudarPapel={(coluna, papel) => {
+              setColunas((atual) => ({ ...atual, papeis: trocarPapel(atual.papeis, coluna, papel) }));
+              setErros({});
+            }}
+            aoMudarInverterSinal={(inverterSinal) => setColunas((atual) => ({ ...atual, inverterSinal }))}
+          />
+          <div className="acoes-do-formulario">
+            <button type="button" className="secundario" onClick={() => setEtapa('arquivo')} disabled={Boolean(ocupado)}>
+              Voltar
+            </button>
+            <button type="button" onClick={conferirColunas} disabled={Boolean(ocupado)} aria-busy={ocupado === 'conferindo'}>
+              {ocupado === 'conferindo' ? 'Conferindo…' : 'Conferir lançamentos'}
+            </button>
+          </div>
+        </div>
+      )}
 
-      {previa && (
+      {etapa === 'previa' && previa && (
         <div className="previa-da-importacao">
           <p className="resumo-da-importacao" role="status">
             {resumoDaImportacao(previa.resposta)}
           </p>
+          <div className="formato-reconhecido">
+            <span>
+              <small>Colunas</small>
+              {descreverMapeamento(previa.mapeamento, nomesDasColunas(linhas, previa.mapeamento.cabecalho))}
+            </span>
+            <button type="button" className="discreto-botao" onClick={() => setEtapa('colunas')} disabled={Boolean(ocupado)}>
+              <Icone nome="colunas" tamanho={16} />
+              Ajustar colunas
+            </button>
+          </div>
           <ul className="linhas-da-importacao">
             {previa.resposta.linhas.map((linha) => (
               <li key={linha.linha} className={`situacao-${linha.situacao.toLowerCase()}`}>
@@ -157,24 +326,29 @@ export default function ImportarExtrato({ espacoId, contas, categorias, aoImport
                   {linha.valor_centavos == null ? '' : formatarComSinal(linha.valor_centavos)}
                 </span>
                 <small>
-                  {linha.erro ?? `${formatarData(linha.data)} · ${ROTULO_DA_SITUACAO[linha.situacao]}`}
+                  {linha.erro ??
+                    [formatarData(linha.data), nomeDaCategoria.get(linha.categoria_id), ROTULO_DA_SITUACAO[linha.situacao]].filter(Boolean).join(' · ')}
                 </small>
               </li>
             ))}
           </ul>
           <div className="acoes-do-formulario">
-            <button type="button" className="secundario" onClick={() => setPrevia(null)} disabled={Boolean(ocupado)}>
-              {novas > 0 ? 'Cancelar' : 'Fechar'}
+            <button type="button" className="secundario" onClick={() => setEtapa('arquivo')} disabled={Boolean(ocupado)}>
+              Voltar
             </button>
-            {novas > 0 && (
+            {novas > 0 ? (
               <button type="button" onClick={importar} disabled={Boolean(ocupado)} aria-busy={ocupado === 'importando'}>
-                <Icone nome="mais" tamanho={16} />
+                <Icone nome="importar" tamanho={16} />
                 {ocupado === 'importando' ? 'Importando…' : `Importar ${novas === 1 ? '1 lançamento' : `${novas} lançamentos`}`}
+              </button>
+            ) : (
+              <button type="button" onClick={aoCancelar}>
+                Fechar
               </button>
             )}
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   intervaloDoMes,
   mesDe,
   mudarMes,
+  ordemDoLancamento,
   paraExtrato,
   saldoTotal,
   validarCategoria,
@@ -44,8 +45,25 @@ describe('paraExtrato', () => {
 
     expect(linha).toEqual({
       id: 'l1', data: '2026-09-19', descricao: 'Supermercado', tipo: 'despesa', categoria: 'Mercado', cor: 'mercado',
-      conta: 'Conta corrente', valor: -21437, estorno: false, estornado: false,
+      conta: 'Conta corrente', valor: -21437, pessoas: [], estorno: false, estornado: false,
     });
+  });
+
+  it('traz as pessoas do racha com a parte de cada uma', () => {
+    const [linha] = paraExtrato(
+      [
+        lancamento({
+          id: 'l4', tipo: 'DESPESA', data: '2026-09-19', descricao: 'Churrasco', valor_centavos: 30000,
+          conta_id: 'c1', categoria_id: 'k1',
+          partidas: [{ conta_id: 'c1', categoria_id: null, valor_centavos: -30000 }, { conta_id: null, categoria_id: 'k1', valor_centavos: 30000 }],
+          divisao: [{ pessoa: 'Ana', valor_centavos: 10000 }, { pessoa: 'Bruno', valor_centavos: 15000 }],
+        }),
+      ],
+      CONTAS,
+      CATEGORIAS,
+    );
+
+    expect(linha.pessoas).toEqual([{ pessoa: 'Ana', valor: 10000 }, { pessoa: 'Bruno', valor: 15000 }]);
   });
 
   it('transferência mostra origem → destino e sai da conta de origem', () => {
@@ -142,6 +160,19 @@ describe('validarLancamento', () => {
     expect(validarLancamento({ ...DESPESA_VALIDA, valor: '0,00' }).valor).toBe('O valor precisa ser maior que zero.');
   });
 
+  it('confere a divisão junto, contra o valor do lançamento', () => {
+    const churrasco = { ...DESPESA_VALIDA, valor: '300,00', divisao: [{ pessoa: 'Ana', valor: '100,00' }, { pessoa: 'Bruno', valor: '250,00' }] };
+
+    expect(validarLancamento(churrasco)).toEqual({ divisao: 'As partes somam R$ 350,00, mais que o valor do lançamento.' });
+    expect(validarLancamento({ ...churrasco, divisao: [{ pessoa: '', valor: '100,00' }] })).toEqual({ 'divisao.0.pessoa': 'Informe o nome.' });
+    // Transferência ignora a divisão (a tela nem mostra o racha).
+    expect(validarLancamento({ ...churrasco, tipo: 'TRANSFERENCIA', categoria_id: '', conta_destino_id: 'c2' })).toEqual({});
+  });
+
+  it('põe os campos da divisão no fim da ordem de foco', () => {
+    expect(ordemDoLancamento({ divisao: [{ pessoa: '', valor: '' }] }).slice(-3)).toEqual(['divisao.0.pessoa', 'divisao.0.valor', 'divisao']);
+  });
+
   it('transferência pede destino diferente da origem e dispensa categoria', () => {
     const transferencia = { ...DESPESA_VALIDA, tipo: 'TRANSFERENCIA', categoria_id: '' };
 
@@ -158,6 +189,14 @@ describe('corpoDoLancamento', () => {
       tipo: 'DESPESA', descricao: 'Supermercado', data: '2026-09-19', valor_centavos: 21437, conta_id: 'c1', categoria_id: 'k1',
     });
     expect(corpoDoLancamento({ ...DESPESA_VALIDA, tipo: 'TRANSFERENCIA', conta_destino_id: 'c2' })).not.toHaveProperty('categoria_id');
+  });
+
+  it('manda a divisão só quando há pessoas e o tipo permite', () => {
+    const comRacha = { ...DESPESA_VALIDA, divisao: [{ pessoa: ' Ana ', valor: '100' }] };
+
+    expect(corpoDoLancamento(comRacha).divisao).toEqual([{ pessoa: 'Ana', valor_centavos: 10000 }]);
+    expect(corpoDoLancamento({ ...DESPESA_VALIDA, divisao: [] })).not.toHaveProperty('divisao');
+    expect(corpoDoLancamento({ ...comRacha, tipo: 'TRANSFERENCIA', conta_destino_id: 'c2' })).not.toHaveProperty('divisao');
   });
 });
 
@@ -178,6 +217,10 @@ describe('errosDaApi', () => {
     expect(errosDaApi({ valor_centavos: 'Use um valor maior que 0.', conta_id: 'Conta não encontrada.' })).toEqual({
       valor: 'Use um valor maior que 0.',
       conta_id: 'Conta não encontrada.',
+    });
+    expect(errosDaApi({ 'divisao.1.valor_centavos': 'Use um valor maior que 0.', 'divisao.0.pessoa': 'Campo obrigatório.' })).toEqual({
+      'divisao.1.valor': 'Use um valor maior que 0.',
+      'divisao.0.pessoa': 'Campo obrigatório.',
     });
   });
 });

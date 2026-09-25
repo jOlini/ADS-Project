@@ -29,6 +29,12 @@ export function formatarComSinal(centavos) {
 // Enquanto não há lançamentos, a casa do valor existe e fica vazia.
 export const VALOR_VAZIO = 'R$ —';
 
+// Centavos no formato do campo de valor, sem o símbolo: 3334 -> "33,34".
+// É o texto que lerValor lê de volta.
+export function valorParaCampo(centavos) {
+  return semSinal(centavos);
+}
+
 // Lê o que a pessoa digitou no campo de valor e devolve centavos, ou null se
 // não der para entender. Aceita o jeito brasileiro ("1.234,56", "1234,5",
 // "R$ 80") e o ponto como decimal quando não há dúvida ("10.5"). Um ponto
