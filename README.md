@@ -149,7 +149,7 @@ DOCS_API.md           documentação técnica da API
 | Ferramenta | Versão | Precisa para |
 |---|---|---|
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows e macOS) ou Docker Engine com Compose v2 (Linux) | Atual | **API + MongoDB + painel.** É o único requisito para avaliar a API |
-| [Python](https://www.python.org/downloads/) | 3.11 ou mais novo | `subir-app.py` e testes da API fora do Docker (opcional) |
+| [Python](https://www.python.org/downloads/) | 3.11 ou mais novo (3.13 recomendado) | `subir-app.py` e testes da API fora do Docker (opcional; o `subir-app.py` instala o 3.13 no Windows se faltar) |
 | [Node.js](https://nodejs.org/) | 20.19 ou mais novo | Área do cliente (React) e testes do front-end (opcional) |
 | Projeto no [Firebase](https://console.firebase.google.com/) | — | Rodar a área do cliente localmente (opcional: a versão publicada já funciona) |
 
@@ -249,11 +249,18 @@ python subir-app.py up             # API, MongoDB e área do cliente
 python subir-app.py up --sem-web   # só API e MongoDB (dispensa o Node.js)
 ```
 
-O script usa só a biblioteca padrão do Python (3.11+) e faz, em ordem: cria o `api/.env` se ele faltar
-(com `JWT_SECRET` e `ADMIN_SENHA` aleatórios e o `FIREBASE_PROJECT_ID` copiado do `web/.env`), instala as dependências da API no `api/.venv` (nunca no
-Python da máquina), roda o `npm ci` do front-end quando o `package-lock.json` muda, abre o Docker Desktop se
-estiver fechado, sobe MongoDB + API no Docker esperando os healthchecks, sobe o Vite em segundo plano e
-imprime os links importantes. Rodar de novo com tudo no ar só confere o estado. Outros comandos:
+O script usa só a biblioteca padrão do Python e faz, em ordem: cria o `api/.env` se ele faltar
+(com `JWT_SECRET` e `ADMIN_SENHA` aleatórios), copia o `FIREBASE_PROJECT_ID` do `web/.env` quando ele está vazio
+(sem ele, o login da área do cliente responde "Login do cliente indisponível no momento"), instala as
+dependências da API no `api/.venv` (nunca no Python da máquina), roda o `npm ci` do front-end quando o
+`package-lock.json` muda, abre o Docker Desktop se estiver fechado, sobe MongoDB + API no Docker esperando
+os healthchecks, sobe o Vite em segundo plano e imprime os links importantes. Rodar de novo com tudo no ar
+só confere o estado.
+
+O `api/.venv` precisa de Python 3.11+ (o CI e o Docker usam o 3.13), mas o script roda com um Python mais
+antigo. Nesse caso ele procura outro Python instalado (no Windows, pelo lançador `py`), instala o 3.13 pelo
+`winget` só para o usuário, sem administrador, e, se nada disso der certo, explica como atualizar. Um
+`api/.venv` quebrado (copiado de outra máquina ou com o Python base removido) é recriado. Outros comandos:
 
 | Comando | O que faz |
 |---|---|
