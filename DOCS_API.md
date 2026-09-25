@@ -385,14 +385,26 @@ Todos exigem o ID token do Firebase. Tudo que é do cliente fica sob um **espaç
 | `GET` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Consultar categoria | `200 OK` | `401`, `404` |
 | `PUT` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Renomear, recolorir, desativar ou reativar | `200 OK` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/lancamentos?de=&ate=&limite=` | Listar lançamentos do mais recente ao mais antigo (período opcional, até 1000) | `200 OK` | `400`, `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência | `201 Created` + `Location` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência (com divisão entre pessoas, opcional) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Consultar lançamento | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}/estorno` | Estornar: cria o lançamento inverso, com a data de hoje | `201 Created` + `Location` | `401`, `404`, `409` |
+| `DELETE` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Excluir: apaga o lançamento de vez (e o estorno dele, se houver) | `204 No Content` | `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/pessoas` | Listar os nomes já usados em divisões (para a tela sugerir) | `200 OK` | `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/importacoes/estrutura` | Mostrar o começo do CSV em células e sugerir as colunas (nada é gravado) | `200 OK` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/importacoes` | Importar o extrato do banco em CSV, ou só simular (`simular: true`) | `200 OK` (relatório por linha) | `400`, `401`, `404` |
 
-Lançamento não tem `PUT` nem `DELETE` (`405 Method Not Allowed`): o histórico não se reescreve. Um lançamento
-errado é corrigido com **estorno**, e os dois continuam visíveis. Conta e categoria não se excluem: desativadas,
-saem das escolhas de novos lançamentos e mantêm o histórico.
+Lançamento não tem `PUT` (`405 Method Not Allowed`): valor, data e conta não se reescrevem. Há dois jeitos de
+desfazer, com efeitos diferentes:
+
+| Ação | Quando usar | O que acontece |
+|---|---|---|
+| **Estornar** (`POST .../estorno`) | O lançamento aconteceu e foi desfeito (compra cancelada, cobrança devolvida) | Entra um lançamento inverso, com a data de hoje. O original continua no extrato, marcado com `estornado_por`: o histórico contábil fica. |
+| **Excluir** (`DELETE`) | O lançamento nunca devia ter existido (erro de digitação, lançamento duplicado) | O documento é apagado e some do extrato e do saldo, sem rastro. Se ele tinha estorno, o estorno sai junto (sozinho, mudaria o saldo sem nada para anular). Excluir um estorno devolve o original ao normal, e ele pode ser estornado de novo. |
+
+Na exclusão, o estorno sai antes do original: se a operação parar no meio, sobra o original sem estorno, um
+estado válido. Uma linha de extrato importada e depois excluída volta se o mesmo arquivo for importado de novo
+(a chave dela sai junto com o lançamento). Conta e categoria não se excluem: desativadas, saem das escolhas de
+novos lançamentos e mantêm o histórico.
 
 ### Dinheiro em centavos e partidas dobradas
 
@@ -441,6 +453,7 @@ Content-Type: application/json
     { "conta_id": "6ab54c4ff2c9fd0fd74cd090", "categoria_id": null, "valor_centavos": -21437 },
     { "conta_id": null, "categoria_id": "6ab54c4ff2c9fd0fd74cd085", "valor_centavos": 21437 }
   ],
+  "divisao": [],
   "estorno_de": null,
   "estornado_por": null,
   "criado_em": "2026-09-24T16:14:07.635000Z"
@@ -463,16 +476,75 @@ Estorno: `409` para um lançamento já estornado ("Este lançamento já foi esto
 estorno ("Um estorno não pode ser estornado."). Um índice único no MongoDB garante um estorno por lançamento
 mesmo com duas requisições simultâneas; a listagem mostra `estornado_por` no original.
 
+### Divisão entre pessoas (racha)
+
+Receita e despesa aceitam `divisao`: a lista de quem entra no racha e com quanto. É informação do lançamento:
+o saldo da conta muda pelo valor inteiro, e as partidas continuam as mesmas duas.
+
+```json
+{ "tipo": "DESPESA", "descricao": "Churrasco", "data": "2026-09-19", "valor_centavos": 30000,
+  "conta_id": "<id da conta>", "categoria_id": "<id de Lazer>",
+  "divisao": [
+    { "pessoa": "Ana", "valor_centavos": 10000 },
+    { "pessoa": "Bruno", "valor_centavos": 15000 },
+    { "pessoa": "Carla", "valor_centavos": 5000 }
+  ] }
+```
+
+- Cada pessoa tem o próprio valor (divisão igual ou não); as partes somam **até** o valor do lançamento, e o
+  que sobra é a parte de quem lançou.
+- Até 20 pessoas, nome de 1 a 60 caracteres, cada nome uma vez só (sem diferença de caixa ou espaços), valor
+  inteiro positivo em centavos.
+- O estorno leva a divisão junto (o racha também é desfeito). `GET /pessoas` devolve os nomes já usados,
+  sem repetição, para a tela sugerir.
+
+| Situação | Campo | Mensagem |
+|---|---|---|
+| Partes somam mais que o lançamento | `divisao` | As partes somam mais que o valor do lançamento. |
+| Mesmo nome duas vezes | `divisao.<n>.pessoa` | Esta pessoa já está na divisão. |
+| Divisão numa transferência | `divisao` | Transferência entre contas não se divide entre pessoas. |
+| Mais de 20 pessoas | `divisao` | Use no máximo 20 itens. |
+
 ### Importação do extrato (CSV)
 
 O cliente manda o **texto** do arquivo exportado pelo banco e diz onde lançar: a conta do extrato, a categoria
 das saídas e a das entradas. Cada linha vira uma receita (valor positivo) ou uma despesa (valor negativo), pelo
 mesmo caminho de um lançamento digitado (partidas dobradas, centavos, limites de descrição e valor).
 
-- **Formato aceito:** cabeçalho com as colunas **Data**, **Descrição** e **Valor** (também `Histórico`,
-  `Data Lançamento`, `Valor (R$)` e outros nomes comuns, sem diferença de acento ou caixa), separadas por `;`,
-  `,` ou tabulação, com até 10 linhas de dados da conta antes do cabeçalho. Data `DD/MM/AAAA` ou `AAAA-MM-DD`;
-  valor `1.234,56` (ou `1234.56`), com `-` nas saídas. Até 1000 linhas e 500 mil caracteres por importação.
+- **Formatos reconhecidos sozinhos** (pelo nome das colunas, sem diferença de acento, caixa ou pontuação), com
+  até 10 linhas de dados da conta antes do cabeçalho e colunas separadas por `;`, `,`, tabulação ou `|`:
+
+  | Formato | Exemplo de cabeçalho |
+  |---|---|
+  | Valor com sinal (saída negativa) | `Data;Descrição;Valor` · `Data Lançamento;Histórico;Valor (R$)` · `Data,Valor,Identificador,Descrição` |
+  | Colunas separadas de entrada e saída | `Data;Histórico;Crédito (R$);Débito (R$)` · `Data Lançamento,Título,Descrição,Entrada(R$),Saída(R$)` |
+  | Valor sem sinal com coluna D/C | `Data Mov.;Histórico;Valor;Deb/Cred` · `"Data","Lançamento","Valor","Tipo Lançamento"` (Entrada/Saída) |
+  | Fatura de cartão em inglês (compra positiva) | `date,title,amount`: o sinal é invertido, e a compra vira saída |
+
+  Uma coluna "Tipo" que não diz débito ou crédito (ex.: "Pix", "TED") é ignorada, e o sinal vem do valor. Data
+  `DD/MM/AAAA` (também com `-` ou `.` e ano de dois dígitos, lido como 20AA) ou `AAAA-MM-DD`; valor `1.234,56`
+  (ou `1234.56`), com `-` antes ou depois do número, ou `D`/`C` depois dele (`80,00 D`). Até 1000 linhas e
+  500 mil caracteres por importação.
+- **Formato não reconhecido: as colunas indicadas pela pessoa.** `POST /importacoes/estrutura` devolve as
+  primeiras 15 linhas do arquivo já separadas em células (com o separador adivinhado, ou o escolhido em
+  `delimitador`) e, quando reconhece o formato, o `mapeamento` pronto. Sem `mapeamento`, a tela mostra a amostra
+  e a pessoa diz o que é cada coluna; a importação recebe o `mapeamento`:
+
+  | Campo do `mapeamento` | Significado |
+  |---|---|
+  | `delimitador` | `;`, `,`, `\t` ou `\|` |
+  | `cabecalho` | Linha do cabeçalho (1 = primeira); `0` quando o arquivo não tem cabeçalho |
+  | `data`, `descricao` | Coluna (a partir de 0), obrigatórias |
+  | `valor` **ou** `credito`/`debito` | Uma coluna com o valor, ou as colunas de entrada e de saída (não as duas formas) |
+  | `tipo` | Coluna D/C (Débito/Crédito, Entrada/Saída), só junto com `valor` |
+  | `categoria` | Coluna com o nome da categoria (opcional) |
+  | `inverter_sinal` | `true` para fatura de cartão, em que a compra vem positiva |
+
+  Mapeamento incoerente é `400` com o erro em `mapeamento.<informação>` (ex.: `mapeamento.valor`: "Indique a
+  coluna do valor, ou as de entrada e saída.").
+- **Coluna de categoria:** a linha vai para a categoria **ativa** do espaço com aquele nome (sem diferença de
+  acento ou caixa) e do tipo certo; sem nome conhecido, para a categoria padrão das saídas ou das entradas. A
+  resposta traz o `categoria_id` de cada linha.
 - **Linha ruim não barra o arquivo:** volta como `INVALIDA`, com o motivo, e as outras entram. Linhas de saldo
   (`SALDO ANTERIOR`, `SALDO DO DIA`) são recusadas: não são lançamentos.
 - **Idempotência por linha:** cada linha ganha uma chave SHA-256 da conta, da data, do valor, da descrição
@@ -480,7 +552,8 @@ mesmo caminho de um lançamento digitado (partidas dobradas, centavos, limites d
   duas linhas). A chave é calculada pela API, nunca enviada pelo cliente (campo extra = `400`). Importar o mesmo
   extrato de novo, ou um período maior que cobre o anterior, só traz o que falta: o resto volta como
   `JA_IMPORTADA`. Um **índice único** `(espaco_id, chave_importacao)` no MongoDB garante isso mesmo com duas
-  importações simultâneas. Um lançamento importado e depois estornado não volta numa nova importação.
+  importações simultâneas. Um lançamento importado e depois estornado não volta numa nova importação; um
+  importado e depois **excluído** volta (a chave sai junto com ele).
 - **Dois passos na tela:** `simular: true` confere o arquivo e responde o que entraria (`NOVA`), sem gravar;
   depois, a mesma chamada sem `simular` grava. Se a importação parar no meio, repeti-la termina o que faltou.
 
@@ -510,16 +583,44 @@ Content-Type: application/json
   "invalidas": 0,
   "linhas": [
     { "linha": 2, "situacao": "IMPORTADA", "data": "2026-09-05", "descricao": "Salário",
-      "valor_centavos": 680000, "lancamento_id": "66f0...", "erro": null },
+      "valor_centavos": 680000, "categoria_id": "<Outras receitas>", "lancamento_id": "66f0...", "erro": null },
     { "linha": 3, "situacao": "IMPORTADA", "data": "2026-09-05", "descricao": "Aluguel",
-      "valor_centavos": -185000, "lancamento_id": "66f1...", "erro": null }
+      "valor_centavos": -185000, "categoria_id": "<Outras despesas>", "lancamento_id": "66f1...", "erro": null }
   ]
 }
 ```
 
-`400` por campo quando o arquivo inteiro não serve (`csv`: sem cabeçalho, sem lançamentos, mais de 1000 linhas)
-ou quando o destino não vale (`conta_id`, `categoria_despesa_id`, `categoria_receita_id`: não encontrada,
-desativada ou do tipo errado). A conta de outra pessoa responde "Conta não encontrada.", como no lançamento.
+Com as colunas indicadas (arquivo sem cabeçalho, separado por `|`, com a coluna D/C e a de categoria):
+
+```http
+POST /espacos/{espaco_id}/importacoes/estrutura
+Content-Type: application/json
+
+{ "csv": "2026-09-01|Feira de sábado|30,00|D|Mercado\n2026-09-02|Reembolso|30,00|C|Outras receitas\n" }
+```
+
+```json
+{
+  "delimitador": "|",
+  "linhas": [
+    { "numero": 1, "celulas": ["2026-09-01", "Feira de sábado", "30,00", "D", "Mercado"] },
+    { "numero": 2, "celulas": ["2026-09-02", "Reembolso", "30,00", "C", "Outras receitas"] }
+  ],
+  "mapeamento": null
+}
+```
+
+```json
+{ "conta_id": "<id da conta>", "categoria_despesa_id": "<id>", "categoria_receita_id": "<id>",
+  "csv": "<o mesmo texto>", "simular": true,
+  "mapeamento": { "delimitador": "|", "cabecalho": 0, "data": 0, "descricao": 1, "valor": 2, "tipo": 3,
+                  "categoria": 4, "inverter_sinal": false } }
+```
+
+`400` por campo quando o arquivo inteiro não serve (`csv`: colunas não reconhecidas e sem `mapeamento`, sem
+lançamentos, mais de 1000 linhas), quando o `mapeamento` é incoerente ou quando o destino não vale (`conta_id`,
+`categoria_despesa_id`, `categoria_receita_id`: não encontrada, desativada ou do tipo errado). A conta de outra
+pessoa responde "Conta não encontrada.", como no lançamento.
 
 ### Validação do ID token do Firebase
 
@@ -553,9 +654,11 @@ do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
 ### Como testar o livro-caixa
 
 - **Testes automatizados:** `api/tests/test_firebase.py` (validação do ID token), `test_financeiro_regras.py`
-  (partidas, estorno e coerência), `test_financeiro_api.py` (rotas, isolamento, saldos e estorno) e
-  `test_financeiro_importacao.py` (leitura do CSV, chave por linha e importação sem duplicar). Os ID
-  tokens de teste são assinados por uma chave RSA gerada na hora, no lugar das chaves do Google.
+  (partidas, estorno e coerência), `test_financeiro_api.py` (rotas, isolamento, saldos e estorno),
+  `test_financeiro_importacao.py` (leitura do CSV, chave por linha e importação sem duplicar),
+  `test_financeiro_layouts.py` (formatos de vários bancos, mapeamento das colunas e começo do arquivo) e
+  `test_financeiro_racha_e_exclusao.py` (divisão entre pessoas, exclusão e importação com colunas indicadas).
+  Os ID tokens de teste são assinados por uma chave RSA gerada na hora, no lugar das chaves do Google.
 - **Manual (Swagger):** com `FIREBASE_PROJECT_ID` no `api/.env`, obtenha um ID token de uma conta **de teste**
   da área do cliente pela API REST do Firebase Authentication (`<VITE_FIREBASE_API_KEY>` do `web/.env`):
 
