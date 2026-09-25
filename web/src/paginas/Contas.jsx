@@ -4,6 +4,7 @@ import AvisoApi from '../componentes/AvisoApi';
 import Campo from '../componentes/Campo';
 import Carregando from '../componentes/Carregando';
 import Icone from '../componentes/Icone';
+import Seletor from '../componentes/Seletor';
 import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
 import { primeiroCampoComErro } from '../regras/cadastro';
@@ -181,14 +182,8 @@ export default function Contas() {
               <Campo rotulo="Nome" name="nome" autoComplete="off" maxLength={60} placeholder="Ex.: Conta do banco"
                 value={formulario.nome} onChange={(evento) => mudar('nome', evento.target.value)} erro={erros.nome} />
 
-              <Campo elemento="select" rotulo="Tipo" name="tipo" value={formulario.tipo}
-                onChange={(evento) => mudar('tipo', evento.target.value)} erro={erros.tipo}>
-                {TIPOS_DE_CONTA.map((tipo) => (
-                  <option key={tipo.valor} value={tipo.valor}>
-                    {tipo.rotulo}
-                  </option>
-                ))}
-              </Campo>
+              <Campo elemento={Seletor} rotulo="Tipo" name="tipo" value={formulario.tipo} opcoes={TIPOS_DE_CONTA}
+                onChange={(evento) => mudar('tipo', evento.target.value)} erro={erros.tipo} />
 
               {emEdicao ? (
                 <>

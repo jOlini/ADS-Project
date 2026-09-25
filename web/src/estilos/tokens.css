@@ -1,0 +1,247 @@
+/*
+ * Design tokens do Pessoal Finance: todo valor visual da área do cliente sai
+ * daqui. Os componentes não escrevem cor, tamanho, espaço ou tempo à mão;
+ * ajustar o visual é mudar um token, e o resto acompanha.
+ *
+ * Três camadas:
+ * 1. Tema (cores): um bloco claro e um escuro, trocados pelo
+ *    prefers-color-scheme. Os nomes seguem o DESIGN.md do produto.
+ * 2. Escalas: espaço, tipografia, raio, sombra, movimento, camadas.
+ * 3. Medidas de componente: altura de controle, largura da barra lateral e
+ *    afins, montadas a partir das escalas.
+ *
+ * Media queries não aceitam var(): os pontos de quebra ficam anotados aqui e
+ * escritos nos @media (560px, 900px, 1080px).
+ * Os mesmos tokens de cor estão em api/painel/painel.css, para as duas
+ * interfaces parecerem um produto só.
+ */
+
+:root {
+  /* ------------------------------------------------------ Cores: tema claro */
+
+  /* Neutros levemente esverdeados: nada de branco, preto ou cinza puros. */
+  --fundo: #f4f5f3;
+  --lateral: #eceeeb;
+  --superficie: #fcfcfb;
+  --linha: #e1e5e2;
+  --linha-forte: #cbd2ce;
+  --texto: #14201c;
+  --suave: #5b6863;
+
+  --marca: #0d5c47;
+  --marca-forte: #0a4838;
+  --marca-suave: #e1f0e8;
+  --sobre-marca: #f2f7f4;
+  /* Campo verde das telas de acesso: no escuro ele escurece, em vez de virar
+     a parede mais clara da tela. */
+  --vitrine: #0d5c47;
+  --sobre-vitrine: #f2f7f4;
+
+  --positivo: #0f7a4f;
+  --erro: #b3261e;
+  --sobre-erro: #fdfcfb;
+  --aviso: #92590b;
+  --info: #2a6b8f;
+  /* Véu atrás dos diálogos. */
+  --veu: rgb(20 32 28 / 0.45);
+  /* Tinta branca só dentro de color-mix(), para clarear o verde da vitrine. */
+  --tinta-clara: #ffffff;
+
+  /* Cores de categoria: enfeite de leitura, sempre com o nome ao lado. */
+  --cat-moradia: #3d5a80;
+  --cat-mercado: #0f7a4f;
+  --cat-transporte: #6d5bd0;
+  --cat-casa: #b07d16;
+  --cat-saude: #2a8fa8;
+  --cat-lazer: #b5566e;
+  --cat-entrada: #0f7a4f;
+  --cat-neutro: #77837e;
+
+  --sombra: 0 1px 2px rgb(20 32 28 / 0.06), 0 6px 14px -10px rgb(20 32 28 / 0.18);
+  --sombra-flutuante: 0 1px 2px rgb(20 32 28 / 0.08), 0 18px 36px -20px rgb(20 32 28 / 0.4);
+
+  /* ------------------------------------------------------------ Tipografia */
+
+  --familia: 'Figtree Variable', 'Figtree', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --familia-mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+
+  /* Tamanhos, do menor ao maior, com o papel de cada um no DESIGN.md. */
+  --fonte-nano: 0.625rem; /* data em miniatura, selo no menu do celular */
+  --fonte-caps: 0.6875rem; /* rótulo em caixa alta, etiqueta, selo de versão */
+  --fonte-micro: 0.75rem; /* faixa do dia, legenda de conta */
+  --fonte-apoio: 0.8125rem; /* dica e erro de campo, subtotal */
+  --fonte-rotulo: 0.875rem; /* rótulo de campo, texto de toast */
+  --fonte-botao: 0.9375rem; /* botão, item de menu */
+  --fonte-corpo: 1rem;
+  --fonte-marca: 1.0625rem;
+  --fonte-dialogo: 1.1875rem; /* título de diálogo */
+  --fonte-numero: 1.25rem; /* números do mês */
+  --fonte-numero-compacto: 1.125rem; /* os mesmos, no celular */
+  --fonte-titulo: 1.625rem; /* h1 da página */
+  --fonte-display: clamp(2rem, 1.4rem + 1.6vw, 2.375rem); /* saldo */
+  --fonte-vitrine: clamp(1.75rem, 1.2rem + 1.4vw, 2.375rem);
+
+  --peso-regular: 400;
+  --peso-medio: 500;
+  --peso-semi: 600;
+  --peso-forte: 700;
+
+  --altura-de-linha: 1.5;
+  --altura-de-linha-titulo: 1.2;
+  --altura-de-linha-justa: 1.15;
+  --altura-de-linha-display: 1;
+
+  --letra-display: -0.03em;
+  --letra-vitrine: -0.025em;
+  --letra-titulo: -0.02em;
+  --letra-leve: -0.01em;
+  --letra-caps: 0.08em;
+  --letra-miniatura: 0.06em; /* mês abreviado no "A vencer" */
+
+  /* ---------------------------------------------------------------- Espaço */
+
+  /* Escala de 2 em 2 px: --espaco-N vale N × 2px. Mudar --unidade muda o
+     respiro da interface inteira de uma vez. */
+  --unidade: 2px;
+  --espaco-1: calc(var(--unidade) * 1); /* 2px: costura de lista */
+  --fresta: calc(var(--unidade) * 1.5); /* 3px: trilho das abas, selo */
+  --espaco-2: calc(var(--unidade) * 2); /* 4px */
+  --espaco-3: calc(var(--unidade) * 3); /* 6px: dentro de controles */
+  --espaco-4: calc(var(--unidade) * 4); /* 8px */
+  --espaco-5: calc(var(--unidade) * 5); /* 10px */
+  --espaco-6: calc(var(--unidade) * 6); /* 12px: entre irmãos */
+  --espaco-7: calc(var(--unidade) * 7); /* 14px */
+  --espaco-8: calc(var(--unidade) * 8); /* 16px */
+  --espaco-9: calc(var(--unidade) * 9); /* 18px: entre linhas de formulário */
+  --espaco-10: calc(var(--unidade) * 10); /* 20px */
+  --espaco-11: calc(var(--unidade) * 11); /* 22px */
+  --espaco-12: calc(var(--unidade) * 12); /* 24px */
+  --espaco-14: calc(var(--unidade) * 14); /* 28px */
+  --espaco-16: calc(var(--unidade) * 16); /* 32px: entre regiões */
+  --espaco-24: calc(var(--unidade) * 24); /* 48px */
+  --espaco-28: calc(var(--unidade) * 28); /* 56px: fim da página */
+  --espaco-32: calc(var(--unidade) * 32); /* 64px */
+
+  /* Respiro lateral que acompanha a largura da tela. */
+  --margem-da-pagina: clamp(16px, 3vw, 32px);
+  --margem-do-acesso: clamp(24px, 5vw, 72px);
+
+  /* --------------------------------------------------------- Forma e borda */
+
+  --raio-foco: 3px;
+  --espessura-do-foco: 2px;
+  --afastamento-do-foco: 2px;
+  --raio-mini: 6px;
+  --raio-pequeno: 8px;
+  --raio: 12px;
+  --raio-grande: 16px;
+  --raio-pilula: 99px;
+
+  --espessura: 1px;
+  --borda: var(--espessura) solid var(--linha);
+  --borda-forte: var(--espessura) solid var(--linha-forte);
+  --anel-de-foco: 0 0 0 3px var(--marca-suave);
+  --anel-de-erro: 0 0 0 3px color-mix(in srgb, var(--erro) 18%, transparent);
+
+  /* -------------------------------------------------------------- Movimento */
+
+  /* "tempo", e não "duracao": o toast usa --duracao para o próprio timer. */
+  --curva: cubic-bezier(0.2, 0, 0, 1);
+  --tempo-curto: 120ms;
+  --tempo: 160ms;
+  --transicao: var(--tempo) var(--curva);
+  --giro: 0.7s;
+
+  /* ---------------------------------------------------------------- Camadas */
+
+  /* Diálogos usam a camada do topo do navegador (<dialog>); o que flutua
+     dentro deles (lista de um seletor, calendário) usa position: fixed. */
+  --camada-fixa: 10;
+  --camada-flutuante: 50;
+  --camada-toast: 1000;
+
+  --opacidade-desligado: 0.6;
+
+  /* ---------------------------------------------------- Medidas de componente */
+
+  --altura-controle: 46px; /* campo de texto, seletor */
+  --altura-botao: 44px;
+  --altura-botao-compacto: 36px;
+  --altura-aba: 30px;
+  --tamanho-icone-botao: 32px; /* botão só com ícone (fechar, mês anterior) */
+  --tamanho-icone-botao-compacto: 28px; /* dentro de um campo (limpar busca) */
+  --tamanho-marca-categoria: 36px;
+  --tamanho-avatar: 32px;
+  --tamanho-simbolo: 40px; /* ícone do estado vazio */
+  --tamanho-dia: 40px; /* dia no calendário */
+  --tamanho-ponto: 10px; /* ponto de cor de categoria */
+  --tamanho-caixa-de-marcar: 18px;
+  --tamanho-giro: 14px; /* rodinha do botão ocupado */
+  --tamanho-data-miniatura: 44px; /* dia no "A vencer" */
+
+  --largura-lateral: 248px;
+  --largura-coluna-lateral: 320px;
+  --largura-formulario-acesso: 400px;
+  --largura-amostra: 360px; /* extrato em miniatura da vitrine */
+  --largura-toast: min(380px, 100vw - 32px);
+  --largura-dialogo: min(460px, 100vw - 32px);
+  --largura-modal: min(560px, 100vw - 32px);
+  --largura-modal-larga: min(880px, 100vw - 32px);
+  --largura-menu: 272px;
+  --largura-calendario: 312px;
+  --largura-nome-do-mes: 11.5rem;
+  --largura-busca: 280px;
+  --largura-busca-maxima: 448px;
+  --largura-parte-do-racha: 8.5rem; /* campo da parte de cada pessoa */
+  --largura-coluna-do-arquivo: 9.5rem; /* coluna na prévia do CSV */
+  --largura-celula-do-arquivo: 14rem;
+  --largura-botao-de-confirmar: 11rem;
+  --altura-previa-da-importacao: min(22rem, 45dvh);
+  --altura-lista-flutuante: 288px;
+
+  --medida-do-texto: 52ch; /* parágrafo explicativo */
+  --medida-do-aviso: 60ch;
+
+  --cor-da-rolagem: var(--linha-forte);
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* ---------------------------------------------------- Cores: tema escuro */
+    --fundo: #0d1311;
+    --lateral: #111916;
+    --superficie: #151d1a;
+    --linha: #232e2a;
+    --linha-forte: #34423c;
+    --texto: #e7eeea;
+    --suave: #93a39c;
+
+    --marca: #3fbf8f;
+    --marca-forte: #5ad1a4;
+    --marca-suave: #17352a;
+    --sobre-marca: #04150f;
+    --vitrine: #0b2019;
+    --sobre-vitrine: #dcebe4;
+
+    --positivo: #4fd49a;
+    --erro: #f2877c;
+    --sobre-erro: #12100f;
+    --aviso: #f0b45a;
+    --info: #8bbdd8;
+    --veu: rgb(0 0 0 / 0.6);
+
+    --cat-moradia: #7fa6d6;
+    --cat-mercado: #4fd49a;
+    --cat-transporte: #a497f0;
+    --cat-casa: #e3b95f;
+    --cat-saude: #6cc7dc;
+    --cat-lazer: #e58aa1;
+    --cat-entrada: #4fd49a;
+    --cat-neutro: #8d9993;
+
+    --sombra: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 6px 14px -10px rgb(0 0 0 / 0.7);
+    --sombra-flutuante: 0 16px 34px -18px rgb(0 0 0 / 0.85), 0 0 0 1px var(--linha);
+  }
+}

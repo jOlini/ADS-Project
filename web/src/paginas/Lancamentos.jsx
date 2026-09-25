@@ -1,41 +1,36 @@
 import { useMemo, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { useOutletContext } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
-import Campo from '../componentes/Campo';
+import CampoDeBusca from '../componentes/CampoDeBusca';
 import Carregando from '../componentes/Carregando';
 import Confirmacao from '../componentes/Confirmacao';
 import Extrato from '../componentes/Extrato';
+import FormularioDeLancamento from '../componentes/FormularioDeLancamento';
 import Icone from '../componentes/Icone';
 import ImportarExtrato from '../componentes/ImportarExtrato';
+import Menu from '../componentes/Menu';
+import Modal from '../componentes/Modal';
+import SeletorDeMes from '../componentes/SeletorDeMes';
 import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
-import { primeiroCampoComErro } from '../regras/cadastro';
-import { formatarBRL, lerValor } from '../regras/dinheiro';
-import { formatarData, hojeIso } from '../regras/datas';
+import { buscarNoExtrato } from '../regras/busca';
+import { nomeDoMes } from '../regras/calendario';
+import { formatarBRL } from '../regras/dinheiro';
+import { formatarData } from '../regras/datas';
 import { dataMaisRecente } from '../regras/importacao';
-import {
-  corpoDoLancamento,
-  errosDaApi,
-  estaNoMes,
-  intervaloDoMes,
-  mesDe,
-  mudarMes,
-  ORDEM_DO_LANCAMENTO,
-  paraExtrato,
-  saldoTotal,
-  TIPOS_DE_LANCAMENTO,
-  validarLancamento,
-} from '../regras/livroCaixa';
+import { estaNoMes, intervaloDoMes, mesDe, mudarMes, paraExtrato, saldoTotal } from '../regras/livroCaixa';
 import { agruparPorDia, filtrarDias, saldoAntesDe, somarMes } from '../regras/resumo';
 import {
   apiConfigurada,
   estornar,
-  lancar,
+  excluir,
   LIMITE_DE_LANCAMENTOS,
   listarCategorias,
   listarContas,
   listarLancamentos,
+  listarPessoas,
 } from '../servicos/livroCaixa';
+import '../estilos/lancamentos.css';
 
 const FILTROS = [
   { id: 'tudo', rotulo: 'Tudo' },
@@ -43,24 +38,16 @@ const FILTROS = [
   { id: 'saidas', rotulo: 'Saídas' },
 ];
 
-const MES = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' });
-const nomeDoMes = ({ ano, mes }) => MES.format(new Date(ano, mes - 1, 1));
-
-const formularioVazio = (tipo = 'DESPESA', contaId = '') => ({
-  tipo,
-  descricao: '',
-  valor: '',
-  data: hojeIso(),
-  conta_id: contaId,
-  categoria_id: '',
-  conta_destino_id: '',
-});
-
-// Contas e categorias do espaço (para os nomes no extrato e as opções do
-// formulário).
+// Contas, categorias e pessoas já usadas em rachas (nomes no extrato e
+// opções dos formulários). As pessoas são só sugestão: se a busca falhar,
+// a tela abre sem elas em vez de mostrar erro.
 async function carregarCadastros(espacoId) {
-  const [contas, categorias] = await Promise.all([listarContas(espacoId), listarCategorias(espacoId)]);
-  return { contas, categorias };
+  const [contas, categorias, pessoas] = await Promise.all([
+    listarContas(espacoId),
+    listarCategorias(espacoId),
+    listarPessoas(espacoId).catch(() => []),
+  ]);
+  return { contas, categorias, pessoas };
 }
 
 // Lançamentos do mês e, à parte, os que vieram depois dele: estes só servem
@@ -73,19 +60,47 @@ async function carregarMes(espacoId, mes) {
   return { doMes, depois };
 }
 
-// Lançamentos: extrato de um mês por vez, formulário para lançar receita,
-// despesa ou transferência, importação do extrato do banco (CSV) e estorno de
-// um lançamento (a correção do livro-caixa: nada é editado nem apagado).
+// O que cada ação faz, dito no próprio menu da linha: estornar deixa rastro,
+// excluir não.
+function acoesDaLinha(linha, { aoEstornar, aoExcluir }) {
+  const itens = [];
+  if (!linha.estorno && !linha.estornado) {
+    itens.push({
+      id: 'estornar',
+      rotulo: 'Estornar',
+      descricao: 'Lança hoje o valor contrário. O original fica no extrato, riscado.',
+      icone: 'estornar',
+      aoEscolher: () => aoEstornar(linha),
+    });
+  }
+  itens.push({
+    id: 'excluir',
+    rotulo: 'Excluir',
+    descricao: linha.estorno
+      ? 'Apaga este estorno. O original volta a contar no saldo.'
+      : 'Apaga de vez, sem histórico. Para erro de digitação ou duplicado.',
+    icone: 'excluir',
+    perigo: true,
+    aoEscolher: () => aoExcluir(linha),
+  });
+  return itens;
+}
+
+// Lançamentos: o extrato de um mês ocupando a tela, com rolagem própria. No
+// topo, a barra com "+ Novo lançamento" e "Importar CSV" (os dois abrem um
+// modal); logo abaixo, o mês, a busca e o filtro. Cada linha tem o menu com
+// Estornar (lançamento inverso, o histórico fica) e Excluir (apaga de vez).
 export default function Lancamentos() {
   const { espaco } = useOutletContext();
   const toast = useToast();
   const [mes, setMes] = useState(() => mesDe(new Date()));
   const [filtro, setFiltro] = useState('tudo');
-  const [formulario, setFormulario] = useState(() => formularioVazio());
-  const [erros, setErros] = useState({});
-  const [enviando, setEnviando] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [modal, setModal] = useState(null);
+  const [modalOcupado, setModalOcupado] = useState(false);
   const [aEstornar, setAEstornar] = useState(null);
-  const [estornando, setEstornando] = useState(false);
+  const [aExcluir, setAExcluir] = useState(null);
+  const [ocupado, setOcupado] = useState(false);
 
   const espacoId = espaco.dados?.id;
   const buscarCadastros = useMemo(() => (espacoId ? () => carregarCadastros(espacoId) : null), [espacoId]);
@@ -96,7 +111,6 @@ export default function Lancamentos() {
   const contas = useMemo(() => cadastros.dados?.contas ?? [], [cadastros.dados]);
   const categorias = useMemo(() => cadastros.dados?.categorias ?? [], [cadastros.dados]);
   const contasAtivas = contas.filter((conta) => conta.ativa);
-  const categoriasDoTipo = categorias.filter((categoria) => categoria.ativa && categoria.tipo === formulario.tipo);
 
   const visao = useMemo(() => {
     if (!cadastros.dados || !extrato.dados) {
@@ -106,8 +120,8 @@ export default function Lancamentos() {
     const depois = paraExtrato(extrato.dados.depois, contas, categorias);
     const saldoNoFimDoMes = saldoAntesDe(depois, saldoTotal(contas));
     return {
-      totais: somarMes(linhasDoMes),
       dias: agruparPorDia(linhasDoMes, saldoNoFimDoMes),
+      saldoNoFimDoMes,
       // No teto da consulta pode faltar lançamento: o saldo do dia sai da tela.
       saldoConfiavel: extrato.dados.depois.length < LIMITE_DE_LANCAMENTOS && extrato.dados.doMes.length < LIMITE_DE_LANCAMENTOS,
     };
@@ -117,7 +131,7 @@ export default function Lancamentos() {
     return (
       <>
         <header className="cabecalho-da-pagina">
-          <h1>Lançamentos</h1>
+          <h1>Extrato</h1>
         </header>
         <AvisoApi />
       </>
@@ -141,130 +155,124 @@ export default function Lancamentos() {
     );
   }
 
-  function mudar(campo, valor) {
-    setFormulario((atual) => {
-      const novo = { ...atual, [campo]: valor };
-      // Trocar o tipo apaga a categoria escolhida: despesa e receita têm listas próprias.
-      if (campo === 'tipo') {
-        novo.categoria_id = '';
-        novo.conta_destino_id = '';
-      }
-      return novo;
-    });
-    setErros((atuais) => ({ ...atuais, [campo]: undefined }));
+  function recarregar() {
+    cadastros.recarregar();
+    extrato.recarregar();
   }
 
-  async function enviar(evento) {
-    evento.preventDefault();
-    const elementos = evento.currentTarget.elements;
-    const encontrados = validarLancamento(formulario);
-    setErros(encontrados);
-    const primeiro = primeiroCampoComErro(encontrados, ORDEM_DO_LANCAMENTO);
-    if (primeiro) {
-      elementos[primeiro]?.focus();
-      return;
-    }
-
-    setEnviando(true);
-    try {
-      const criado = await lancar(espacoId, corpoDoLancamento(formulario));
-      toast.sucesso(`${criado.descricao} · ${formatarBRL(lerValor(formulario.valor))}`, { titulo: 'Lançamento registrado' });
-      // Mantém tipo, conta e data: quem lança várias despesas seguidas não
-      // precisa escolher tudo de novo.
-      setFormulario((atual) => ({ ...atual, descricao: '', valor: '' }));
-      if (!estaNoMes(criado.data, mes)) {
-        setMes(mesDe(criado.data));
-      }
-      cadastros.recarregar();
-      extrato.recarregar();
-      elementos.descricao?.focus();
-    } catch (erro) {
-      const campos = errosDaApi(erro.campos);
-      setErros(campos);
-      toast.erro(erro.message, { titulo: 'Lançamento não registrado' });
-      const campoComErro = primeiroCampoComErro(campos, ORDEM_DO_LANCAMENTO);
-      if (campoComErro) {
-        elementos[campoComErro]?.focus();
-      }
-    } finally {
-      setEnviando(false);
-    }
+  function fecharModal() {
+    setModal(null);
+    setModalOcupado(false);
   }
 
-  async function confirmarEstorno() {
-    setEstornando(true);
-    try {
-      const estorno = await estornar(espacoId, aEstornar.id);
-      toast.sucesso(`Entrou em ${formatarData(estorno.data)}, com o valor no sentido contrário.`, {
-        titulo: 'Lançamento estornado',
-      });
-      setAEstornar(null);
-      cadastros.recarregar();
-      extrato.recarregar();
-    } catch (erro) {
-      toast.erro(erro.message, { titulo: 'Estorno não registrado' });
-    } finally {
-      setEstornando(false);
+  function aposLancar(criado) {
+    fecharModal();
+    if (!estaNoMes(criado.data, mes)) {
+      setMes(mesDe(criado.data));
     }
+    recarregar();
   }
 
   // Depois da importação, o extrato abre no mês do lançamento mais recente
   // que entrou, se ele não for o mês na tela.
   function aposImportar(resposta) {
+    fecharModal();
     const ultima = dataMaisRecente(resposta.linhas);
     if (ultima && !estaNoMes(ultima, mes)) {
       setMes(mesDe(ultima));
     }
-    cadastros.recarregar();
-    extrato.recarregar();
+    recarregar();
   }
 
-  const transferencia = formulario.tipo === 'TRANSFERENCIA';
-  const diasVisiveis = filtrarDias(visao?.dias ?? [], filtro);
+  async function confirmarEstorno() {
+    setOcupado(true);
+    try {
+      const estorno = await estornar(espacoId, aEstornar.id);
+      toast.sucesso(`Entrou em ${formatarData(estorno.data)}, com o valor no sentido contrário.`, { titulo: 'Lançamento estornado' });
+      setAEstornar(null);
+      recarregar();
+    } catch (erro) {
+      toast.erro(erro.message, { titulo: 'Estorno não registrado' });
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function confirmarExclusao() {
+    setOcupado(true);
+    try {
+      await excluir(espacoId, aExcluir.id);
+      toast.sucesso(aExcluir.estornado ? 'O estorno dele saiu junto.' : 'Ele saiu do extrato e do saldo.', {
+        titulo: `"${aExcluir.descricao}" excluído`,
+      });
+      setAExcluir(null);
+      recarregar();
+    } catch (erro) {
+      toast.erro(erro.message, { titulo: 'Lançamento não excluído' });
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  const filtrado = filtro !== 'tudo' || busca.trim() !== '';
+  const diasVisiveis = buscarNoExtrato(filtrarDias(visao?.dias ?? [], filtro), busca);
+  const linhasVisiveis = diasVisiveis.flatMap((dia) => dia.lancamentos);
+  // Com filtro ou busca, os totais descrevem só o que está na tela.
+  const totais = somarMes(linhasVisiveis);
+  const pessoasConhecidas = cadastros.dados?.pessoas ?? [];
 
   return (
-    <>
-      <header className="cabecalho-da-pagina">
-        <h1>Lançamentos</h1>
-        <div className="navegacao-do-mes" role="group" aria-label="Mês do extrato">
-          <button type="button" className="discreto-botao" onClick={() => setMes(mudarMes(mes, -1))} aria-label="Mês anterior">
-            <Icone nome="anterior" tamanho={16} />
+    <div className="pagina-do-extrato">
+      <header className="barra-do-extrato">
+        <h1>Extrato</h1>
+        <div className="acoes-do-extrato" role="toolbar" aria-label="Ações do extrato">
+          <button type="button" className="secundario" onClick={() => setModal('importar')}>
+            <Icone nome="importar" tamanho={18} />
+            Importar CSV
           </button>
-          <span className="mes" aria-live="polite">
-            <Icone nome="calendario" tamanho={16} />
-            {nomeDoMes(mes)}
-          </span>
-          <button type="button" className="discreto-botao" onClick={() => setMes(mudarMes(mes, 1))} aria-label="Próximo mês">
-            <Icone nome="proximo" tamanho={16} />
+          <button type="button" onClick={() => setModal('novo')}>
+            <Icone nome="mais" tamanho={18} />
+            Novo lançamento
           </button>
         </div>
       </header>
 
-      <div className="corpo-do-resumo pagina-de-lancamentos">
-        <section className="cartao extrato" aria-labelledby="titulo-extrato">
-          <div className="cabecalho-do-painel">
-            <h2 id="titulo-extrato">Extrato</h2>
-            {visao && (visao.dias.length > 0 || filtro !== 'tudo') && (
-              <div className="abas" role="group" aria-label="Filtrar o extrato">
-                {FILTROS.map((opcao) => (
-                  <button key={opcao.id} type="button" aria-pressed={filtro === opcao.id} onClick={() => setFiltro(opcao.id)}>
-                    {opcao.rotulo}
-                  </button>
-                ))}
-              </div>
-            )}
+      <section className="cartao extrato extrato-cheio" aria-label={`Extrato de ${nomeDoMes(mes)}`}>
+        <div className="ferramentas-do-extrato">
+          <SeletorDeMes valor={mes} aoMudar={setMes} rotulo="Mês do extrato" />
+          <CampoDeBusca valor={busca} aoMudar={setBusca} rotulo="Buscar no extrato"
+            placeholder="Buscar por descrição, valor ou pessoa" className="busca-do-extrato" />
+          <div className="abas" role="group" aria-label="Filtrar o extrato">
+            {FILTROS.map((opcao) => (
+              <button key={opcao.id} type="button" aria-pressed={filtro === opcao.id} onClick={() => setFiltro(opcao.id)}>
+                {opcao.rotulo}
+              </button>
+            ))}
           </div>
-          {visao && visao.dias.length > 0 && (
-            <p className="totais-do-mes">
-              <span>
-                Entradas <b className="entrada">{formatarBRL(visao.totais.entradas)}</b>
-              </span>
-              <span>
-                Saídas <b>{formatarBRL(visao.totais.saidas)}</b>
-              </span>
-            </p>
-          )}
+        </div>
 
+        {visao && visao.dias.length > 0 && (
+          <p className="totais-do-mes" aria-live="polite">
+            {filtrado && (
+              <span className="contagem">
+                {linhasVisiveis.length === 1 ? '1 lançamento' : `${linhasVisiveis.length} lançamentos`}
+              </span>
+            )}
+            <span>
+              Entradas <b className="entrada">{formatarBRL(totais.entradas)}</b>
+            </span>
+            <span>
+              Saídas <b>{formatarBRL(totais.saidas)}</b>
+            </span>
+            {!filtrado && visao.saldoConfiavel && (
+              <span>
+                Saldo no fim do mês <b>{formatarBRL(visao.saldoNoFimDoMes)}</b>
+              </span>
+            )}
+          </p>
+        )}
+
+        <div className="rolagem-do-extrato" tabIndex={0} role="region" aria-label={`Lançamentos de ${nomeDoMes(mes)}`}>
           {extrato.erro ? (
             <p className="mensagem erro" role="alert">
               <Icone nome="alerta" tamanho={16} />
@@ -275,135 +283,94 @@ export default function Lancamentos() {
           ) : diasVisiveis.length > 0 ? (
             <Extrato
               dias={diasVisiveis}
-              mostrarSaldo={filtro === 'tudo' && visao.saldoConfiavel}
-              acoes={(linha) =>
-                !linha.estorno && !linha.estornado ? (
-                  <button type="button" className="discreto-botao" onClick={() => setAEstornar(linha)}>
-                    <Icone nome="estornar" tamanho={16} />
-                    <span className="rotulo-da-acao">Estornar</span>
-                    <span className="apenas-leitor">: {linha.descricao}</span>
-                  </button>
-                ) : null
-              }
+              mostrarSaldo={!filtrado && visao.saldoConfiavel}
+              acoes={(linha) => (
+                <Menu rotulo={`Ações de ${linha.descricao}`} itens={acoesDaLinha(linha, { aoEstornar: setAEstornar, aoExcluir: setAExcluir })} />
+              )}
             />
           ) : (
             <div className="vazio">
               <span className="simbolo" aria-hidden="true">
-                <Icone nome="lancamentos" tamanho={20} />
+                <Icone nome={filtrado ? 'busca' : 'lancamentos'} tamanho={20} />
               </span>
-              <h3>{filtro === 'tudo' ? `Nenhum lançamento em ${nomeDoMes(mes)}` : 'Nada com esse filtro'}</h3>
+              <h3>{filtrado ? 'Nada encontrado' : `Nenhum lançamento em ${nomeDoMes(mes)}`}</h3>
               <p>
-                {filtro !== 'tudo'
-                  ? 'Troque o filtro para ver os outros lançamentos do mês.'
+                {filtrado
+                  ? 'Troque a busca ou o filtro para ver os outros lançamentos do mês.'
                   : contasAtivas.length === 0
                     ? 'Os lançamentos aparecem aqui depois que você cadastrar uma conta.'
-                    : 'Use o formulário para registrar o que entrou, o que saiu ou o que mudou de conta.'}
+                    : 'Use "Novo lançamento" para registrar o que entrou ou saiu, ou traga o extrato do banco com "Importar CSV".'}
               </p>
             </div>
           )}
-        </section>
-
-        <div className="lado">
-          <section className="cartao painel" aria-labelledby="titulo-novo-lancamento">
-            <div className="cabecalho-do-painel">
-              <h2 id="titulo-novo-lancamento">Novo lançamento</h2>
-            </div>
-
-            {contasAtivas.length === 0 ? (
-              <div className="vazio compacto">
-                <p>Cadastre uma conta antes de lançar: todo lançamento sai de uma conta ou entra nela.</p>
-                <Link className="botao" to="/contas">
-                  <Icone nome="mais" tamanho={16} />
-                  Cadastrar conta
-                </Link>
-              </div>
-            ) : (
-              <form onSubmit={enviar} noValidate>
-                <div className="abas largas" role="group" aria-label="Tipo de lançamento">
-                  {TIPOS_DE_LANCAMENTO.map((tipo) => (
-                    <button
-                      key={tipo.valor}
-                      type="button"
-                      aria-pressed={formulario.tipo === tipo.valor}
-                      onClick={() => mudar('tipo', tipo.valor)}
-                    >
-                      {tipo.rotulo}
-                    </button>
-                  ))}
-                </div>
-
-                <Campo rotulo="Descrição" name="descricao" autoComplete="off" maxLength={120}
-                  placeholder={transferencia ? 'Ex.: Para a poupança' : 'Ex.: Supermercado'}
-                  value={formulario.descricao} onChange={(evento) => mudar('descricao', evento.target.value)} erro={erros.descricao} />
-
-                <Campo rotulo="Valor (R$)" name="valor" inputMode="decimal" autoComplete="off" placeholder="0,00"
-                  value={formulario.valor} onChange={(evento) => mudar('valor', evento.target.value)} erro={erros.valor} />
-                <Campo rotulo="Data" type="date" name="data"
-                  value={formulario.data} onChange={(evento) => mudar('data', evento.target.value)} erro={erros.data} />
-
-                <Campo elemento="select" rotulo={transferencia ? 'Sai da conta' : 'Conta'} name="conta_id"
-                  value={formulario.conta_id} onChange={(evento) => mudar('conta_id', evento.target.value)} erro={erros.conta_id}>
-                  <option value="">Escolha a conta</option>
-                  {contasAtivas.map((conta) => (
-                    <option key={conta.id} value={conta.id}>
-                      {conta.nome}
-                    </option>
-                  ))}
-                </Campo>
-
-                {transferencia ? (
-                  <Campo elemento="select" rotulo="Entra na conta" name="conta_destino_id"
-                    value={formulario.conta_destino_id} onChange={(evento) => mudar('conta_destino_id', evento.target.value)}
-                    erro={erros.conta_destino_id}>
-                    <option value="">Escolha a conta de destino</option>
-                    {contasAtivas.map((conta) => (
-                      <option key={conta.id} value={conta.id}>
-                        {conta.nome}
-                      </option>
-                    ))}
-                  </Campo>
-                ) : (
-                  <Campo elemento="select" rotulo="Categoria" name="categoria_id"
-                    value={formulario.categoria_id} onChange={(evento) => mudar('categoria_id', evento.target.value)}
-                    erro={erros.categoria_id}
-                    dica={categoriasDoTipo.length === 0 ? 'Nenhuma categoria ativa deste tipo. Crie uma em Categorias.' : undefined}>
-                    <option value="">Escolha a categoria</option>
-                    {categoriasDoTipo.map((categoria) => (
-                      <option key={categoria.id} value={categoria.id}>
-                        {categoria.nome}
-                      </option>
-                    ))}
-                  </Campo>
-                )}
-
-                <button type="submit" className="largo" disabled={enviando} aria-busy={enviando}>
-                  {enviando ? 'Lançando…' : 'Lançar'}
-                </button>
-              </form>
-            )}
-          </section>
-
-          {contasAtivas.length > 0 && (
-            <ImportarExtrato espacoId={espacoId} contas={contasAtivas} categorias={categorias} aoImportar={aposImportar} />
-          )}
         </div>
-      </div>
+      </section>
+
+      <Modal aberta={modal === 'novo'} titulo="Novo lançamento" aoFechar={fecharModal} ocupado={modalOcupado}>
+        <FormularioDeLancamento
+          espacoId={espacoId}
+          contas={contasAtivas}
+          categorias={categorias}
+          pessoasConhecidas={pessoasConhecidas}
+          aoLancar={aposLancar}
+          aoCancelar={fecharModal}
+          aoMudarOcupado={setModalOcupado}
+        />
+      </Modal>
+
+      <Modal aberta={modal === 'importar'} titulo="Importar CSV" largura="larga" aoFechar={fecharModal} ocupado={modalOcupado}
+        descricao="Traga o extrato exportado pelo banco. Nada é gravado antes de você conferir.">
+        {contasAtivas.length === 0 ? (
+          <p className="discreto">Cadastre uma conta antes de importar: o extrato entra numa conta.</p>
+        ) : (
+          <ImportarExtrato
+            espacoId={espacoId}
+            contas={contasAtivas}
+            categorias={categorias}
+            aoImportar={aposImportar}
+            aoCancelar={fecharModal}
+            aoMudarOcupado={setModalOcupado}
+          />
+        )}
+      </Modal>
 
       <Confirmacao
         aberta={Boolean(aEstornar)}
         titulo={aEstornar ? `Estornar "${aEstornar.descricao}"?` : ''}
         rotuloDeConfirmar="Estornar"
-        ocupado={estornando}
+        ocupado={ocupado}
         aoConfirmar={confirmarEstorno}
-        aoCancelar={() => !estornando && setAEstornar(null)}
+        aoCancelar={() => !ocupado && setAEstornar(null)}
       >
         {aEstornar && (
           <p>
             Entra hoje um lançamento de {formatarBRL(Math.abs(aEstornar.valor))} no sentido contrário, e o saldo volta ao que
-            era. O original continua no extrato, marcado como estornado. Um lançamento só pode ser estornado uma vez.
+            era. O original continua no extrato, marcado como estornado: o histórico fica. Um lançamento só pode ser estornado
+            uma vez.
           </p>
         )}
       </Confirmacao>
-    </>
+
+      <Confirmacao
+        aberta={Boolean(aExcluir)}
+        titulo={aExcluir ? `Excluir "${aExcluir.descricao}"?` : ''}
+        rotuloDeConfirmar="Excluir"
+        perigo
+        ocupado={ocupado}
+        aoConfirmar={confirmarExclusao}
+        aoCancelar={() => !ocupado && setAExcluir(null)}
+      >
+        {aExcluir && (
+          <>
+            <p>
+              O lançamento de {formatarBRL(Math.abs(aExcluir.valor))} some do extrato e do saldo, sem deixar registro. Use para
+              erro de digitação ou lançamento duplicado; para desfazer mantendo o histórico, use Estornar.
+            </p>
+            {aExcluir.estornado && <p>O estorno dele também será excluído.</p>}
+            {aExcluir.estorno && <p>O lançamento original volta a contar no saldo.</p>}
+          </>
+        )}
+      </Confirmacao>
+    </div>
   );
 }

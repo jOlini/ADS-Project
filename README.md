@@ -89,7 +89,8 @@ alcance a área administrativa.
 **Livro-caixa do cliente (0.2).** Contas, categorias e lançamentos ficam na API, em `/espacos`. O cliente
 não ganha outra senha: a API aceita o **ID token do Firebase** (validado com as chaves públicas do Google) e
 usa o `uid` como identidade. O token do back-office não abre o livro-caixa, e o do cliente não abre
-`/usuarios`. Os lançamentos seguem partidas dobradas, com valores em centavos inteiros e correção por estorno
+`/usuarios`. Os lançamentos seguem partidas dobradas, com valores em centavos inteiros, correção por estorno
+(o histórico fica) ou exclusão (erro de digitação e duplicata) e divisão do valor entre pessoas
 ([`DOCS_API.md`, Parte 6](DOCS_API.md#parte-6--livro-caixa-do-cliente-final)).
 
 **Perfis de acesso da API**
@@ -112,7 +113,7 @@ usa o `uid` como identidade. O token do back-office não abre o livro-caixa, e o
 | Painel da API | HTML, CSS e JavaScript puros, servidos pela própria API | Interface de demonstração: login, CRUD e respostas da API na tela |
 | Área do cliente | React 19 · Vite · React Router | SPA com as rotas `/cadastro`, `/login` e `/principal` |
 | Identidade do cliente | Firebase Authentication (e-mail/senha) · Cloud Firestore | Conta do cliente final e dados do perfil, protegidos por regras do Firestore |
-| Interface | CSS próprio, fonte Figtree auto-hospedada (SIL OFL), temas claro e escuro automáticos | Visual "extrato vivo" nas duas interfaces, com toasts e transições que respeitam "reduzir movimento" |
+| Interface | CSS próprio com design tokens (`web/src/estilos/tokens.css`), fonte Figtree auto-hospedada (SIL OFL), temas claro e escuro automáticos | Visual "extrato vivo" nas duas interfaces; seletor, calendário, modal e menu próprios no lugar dos controles do navegador; toasts e transições que respeitam "reduzir movimento" |
 | Testes | pytest · Vitest · oxlint | Testes unitários e de rota da API; regras e serviços do front-end; lint |
 | CI/CD | GitHub Actions · GitHub Pages · webhook do Discord | Testes a cada commit de PR, deploy automático e alertas |
 | Containers | Docker · Docker Compose | MongoDB + API com um comando; imagem nginx do front-end |
@@ -350,13 +351,17 @@ observador.
 | API | `api/tests/test_api.py` | Respostas HTTP, matriz completa do RBAC, 401/403/404/409 e cabeçalhos de segurança |
 | API | `api/tests/test_firebase.py` | ID token do Firebase: assinatura, RS256, `aud`, `iss`, datas, `sub`, token do back-office recusado |
 | API | `api/tests/test_financeiro_regras.py` | Partidas dobradas (soma zero), estorno, saldo e coerência dos campos do lançamento |
+| API | `api/tests/test_financeiro_layouts.py` | Extratos de formatos diferentes (entrada e saída separadas, coluna D/C, fatura de cartão), colunas indicadas pela pessoa e começo do arquivo |
+| API | `api/tests/test_financeiro_racha_e_exclusao.py` | Divisão entre pessoas, exclusão (com o estorno junto) e importação com colunas indicadas |
 | API | `api/tests/test_financeiro_importacao.py` | Extrato em CSV: formatos de banco, linha ruim com o motivo, chave por linha e importação repetida sem duplicar |
 | API | `api/tests/test_financeiro_api.py` | Livro-caixa pelo HTTP: identidades separadas, espaço alheio em 404, saldos, valores em centavos e estorno único |
 | Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro, datas, dinheiro em centavos, extrato e resumo do mês (com estorno e transferência) |
 | Front-end | `web/src/servicos/contas.test.js` | Cadastro no Firebase com o SDK simulado |
 | Front-end | `web/src/servicos/livroCaixa.test.js` | Chamadas à API com o ID token, erros em Problem Details e API fora do ar |
 | Front-end | `web/src/componentes/toast/toasts.test.js` | Regras dos avisos na tela |
-| Front-end | `web/src/regras/importacao.test.js` | Importação do extrato: arquivo em UTF-8 ou Windows-1252, categorias sugeridas e resumo do que entrou |
+| Front-end | `web/src/regras/importacao.test.js` | Importação do extrato: arquivo em UTF-8 ou Windows-1252, categorias sugeridas, colunas do arquivo e resumo do que entrou |
+| Front-end | `web/src/regras/divisao.test.js` e `busca.test.js` | Racha (divisão igual no centavo, partes que passam do total) e busca do extrato por descrição, valor ou pessoa |
+| Front-end | `web/src/regras/calendario.test.js` e `seletor.test.js` | Calendário (grade do mês, meses e anos, data digitada) e teclado das listas do seletor e do menu |
 
 Os mesmos testes rodam no GitHub Actions a cada commit de pull request e a cada push na `main`
 (ver [CI/CD](#cicd)).
@@ -428,19 +433,26 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
 `FIREBASE_PROJECT_ID` e `CORS_ORIGENS` no `api/.env` e a API rodando:
 
 1. Em **Contas**, crie "Conta corrente" com saldo de hoje `1.000,00` e "Poupança" com `0`.
-2. Em **Lançamentos**, lance uma receita (`Salário`, `3.000,00`), uma despesa (`Mercado`, `214,37`) e uma
-   transferência de `500,00` da conta corrente para a poupança. O extrato mostra cada dia com o saldo de
-   todas as contas; a transferência não muda o total.
-3. **Estorne** a despesa: entra um lançamento de `+ R$ 214,37` com a data de hoje, o original fica riscado com a
-   etiqueta "Estornado" e as saídas do mês voltam a zero. O botão some das duas linhas: um lançamento só é
-   estornado uma vez.
-4. O **Resumo** mostra o saldo em contas (`R$ 3.785,63` antes do estorno), as entradas, as saídas e o extrato do
-   mês. Em **Categorias**, crie, renomeie ou desative uma categoria: desativada, ela sai do formulário de
-   lançamento.
-5. Em **Lançamentos › Importar extrato**, escolha um CSV com as colunas Data, Descrição e Valor (exemplo
-   fictício abaixo), a conta e as categorias, e clique em **Conferir extrato**: a lista mostra o que entra e as
+2. Em **Lançamentos**, o extrato ocupa a tela e só a lista rola. Pelo botão **+ Novo lançamento**, lance uma
+   receita (`Salário`, `3.000,00`), uma despesa (`Mercado`, `214,37`) e uma transferência de `500,00` da conta
+   corrente para a poupança. O extrato mostra cada dia com o saldo de todas as contas; a transferência não muda o
+   total. A data abre um calendário próprio: clicar no mês ou no ano do topo pula direto para eles.
+3. Lance uma despesa `Churrasco` de `300,00` e, em **Dividir com pessoas**, adicione Ana, Bruno e Carla com
+   `100,00`, `150,00` e `50,00`. A linha do extrato mostra quem entrou no racha e com quanto. Com as partes
+   passando de `300,00`, o formulário não deixa lançar.
+4. Na busca do extrato, digite `bruno` ou `300`: ficam só os lançamentos com a pessoa ou o valor, e os totais
+   passam a ser os do que está na tela.
+5. No menu **⋯** da despesa `Mercado`, **Estorne**: entra um lançamento de `+ R$ 214,37` com a data de hoje, o
+   original fica riscado com a etiqueta "Estornado" e as saídas do mês voltam a zero. Estornar some do menu das
+   duas linhas: um lançamento só é estornado uma vez. Lance algo errado e, no mesmo menu, **Exclua**: ele some do
+   extrato e do saldo, sem deixar registro.
+6. O **Resumo** mostra o saldo em contas, as entradas, as saídas e o extrato do mês. Em **Categorias**, crie,
+   renomeie ou desative uma categoria: desativada, ela sai do formulário de lançamento.
+7. Em **Importar CSV**, escolha um CSV com as colunas Data, Descrição e Valor (exemplo fictício abaixo), a conta
+   e as categorias, e clique em **Continuar**: as colunas são reconhecidas e a lista mostra o que entra e as
    linhas com erro (a de saldo não é lançamento). **Importe** e depois confira o mesmo arquivo de novo: nenhum
-   lançamento é novo, todos aparecem como "Já importada".
+   lançamento é novo, todos aparecem como "Já importada". Um arquivo sem cabeçalho abre a etapa **Colunas**,
+   em que você diz o que é cada coluna.
 
    ```text
    Data;Descrição;Valor
@@ -485,6 +497,9 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de seguran�
 | `GET`, `POST`, `PUT` | `/espacos/{id}/contas` e `/espacos/{id}/categorias` | Contas (com saldo) e categorias | Membro do espaço | `200 OK` / `201 Created` |
 | `GET`, `POST` | `/espacos/{id}/lancamentos` | Listar e lançar receita, despesa ou transferência | Membro do espaço | `200 OK` / `201 Created` |
 | `POST` | `/espacos/{id}/lancamentos/{id}/estorno` | Estornar lançamento | Membro do espaço | `201 Created` |
+| `DELETE` | `/espacos/{id}/lancamentos/{id}` | Excluir lançamento (e o estorno dele) | Membro do espaço | `204 No Content` |
+| `GET` | `/espacos/{id}/pessoas` | Nomes já usados em divisões | Membro do espaço | `200 OK` |
+| `POST` | `/espacos/{id}/importacoes` e `/importacoes/estrutura` | Importar extrato em CSV; mostrar o começo do arquivo e as colunas | Membro do espaço | `200 OK` |
 
 ---
 

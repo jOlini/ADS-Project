@@ -109,6 +109,24 @@ class LivroCaixaMemoria:
         self.lancamentos[lancamento.id] = replace(lancamento, estornado_por=None)
         return lancamento
 
+    def excluir_lancamento(self, espaco_id, id):
+        lancamento = self.lancamentos.get(id)
+        if not lancamento or lancamento.espaco_id != espaco_id:
+            return False
+        del self.lancamentos[id]
+        return True
+
+    def excluir_estornos_de(self, espaco_id, id):
+        estornos = [l.id for l in self.lancamentos.values() if l.espaco_id == espaco_id and l.estorno_de == id]
+        for estorno in estornos:
+            del self.lancamentos[estorno]
+        return len(estornos)
+
+    def listar_pessoas(self, espaco_id):
+        return list(
+            {parte.pessoa for l in self.lancamentos.values() if l.espaco_id == espaco_id for parte in l.divisao}
+        )
+
     def buscar_estornos(self, espaco_id, ids):
         return {
             l.estorno_de: l.id

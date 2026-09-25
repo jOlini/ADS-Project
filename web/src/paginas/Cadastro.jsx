@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AvisoFirebase from '../componentes/AvisoFirebase';
 import Campo from '../componentes/Campo';
+import SeletorDeData from '../componentes/SeletorDeData';
 import { useToast } from '../componentes/toast/useToast';
 import { firebaseConfigurado } from '../firebase';
 import { ORDEM_DO_CADASTRO, TAMANHO_MINIMO_SENHA, primeiroCampoComErro, validarCadastro } from '../regras/cadastro';
@@ -84,8 +85,8 @@ export default function Cadastro() {
               <Campo rotulo="Sobrenome" name="sobrenome" autoComplete="family-name" maxLength={100}
                 value={dados.sobrenome} onChange={alterar} erro={erros.sobrenome} />
             </div>
-            <Campo rotulo="Data de nascimento" type="date" name="dataNascimento" autoComplete="bday"
-              min="1900-01-01" max={hojeIso()}
+            <Campo elemento={SeletorDeData} rotulo="Data de nascimento" name="dataNascimento" autoComplete="bday"
+              min="1900-01-01" max={hojeIso()} visaoInicial="anos"
               value={dados.dataNascimento} onChange={alterar} erro={erros.dataNascimento} />
 
             <p className="mensagem erro" role="alert">

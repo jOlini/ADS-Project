@@ -11,8 +11,19 @@ vi.mock('../firebase', () => ({ auth }));
 vi.stubEnv('VITE_API_URL', 'http://api.teste/');
 vi.stubGlobal('fetch', fetch);
 
-const { ErroDaApi, MENSAGEM_SEM_API, MENSAGEM_SESSAO_ENCERRADA, apiConfigurada, espacoPessoal, estornar, lancar, listarLancamentos } =
-  await import('./livroCaixa');
+const {
+  ErroDaApi,
+  MENSAGEM_SEM_API,
+  MENSAGEM_SESSAO_ENCERRADA,
+  apiConfigurada,
+  espacoPessoal,
+  estornar,
+  estruturaDoExtrato,
+  excluir,
+  lancar,
+  listarLancamentos,
+  listarPessoas,
+} = await import('./livroCaixa');
 
 function resposta(status, corpo) {
   return { ok: status >= 200 && status < 300, status, json: async () => corpo };
@@ -62,6 +73,25 @@ describe('API do livro-caixa', () => {
 
     expect(fetch.mock.calls[0][0]).toBe('http://api.teste/espacos/e%2F1/lancamentos?limite=1000&de=2026-09-01&ate=2026-09-30');
     expect(fetch.mock.calls[1][0]).toBe('http://api.teste/espacos/e1/lancamentos/l%3F1/estorno');
+  });
+
+  it('exclui com DELETE e aceita a resposta 204 sem corpo', async () => {
+    fetch.mockResolvedValue({ ok: true, status: 204, json: async () => Promise.reject(new SyntaxError('sem corpo')) });
+
+    await expect(excluir('e1', 'l1')).resolves.toBeNull();
+    expect(fetch.mock.calls[0][0]).toBe('http://api.teste/espacos/e1/lancamentos/l1');
+    expect(fetch.mock.calls[0][1].method).toBe('DELETE');
+  });
+
+  it('busca as pessoas e a estrutura do extrato', async () => {
+    fetch.mockResolvedValue(resposta(200, []));
+
+    await listarPessoas('e1');
+    await estruturaDoExtrato('e1', { csv: 'a;b', delimitador: ';' });
+
+    expect(fetch.mock.calls[0][0]).toBe('http://api.teste/espacos/e1/pessoas');
+    expect(fetch.mock.calls[1][0]).toBe('http://api.teste/espacos/e1/importacoes/estrutura');
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ csv: 'a;b', delimitador: ';' });
   });
 
   it('transforma o Problem Details em ErroDaApi com o erro de cada campo', async () => {

@@ -4,6 +4,7 @@
 // aqui só poupa uma ida ao servidor e põe a mensagem no campo certo.
 import { lerValor } from './dinheiro';
 import { dataExiste } from './datas';
+import { camposDaDivisao, corpoDaDivisao, validarDivisao } from './divisao';
 
 export const TIPOS_DE_CONTA = [
   { valor: 'CORRENTE', rotulo: 'Conta corrente' },
@@ -39,7 +40,7 @@ export function rotuloDoTipoDeConta(tipo) {
 
 // Lançamentos da API viram linhas do extrato (o formato de resumo.js):
 // valor em centavos com o sinal do que aconteceu na conta de origem,
-// nome da categoria e da conta no lugar dos ids.
+// nome da categoria e da conta no lugar dos ids e as pessoas do racha.
 export function paraExtrato(lancamentos, contas, categorias) {
   const nomeDaConta = new Map(contas.map((conta) => [conta.id, conta.nome]));
   const categoriaPorId = new Map(categorias.map((categoria) => [categoria.id, categoria]));
@@ -58,6 +59,7 @@ export function paraExtrato(lancamentos, contas, categorias) {
       cor: transferencia ? 'neutro' : (categoria?.cor ?? 'neutro'),
       conta: transferencia ? `${nome(lancamento.conta_id)} → ${nome(lancamento.conta_destino_id)}` : nome(lancamento.conta_id),
       valor: partidaDaConta?.valor_centavos ?? 0,
+      pessoas: (lancamento.divisao ?? []).map((parte) => ({ pessoa: parte.pessoa, valor: parte.valor_centavos })),
       estorno: Boolean(lancamento.estorno_de),
       estornado: Boolean(lancamento.estornado_por),
     };
@@ -101,6 +103,15 @@ export function estaNoMes(iso, { ano, mes }) {
 // ---------------------------------------------------------- Formulários
 
 export const ORDEM_DO_LANCAMENTO = ['descricao', 'valor', 'data', 'conta_id', 'categoria_id', 'conta_destino_id'];
+
+// Ordem dos campos do formulário de lançamento, com os da divisão no fim.
+export function ordemDoLancamento(formulario) {
+  return [...ORDEM_DO_LANCAMENTO, ...camposDaDivisao(formulario.divisao ?? [])];
+}
+
+// Racha só em receita e despesa: transferência entre contas próprias não
+// tem o que dividir.
+const temDivisao = (formulario) => formulario.tipo !== 'TRANSFERENCIA' && (formulario.divisao?.length ?? 0) > 0;
 export const ORDEM_DA_CONTA = ['nome', 'tipo', 'saldoInicial'];
 export const ORDEM_DA_CATEGORIA = ['nome', 'tipo', 'cor'];
 
@@ -147,6 +158,10 @@ export function validarLancamento(formulario) {
     erros.categoria_id = 'Escolha a categoria.';
   }
 
+  if (temDivisao(formulario)) {
+    Object.assign(erros, validarDivisao(formulario.divisao, valor || null));
+  }
+
   return erros;
 }
 
@@ -164,6 +179,9 @@ export function corpoDoLancamento(formulario) {
     corpo.conta_destino_id = formulario.conta_destino_id;
   } else {
     corpo.categoria_id = formulario.categoria_id;
+  }
+  if (temDivisao(formulario)) {
+    corpo.divisao = corpoDaDivisao(formulario.divisao);
   }
   return corpo;
 }
@@ -193,9 +211,16 @@ export function validarCategoria(formulario) {
 }
 
 // Os erros de campo da API (400) usam os nomes do JSON; os formulários usam
-// "valor" e "saldoInicial" para o texto digitado.
+// "valor" e "saldoInicial" para o texto digitado, também dentro da divisão
+// ("divisao.0.valor_centavos" vira "divisao.0.valor").
 const CAMPO_DO_FORMULARIO = { valor_centavos: 'valor', saldo_inicial_centavos: 'saldoInicial' };
 
+function campoDoFormulario(campo) {
+  const partes = campo.split('.');
+  const ultimo = partes.at(-1);
+  return [...partes.slice(0, -1), CAMPO_DO_FORMULARIO[ultimo] ?? ultimo].join('.');
+}
+
 export function errosDaApi(campos = {}) {
-  return Object.fromEntries(Object.entries(campos).map(([campo, mensagem]) => [CAMPO_DO_FORMULARIO[campo] ?? campo, mensagem]));
+  return Object.fromEntries(Object.entries(campos).map(([campo, mensagem]) => [campoDoFormulario(campo), mensagem]));
 }

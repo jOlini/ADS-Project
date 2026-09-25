@@ -2,8 +2,9 @@
 
 Tudo fica sob /espacos/{espaco_id}: o espaço é o dono dos dados, e a
 dependência espaco_do_cliente barra quem não é membro antes de qualquer
-consulta. Lançamento não tem PUT nem DELETE: correção é por estorno. O
-extrato do banco (CSV) entra por /importacoes, sem duplicar linha já importada.
+consulta. Lançamento não tem PUT: correção de valor é por estorno, que deixa
+o histórico; DELETE apaga de vez (erro de digitação, duplicata). O extrato do
+banco (CSV) entra por /importacoes, sem duplicar linha já importada.
 """
 
 from datetime import date
@@ -18,12 +19,16 @@ from app.financeiro.modelos import (
     ContaResposta,
     Espaco,
     EspacoResposta,
+    EstruturaResposta,
     ImportacaoResposta,
     LancamentoResposta,
+    LinhaDoArquivoResposta,
+    MapeamentoDoExtrato,
     NovaCategoria,
     NovaConta,
     NovaImportacao,
     NovoLancamento,
+    PedidoDeEstrutura,
 )
 from app.financeiro.repositorio import RepositorioLivroCaixa
 from app.financeiro.servicos import ServicoLivroCaixa
@@ -263,6 +268,35 @@ def estornar(
     return LancamentoResposta.de(estorno)
 
 
+@rotas_livro_caixa.delete(
+    "/{espaco_id}/lancamentos/{lancamento_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Excluir lançamento (apaga de vez, junto com o estorno dele)",
+    responses=ERRO_404,
+)
+def excluir_lancamento(
+    lancamento_id: str,
+    espaco: Espaco = Depends(espaco_do_cliente),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
+):
+    """Para erro de digitação ou lançamento duplicado: some do extrato e do
+    saldo, sem deixar histórico. Para desfazer mantendo o registro, use o
+    estorno. Excluir um estorno devolve o original ao normal. Uma linha de
+    extrato importada e depois excluída volta se o arquivo for importado de novo."""
+    servico.excluir(espaco, lancamento_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@rotas_livro_caixa.get(
+    "/{espaco_id}/pessoas",
+    response_model=list[str],
+    summary="Listar as pessoas já usadas em divisões (rachas)",
+    responses=ERRO_404,
+)
+def listar_pessoas(espaco: Espaco = Depends(espaco_do_cliente), servico: ServicoLivroCaixa = Depends(obter_servico)):
+    return servico.pessoas(espaco)
+
+
 # --- Importação de extrato ----------------------------------------------------
 
 
@@ -278,10 +312,34 @@ def importar_extrato(
     cliente: ClienteFirebase = Depends(cliente_autenticado),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
-    """Colunas Data, Descrição e Valor (negativo nas saídas), separadas por `;`, `,`
-    ou tabulação. Cada linha vira uma receita ou despesa na conta escolhida. Linha já
-    importada antes é pulada (`JA_IMPORTADA`), e linha ilegível volta com o motivo
-    (`INVALIDA`), sem barrar as outras. Com `simular: true`, nada é gravado e as linhas
-    que entrariam voltam como `NOVA`."""
+    """Sem `mapeamento`, as colunas são reconhecidas pelo nome (data, descrição e valor
+    com sinal; ou entrada e saída separadas; ou valor com coluna D/C), separadas por
+    `;`, `,`, tabulação ou `|`. Com `mapeamento`, valem as colunas indicadas (ver
+    `/importacoes/estrutura`). Cada linha vira uma receita ou despesa na conta
+    escolhida. Linha já importada antes é pulada (`JA_IMPORTADA`), e linha ilegível
+    volta com o motivo (`INVALIDA`), sem barrar as outras. Com `simular: true`, nada é
+    gravado e as linhas que entrariam voltam como `NOVA`."""
     resultados = servico.importar(espaco, dados, cliente.uid)
     return ImportacaoResposta.de(resultados, simulacao=dados.simular)
+
+
+@rotas_livro_caixa.post(
+    "/{espaco_id}/importacoes/estrutura",
+    response_model=EstruturaResposta,
+    summary="Mostrar o começo do CSV e sugerir as colunas (nada é gravado)",
+    responses={**ERRO_400, **ERRO_404},
+)
+def estrutura_do_extrato(
+    dados: PedidoDeEstrutura,
+    espaco: Espaco = Depends(espaco_do_cliente),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
+):
+    """As primeiras linhas do arquivo já separadas em células e, quando os nomes das
+    colunas são reconhecidos, o `mapeamento` pronto para `/importacoes`. Com `mapeamento`
+    nulo, a tela pede que a pessoa indique as colunas."""
+    resultado = servico.estrutura(dados)
+    return EstruturaResposta(
+        delimitador=resultado.delimitador,
+        linhas=[LinhaDoArquivoResposta(numero=linha.numero, celulas=linha.celulas) for linha in resultado.linhas],
+        mapeamento=MapeamentoDoExtrato(**vars(resultado.mapeamento)) if resultado.mapeamento else None,
+    )

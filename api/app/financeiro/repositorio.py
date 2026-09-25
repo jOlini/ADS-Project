@@ -25,6 +25,7 @@ from app.financeiro.modelos import (
     Lancamento,
     Membro,
     Papel,
+    Parte,
     Partida,
     TipoCategoria,
     TipoConta,
@@ -75,7 +76,13 @@ class RepositorioLivroCaixa(Protocol):
 
     def inserir_lancamento(self, lancamento: Lancamento) -> Lancamento: ...
 
+    def excluir_lancamento(self, espaco_id: str, id: str) -> bool: ...
+
+    def excluir_estornos_de(self, espaco_id: str, id: str) -> int: ...
+
     def buscar_estornos(self, espaco_id: str, ids: list[str]) -> dict[str, str]: ...
+
+    def listar_pessoas(self, espaco_id: str) -> list[str]: ...
 
     def chaves_importadas(self, espaco_id: str, chaves: list[str]) -> set[str]: ...
 
@@ -236,6 +243,10 @@ class LivroCaixaMongo:
             documento["estorno_de"] = lancamento.estorno_de
         if lancamento.chave_importacao:
             documento["chave_importacao"] = lancamento.chave_importacao
+        if lancamento.divisao:
+            documento["divisao"] = [
+                {"pessoa": parte.pessoa, "valor_centavos": parte.valor_centavos} for parte in lancamento.divisao
+            ]
         try:
             lancamento.id = str(self._lancamentos.insert_one(documento).inserted_id)
         except DuplicateKeyError as erro:
@@ -244,6 +255,13 @@ class LivroCaixaMongo:
                 raise LancamentoJaImportado() from erro
             raise ErroConflito(MENSAGEM_JA_ESTORNADO) from erro
         return lancamento
+
+    def excluir_lancamento(self, espaco_id: str, id: str) -> bool:
+        oid = _object_id(id)
+        return bool(oid) and self._lancamentos.delete_one({"_id": oid, "espaco_id": espaco_id}).deleted_count == 1
+
+    def excluir_estornos_de(self, espaco_id: str, id: str) -> int:
+        return self._lancamentos.delete_many({"espaco_id": espaco_id, "estorno_de": id}).deleted_count
 
     def buscar_estornos(self, espaco_id: str, ids: list[str]) -> dict[str, str]:
         """{id do lançamento original: id do estorno}, para os ids pedidos."""
@@ -258,6 +276,10 @@ class LivroCaixaMongo:
             {"espaco_id": espaco_id, "chave_importacao": {"$in": chaves}}, {"_id": 0, "chave_importacao": 1}
         )
         return {documento["chave_importacao"] for documento in documentos}
+
+    def listar_pessoas(self, espaco_id: str) -> list[str]:
+        """Nomes já usados em divisões do espaço, sem repetição exata."""
+        return self._lancamentos.distinct("divisao.pessoa", {"espaco_id": espaco_id})
 
     def somar_partidas_por_conta(self, espaco_id: str) -> dict[str, int]:
         """{id da conta: soma das partidas}. O banco soma inteiros de 64 bits,
@@ -354,4 +376,5 @@ def _para_lancamento(documento: dict) -> Lancamento:
         criado_por=documento["criado_por"],
         estorno_de=documento.get("estorno_de"),
         chave_importacao=documento.get("chave_importacao"),
+        divisao=[Parte(p["pessoa"], p["valor_centavos"]) for p in documento.get("divisao", [])],
     )

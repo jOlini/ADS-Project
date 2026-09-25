@@ -1,0 +1,633 @@
+/*
+ * Tela de Lançamentos: o extrato ocupa a altura da janela e só a lista rola
+ * (a página não tem rolagem própria). Em cima, a barra com o título e as
+ * ações; logo abaixo, mês, busca e filtro. Também os modais de novo
+ * lançamento (com o racha) e de importação do CSV.
+ */
+
+/* ------------------------------------------------ Tela cheia, rolagem própria */
+
+/* A moldura do app vira uma coluna da altura da janela quando esta página
+   está aberta; as outras páginas seguem rolando normalmente. */
+.app:has(.pagina-do-extrato) {
+  height: 100vh;
+  height: 100dvh;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app:has(.pagina-do-extrato) .area {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: var(--espaco-12);
+}
+
+.pagina-do-extrato {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-8);
+}
+
+.barra-do-extrato {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-6) var(--espaco-8);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.acoes-do-extrato {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4);
+}
+
+.extrato-cheio {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ferramentas-do-extrato {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-6);
+  align-items: center;
+  padding: var(--espaco-8) var(--espaco-10) var(--espaco-6);
+  border-bottom: var(--borda);
+}
+
+.busca-do-extrato {
+  flex: 1 1 var(--largura-busca);
+  max-width: var(--largura-busca-maxima);
+}
+
+.ferramentas-do-extrato .abas {
+  margin-left: auto;
+}
+
+.extrato-cheio .totais-do-mes {
+  padding: var(--espaco-5) var(--espaco-10);
+  border-bottom: var(--borda);
+}
+
+.totais-do-mes .contagem {
+  color: var(--texto);
+  font-weight: var(--peso-semi);
+}
+
+/* position: relative prende aqui os textos só para leitor de tela
+   (.apenas-leitor, absolutos): sem isso eles escapariam da rolagem e
+   esticariam a página. */
+.rolagem-do-extrato {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cor-da-rolagem) transparent;
+}
+
+.rolagem-do-extrato:focus-visible {
+  outline-offset: calc(var(--espaco-1) * -1);
+}
+
+/* A faixa do dia gruda no topo enquanto os lançamentos dele passam. */
+.rolagem-do-extrato .dia {
+  position: sticky;
+  top: 0;
+  z-index: var(--camada-fixa);
+}
+
+.rolagem-do-extrato .dia:first-child {
+  border-top: 0;
+}
+
+/* No celular (a barra lateral vira uma linha no topo) e em janela baixa. */
+@media (max-width: 900px) {
+  .app:has(.pagina-do-extrato) {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
+
+/* Janela baixa demais (celular deitado): a lista ficaria espremida. A página
+   volta a rolar inteira. */
+@media (max-height: 520px) {
+  .app:has(.pagina-do-extrato) {
+    height: auto;
+    grid-template-rows: none;
+  }
+
+  .app:has(.pagina-do-extrato) .area,
+  .pagina-do-extrato,
+  .extrato-cheio,
+  .rolagem-do-extrato {
+    display: block;
+    overflow: visible;
+  }
+
+  .barra-do-extrato {
+    margin-bottom: var(--espaco-8);
+  }
+}
+
+@media (max-width: 560px) {
+  .acoes-do-extrato {
+    width: 100%;
+  }
+
+  .acoes-do-extrato button {
+    flex: 1;
+    gap: var(--espaco-3);
+    padding: 0 var(--espaco-4);
+    font-size: var(--fonte-rotulo);
+    white-space: nowrap;
+  }
+
+  .ferramentas-do-extrato {
+    padding: var(--espaco-6);
+  }
+
+  .busca-do-extrato {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .extrato-cheio .totais-do-mes {
+    padding: var(--espaco-4) var(--espaco-6);
+  }
+}
+
+/* ---------------------------------------------------- Linha do extrato */
+
+/* Pessoas do racha, numa linha própria abaixo da categoria. */
+.lancamento .descricao small.racha {
+  display: flex;
+  gap: var(--espaco-2);
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.lancamento .racha .icone {
+  color: var(--suave);
+}
+
+.texto-do-racha {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------ Botões menores */
+
+button.compacto {
+  min-height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-6);
+  font-size: var(--fonte-rotulo);
+}
+
+/* ------------------------------------------------ Racha no formulário */
+
+.divisao {
+  display: grid;
+  gap: var(--espaco-6);
+  min-width: 0;
+  margin: 0;
+  padding: var(--espaco-7) var(--espaco-8);
+  border: var(--borda);
+  border-radius: var(--raio);
+  background: color-mix(in srgb, var(--fundo) 60%, var(--superficie));
+}
+
+.cabecalho-da-divisao {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--altura-botao-compacto);
+}
+
+.titulo-da-divisao {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+}
+
+.titulo-da-divisao .icone {
+  color: var(--suave);
+}
+
+.partes {
+  display: grid;
+  gap: var(--espaco-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.parte {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--largura-parte-do-racha)) auto;
+  gap: var(--espaco-4);
+  align-items: center;
+}
+
+.parte input {
+  width: 100%;
+  min-width: 0;
+  height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-6);
+  font: inherit;
+  font-size: var(--fonte-botao);
+  color: var(--texto);
+  background: var(--superficie);
+  border: var(--borda-forte);
+  border-radius: var(--raio-pequeno);
+  transition: border-color var(--transicao), box-shadow var(--transicao);
+}
+
+.parte input[inputmode='decimal'] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.parte input::placeholder {
+  color: var(--suave);
+}
+
+.parte input:hover {
+  border-color: var(--suave);
+}
+
+.parte input:focus-visible {
+  outline: none;
+  border-color: var(--marca);
+  box-shadow: var(--anel-de-foco);
+}
+
+.parte input[aria-invalid='true'] {
+  border-color: var(--erro);
+}
+
+.parte .erro-do-campo {
+  grid-column: 1 / -1;
+}
+
+.resumo-da-divisao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2) var(--espaco-10);
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.resumo-da-divisao b {
+  margin-left: var(--espaco-2);
+  color: var(--texto);
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+.resumo-da-divisao.passou b {
+  color: var(--erro);
+}
+
+.acoes-da-divisao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-3);
+  align-items: center;
+}
+
+/* Pessoa já usada antes: um toque a põe na divisão. */
+button.sugestao {
+  gap: var(--espaco-2);
+  min-height: var(--altura-aba);
+  padding: 0 var(--espaco-5);
+  color: var(--texto);
+  background: var(--superficie);
+  border: var(--borda-forte);
+  border-radius: var(--raio-pilula);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-semi);
+}
+
+button.sugestao:hover:not(:disabled) {
+  background: var(--lateral);
+}
+
+.caixa-de-marcar.compacta b {
+  font-weight: var(--peso-medio);
+}
+
+/* ------------------------------------------------------- Importação */
+
+.importacao {
+  display: grid;
+  gap: var(--espaco-10);
+}
+
+.etapas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4) var(--espaco-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+}
+
+.etapas li {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+}
+
+.numero-da-etapa {
+  display: grid;
+  place-items: center;
+  width: var(--espaco-12);
+  height: var(--espaco-12);
+  border: var(--borda-forte);
+  border-radius: var(--raio-pilula);
+  font-size: var(--fonte-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.etapas li[aria-current='step'] {
+  color: var(--texto);
+}
+
+.etapas li[aria-current='step'] .numero-da-etapa {
+  color: var(--sobre-marca);
+  background: var(--marca);
+  border-color: var(--marca);
+}
+
+.etapas li.feita .numero-da-etapa {
+  color: var(--positivo);
+  border-color: currentColor;
+}
+
+/* Rótulo de campo que não é um <label> (o do arquivo, que tem a zona). */
+.rotulo-do-campo {
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+}
+
+/* Escolha do arquivo: uma área própria no lugar do botão do navegador. O
+   <input type="file"> fica dentro, invisível mas focável (é ele que abre a
+   janela de arquivos pelo teclado); a regra dele vence a do .campo input. */
+.zona-de-arquivo input[type='file'] {
+  width: var(--espessura);
+  height: var(--espessura);
+  padding: 0;
+  border: 0;
+}
+
+.zona-de-arquivo {
+  position: relative;
+  display: flex;
+  gap: var(--espaco-6);
+  align-items: center;
+  padding: var(--espaco-8) var(--espaco-9);
+  color: var(--suave);
+  background: var(--superficie);
+  border: var(--espessura) dashed var(--linha-forte);
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: border-color var(--transicao), background-color var(--transicao);
+}
+
+.zona-de-arquivo:hover {
+  border-color: var(--suave);
+  background: var(--lateral);
+}
+
+.zona-de-arquivo:focus-within {
+  border-color: var(--marca);
+  border-style: solid;
+  box-shadow: var(--anel-de-foco);
+}
+
+.zona-de-arquivo.com-erro {
+  border-color: var(--erro);
+}
+
+.texto-da-zona {
+  display: grid;
+  min-width: 0;
+}
+
+.texto-da-zona b {
+  overflow: hidden;
+  color: var(--texto);
+  font-weight: var(--peso-semi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.texto-da-zona small {
+  font-size: var(--fonte-apoio);
+}
+
+.etapa-de-colunas,
+.mapeamento {
+  display: grid;
+  gap: var(--espaco-8);
+}
+
+.aviso-da-etapa {
+  display: flex;
+  gap: var(--espaco-5);
+  align-items: flex-start;
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+}
+
+.aviso-da-etapa.destaque {
+  padding: var(--espaco-6) var(--espaco-7);
+  color: var(--texto);
+  background: color-mix(in srgb, var(--aviso) 10%, transparent);
+  border-radius: var(--raio);
+}
+
+.aviso-da-etapa .icone {
+  margin-top: var(--espaco-1);
+  color: var(--aviso);
+}
+
+.erros-do-mapeamento {
+  display: grid;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Começo do arquivo: rola de lado quando há muitas colunas. */
+.tabela-do-arquivo {
+  overflow-x: auto;
+  border: var(--borda);
+  border-radius: var(--raio);
+  scrollbar-width: thin;
+  scrollbar-color: var(--cor-da-rolagem) transparent;
+}
+
+.tabela-do-arquivo table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fonte-apoio);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabela-do-arquivo th {
+  min-width: var(--largura-coluna-do-arquivo);
+  padding: var(--espaco-5) var(--espaco-4);
+  vertical-align: top;
+  text-align: left;
+  background: var(--fundo);
+  border-bottom: var(--borda);
+}
+
+.nome-da-coluna {
+  display: block;
+  margin-bottom: var(--espaco-3);
+  overflow: hidden;
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabela-do-arquivo th button.controle-do-seletor {
+  height: var(--altura-botao-compacto);
+  min-height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-4) 0 var(--espaco-5);
+  font-size: var(--fonte-rotulo);
+}
+
+.tabela-do-arquivo th .com-papel button.controle-do-seletor {
+  font-weight: var(--peso-semi);
+  border-color: var(--suave);
+}
+
+.tabela-do-arquivo td {
+  max-width: var(--largura-celula-do-arquivo);
+  padding: var(--espaco-4) var(--espaco-5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabela-do-arquivo tr + tr td {
+  border-top: var(--borda);
+}
+
+/* Coluna ignorada: fica na tela, apagada, para a pessoa ver o que sobra. */
+.tabela-do-arquivo td.ignorada {
+  color: var(--suave);
+}
+
+.previa-da-importacao {
+  display: grid;
+  gap: var(--espaco-6);
+}
+
+.resumo-da-importacao {
+  font-weight: var(--peso-semi);
+}
+
+.formato-reconhecido {
+  display: flex;
+  gap: var(--espaco-6);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--espaco-5) var(--espaco-6);
+  background: var(--fundo);
+  border-radius: var(--raio);
+  font-size: var(--fonte-apoio);
+}
+
+.formato-reconhecido button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.formato-reconhecido small {
+  display: block;
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+}
+
+.linhas-da-importacao {
+  max-height: var(--altura-previa-da-importacao);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: var(--borda);
+  border-radius: var(--raio);
+  scrollbar-width: thin;
+  scrollbar-color: var(--cor-da-rolagem) transparent;
+}
+
+.linhas-da-importacao li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--espaco-1) var(--espaco-6);
+  padding: var(--espaco-4) var(--espaco-6);
+}
+
+.linhas-da-importacao li + li {
+  border-top: var(--borda);
+}
+
+.linhas-da-importacao .descricao {
+  overflow: hidden;
+  font-weight: var(--peso-semi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linhas-da-importacao .valor {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.linhas-da-importacao .valor.entrada {
+  color: var(--positivo);
+}
+
+.linhas-da-importacao small {
+  grid-column: 1 / -1;
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+/* Já importada: fica na lista, apagada, para a pessoa ver que foi pulada. */
+.linhas-da-importacao .situacao-ja_importada :is(.descricao, .valor) {
+  color: var(--suave);
+}
+
+.linhas-da-importacao .situacao-invalida small {
+  color: var(--erro);
+}
+
+.importacao .acoes-do-formulario button:last-child {
+  flex: 0 1 auto;
+  min-width: var(--largura-botao-de-confirmar);
+}

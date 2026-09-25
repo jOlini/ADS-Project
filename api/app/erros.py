@@ -89,6 +89,8 @@ def _mensagem_do_campo(erro: dict) -> str:
         return f"Use pelo menos {contexto['min_length']} caracteres."
     if tipo == "string_too_long":
         return f"Use no máximo {contexto['max_length']} caracteres."
+    if tipo == "too_long":
+        return f"Use no máximo {contexto['max_length']} itens."
     if tipo == "enum":
         # O Pydantic informa as opções como "'A', 'B' or 'C'".
         opcoes = contexto.get("expected", "").replace("'", "").replace(" or ", " ou ")

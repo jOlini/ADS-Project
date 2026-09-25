@@ -110,9 +110,25 @@ export function estornar(espacoId, lancamentoId) {
   return chamar(doEspaco(espacoId, `/lancamentos/${encodeURIComponent(lancamentoId)}/estorno`), { metodo: 'POST' });
 }
 
+// Apaga de vez (erro de digitação, duplicata), junto com o estorno dele. 204.
+export function excluir(espacoId, lancamentoId) {
+  return chamar(doEspaco(espacoId, `/lancamentos/${encodeURIComponent(lancamentoId)}`), { metodo: 'DELETE' });
+}
+
+// Nomes já usados em rachas, para o formulário sugerir.
+export function listarPessoas(espacoId) {
+  return chamar(doEspaco(espacoId, '/pessoas'));
+}
+
+// Começo do CSV em células e o mapeamento das colunas, quando a API as
+// reconhece pelo nome: { csv, delimitador? }. Nada é gravado.
+export function estruturaDoExtrato(espacoId, pedido) {
+  return chamar(doEspaco(espacoId, '/importacoes/estrutura'), { metodo: 'POST', corpo: pedido });
+}
+
 // Extrato do banco em CSV: { conta_id, categoria_despesa_id, categoria_receita_id,
-// csv, simular }. Com simular, a API só diz o que entraria. Linha já importada
-// antes não entra de novo (chave de idempotência calculada pela API).
+// csv, mapeamento?, simular }. Com simular, a API só diz o que entraria. Linha
+// já importada antes não entra de novo (chave de idempotência calculada pela API).
 export function importarExtrato(espacoId, importacao) {
   return chamar(doEspaco(espacoId, '/importacoes'), { metodo: 'POST', corpo: importacao });
 }

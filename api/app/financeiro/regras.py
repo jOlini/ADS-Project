@@ -12,6 +12,7 @@ gravado e atualizado: é o saldo inicial mais a soma das partidas dela. Assim
 nenhum saldo fica "descolado" do histórico que o explica.
 """
 
+from app.financeiro.importacao import normalizar
 from app.financeiro.modelos import (
     Categoria,
     Conta,
@@ -52,6 +53,39 @@ def conferir_lancamento(
     corpo, já filtrado pelo espaço: None quando o id não existe ou é de outro
     espaço. Por isso "não encontrada" também cobre "não é sua".
     """
+    erros = _conferir_contas_e_categoria(dados, conta, categoria, conta_destino)
+    erros.update(conferir_divisao(dados))
+    return erros
+
+
+def conferir_divisao(dados: NovoLancamento) -> dict[str, str]:
+    """Racha: cada pessoa uma vez só e a soma das partes até o valor do
+    lançamento. O que sobra é a parte de quem lançou; transferência entre
+    contas próprias não tem o que dividir."""
+    erros: dict[str, str] = {}
+    if not dados.divisao:
+        return erros
+    if dados.tipo == TipoLancamento.TRANSFERENCIA:
+        erros["divisao"] = "Transferência entre contas não se divide entre pessoas."
+        return erros
+
+    vistas: set[str] = set()
+    for indice, parte in enumerate(dados.divisao):
+        nome = " ".join(parte.pessoa.split()).casefold()
+        if nome in vistas:
+            erros[f"divisao.{indice}.pessoa"] = "Esta pessoa já está na divisão."
+        vistas.add(nome)
+    if sum(parte.valor_centavos for parte in dados.divisao) > dados.valor_centavos:
+        erros["divisao"] = "As partes somam mais que o valor do lançamento."
+    return erros
+
+
+def _conferir_contas_e_categoria(
+    dados: NovoLancamento,
+    conta: Conta | None,
+    categoria: Categoria | None,
+    conta_destino: Conta | None,
+) -> dict[str, str]:
     erros: dict[str, str] = {}
 
     if erro := _erro_da_conta(conta):
@@ -93,6 +127,18 @@ def conferir_importacao(
     if erro := _erro_da_categoria(categoria_receita, TipoCategoria.RECEITA):
         erros["categoria_receita_id"] = erro
     return erros
+
+
+def categoria_pelo_nome(categorias: list[Categoria], nome: str | None, tipo: TipoCategoria) -> Categoria | None:
+    """Categoria ativa do tipo com o nome escrito na coluna de categoria do
+    extrato, comparado sem acento, caixa nem pontuação. None se não houver."""
+    if not nome:
+        return None
+    procurado = normalizar(nome)
+    return next(
+        (c for c in categorias if c.ativa and c.tipo == tipo and normalizar(c.nome) == procurado),
+        None,
+    )
 
 
 def _erro_da_conta(conta: Conta | None) -> str | None:

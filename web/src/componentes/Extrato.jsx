@@ -23,9 +23,12 @@ function iconeDoLancamento(lancamento) {
   return lancamento.valor > 0 ? 'entrada' : 'saida';
 }
 
+// "Ana R$ 100,00 · Bruno R$ 150,00": quem entrou no racha e com quanto.
+const textoDoRacha = (pessoas) => pessoas.map((parte) => `${parte.pessoa} ${formatarBRL(parte.valor)}`).join(' · ');
+
 // Os dias do extrato (agruparPorDia) com as linhas de cada um. mostrarSaldo
-// desliga o "Saldo do dia" quando um filtro esconde linhas. acoes(linha),
-// se vier, desenha um botão no fim da linha (ex.: Estornar).
+// desliga o "Saldo do dia" quando um filtro ou a busca esconde linhas.
+// acoes(linha), se vier, desenha o menu de ações no fim da linha.
 export default function Extrato({ dias, mostrarSaldo = true, acoes }) {
   return dias.map((dia) => (
     <div key={dia.data}>
@@ -47,6 +50,15 @@ export default function Extrato({ dias, mostrarSaldo = true, acoes }) {
               {lancamento.categoria} · {lancamento.conta}
               {lancamento.estornado && <span className="etiqueta">Estornado</span>}
             </small>
+            {lancamento.pessoas?.length > 0 && (
+              <small className="racha" title={textoDoRacha(lancamento.pessoas)}>
+                <Icone nome="pessoas" tamanho={14} />
+                <span className="texto-do-racha">
+                  <span className="apenas-leitor">Dividido com: </span>
+                  {textoDoRacha(lancamento.pessoas)}
+                </span>
+              </small>
+            )}
           </span>
           <span className={`valor${lancamento.valor > 0 ? ' entrada' : ''}`}>
             {lancamento.estornado && <span className="apenas-leitor">Estornado: </span>}

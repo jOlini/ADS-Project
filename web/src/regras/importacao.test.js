@@ -2,13 +2,21 @@
 // Firebase, sem API e sem navegador. Dados fictícios.
 import { describe, expect, it } from 'vitest';
 import {
+  cabecalhoProvavel,
   categoriaSugerida,
   dataMaisRecente,
   decodificarExtrato,
+  descreverMapeamento,
   errosDaImportacao,
+  linhasDeDados,
+  mapeamentoDosPapeis,
+  nomesDasColunas,
+  papeisDoMapeamento,
   resumoDaImportacao,
   TAMANHO_MAXIMO_DO_ARQUIVO,
+  trocarPapel,
   validarImportacao,
+  validarMapeamento,
 } from './importacao';
 
 const CATEGORIAS = [
@@ -55,6 +63,10 @@ describe('errosDaImportacao', () => {
       conta_id: 'Conta não encontrada.',
     });
   });
+
+  it('deixa o erro do mapeamento com o nome da informação', () => {
+    expect(errosDaImportacao({ 'mapeamento.valor': 'Indique a coluna do valor.' })).toEqual({ valor: 'Indique a coluna do valor.' });
+  });
 });
 
 describe('categoriaSugerida', () => {
@@ -98,5 +110,70 @@ describe('dataMaisRecente', () => {
 
   it('devolve null quando nada entrou', () => {
     expect(dataMaisRecente([{ situacao: 'JA_IMPORTADA', data: '2026-09-15' }])).toBeNull();
+  });
+});
+
+// Começo de um arquivo como a API devolve em /importacoes/estrutura.
+const AMOSTRA = [
+  { numero: 1, celulas: ['Extrato da conta'] },
+  { numero: 3, celulas: ['Data', 'Histórico', 'Valor (R$)', 'D/C'] },
+  { numero: 4, celulas: ['01/09/2026', 'Café', '5,00', 'D'] },
+];
+
+describe('colunas do arquivo', () => {
+  it('dá nome às colunas pelo cabeçalho ou pelo número', () => {
+    expect(nomesDasColunas(AMOSTRA, 3)).toEqual(['Data', 'Histórico', 'Valor (R$)', 'D/C']);
+    expect(nomesDasColunas(AMOSTRA, 0)).toEqual(['Coluna 1', 'Coluna 2', 'Coluna 3', 'Coluna 4']);
+  });
+
+  it('adivinha a linha do cabeçalho pela data na primeira linha', () => {
+    expect(cabecalhoProvavel(AMOSTRA)).toBe(1);
+    expect(cabecalhoProvavel([{ numero: 1, celulas: ['2026-09-01', 'Feira', '30,00'] }])).toBe(0);
+    expect(cabecalhoProvavel([{ numero: 2, celulas: ['5/9/26', 'Pão'] }])).toBe(0);
+    expect(cabecalhoProvavel([])).toBe(0);
+  });
+
+  it('separa as linhas de dados das de antes do cabeçalho', () => {
+    expect(linhasDeDados(AMOSTRA, 3).map((linha) => linha.numero)).toEqual([4]);
+    expect(linhasDeDados(AMOSTRA, 0)).toHaveLength(3);
+  });
+
+  it('vai e volta entre o mapeamento da API e os papéis das colunas', () => {
+    const mapeamento = { delimitador: ';', cabecalho: 3, data: 0, descricao: 1, valor: 2, tipo: 3, credito: null, inverter_sinal: false };
+    const papeis = papeisDoMapeamento(mapeamento);
+
+    expect(papeis).toEqual({ 0: 'data', 1: 'descricao', 2: 'valor', 3: 'tipo' });
+    expect(mapeamentoDosPapeis(papeis, { delimitador: ';', cabecalho: 3 })).toEqual({
+      delimitador: ';', cabecalho: 3, inverter_sinal: false, data: 0, descricao: 1, valor: 2, tipo: 3,
+    });
+    expect(papeisDoMapeamento(null)).toEqual({});
+  });
+
+  it('cada papel fica numa coluna só', () => {
+    const papeis = { 0: 'data', 1: 'descricao' };
+
+    expect(trocarPapel(papeis, 2, 'data')).toEqual({ 1: 'descricao', 2: 'data' });
+    expect(trocarPapel(papeis, 1, '')).toEqual({ 0: 'data' });
+    expect(trocarPapel(papeis, 0, 'valor')).toEqual({ 0: 'valor', 1: 'descricao' });
+  });
+
+  it('confere o mapeamento como a API', () => {
+    expect(validarMapeamento({ data: 0, descricao: 1, valor: 2 })).toEqual({});
+    expect(validarMapeamento({ data: 0, descricao: 1, credito: 2, debito: 3 })).toEqual({});
+    expect(validarMapeamento({ tipo: 3 })).toEqual({
+      data: 'Indique a coluna da data.',
+      descricao: 'Indique a coluna da descrição.',
+      valor: 'Indique a coluna do valor, ou as de entrada e saída.',
+      tipo: 'A coluna D/C acompanha a coluna do valor.',
+    });
+    expect(validarMapeamento({ data: 0, descricao: 1, valor: 2, debito: 3 }).valor).toMatch(/não as duas/);
+  });
+
+  it('descreve o formato com os nomes do arquivo', () => {
+    const mapeamento = { data: 0, descricao: 1, valor: 2, tipo: 3, inverter_sinal: true };
+
+    expect(descreverMapeamento(mapeamento, nomesDasColunas(AMOSTRA, 3))).toBe(
+      'Data: Data · Descrição: Histórico · Valor: Valor (R$) · D/C: D/C · sinal invertido',
+    );
   });
 });
