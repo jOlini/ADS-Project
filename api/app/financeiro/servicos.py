@@ -5,10 +5,12 @@ só o espaço já liberado e o uid de quem pede.
 """
 
 from datetime import UTC, date, datetime
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from app.erros import ErroConflito, ErroNaoEncontrado, ErroValidacao
-from app.financeiro import importacao, regras
+from app.financeiro import cartoes, importacao, regras
+from app.financeiro.cartoes import PeriodoDaFatura, Referencia, ResumoDoCartao
 from app.financeiro.modelos import (
     AtualizacaoCategoria,
     AtualizacaoConta,
@@ -18,13 +20,16 @@ from app.financeiro.modelos import (
     Lancamento,
     Membro,
     NovaCategoria,
+    NovaCompra,
     NovaConta,
     NovaImportacao,
     NovoLancamento,
+    NovoPagamento,
     Papel,
     Parte,
     PedidoDeEstrutura,
     ResultadoDaLinha,
+    SituacaoDaFatura,
     SituacaoDaLinha,
     TipoCategoria,
     TipoEspaco,
@@ -34,6 +39,9 @@ from app.financeiro.repositorio import EspacoPessoalJaExiste, LancamentoJaImport
 
 FUSO_PADRAO = "America/Sao_Paulo"
 TAMANHO_MAXIMO_DA_DESCRICAO = 120
+# Lançamentos de um cartão lidos de uma vez para o painel e a fatura. Um mês
+# de fatura fica muito abaixo; o teto só protege a memória.
+LIMITE_DO_CARTAO = 5000
 
 
 def agora() -> datetime:
@@ -92,6 +100,8 @@ class ServicoLivroCaixa:
         return conta, regras.saldo_da_conta(conta, self.repositorio.somar_partidas_por_conta(espaco.id))
 
     def criar_conta(self, espaco: Espaco, dados: NovaConta) -> Conta:
+        if erros := regras.conferir_conta(dados):
+            raise ErroValidacao(erros)
         conta = Conta(
             espaco_id=espaco.id,
             nome=dados.nome,
@@ -99,14 +109,22 @@ class ServicoLivroCaixa:
             saldo_inicial_centavos=dados.saldo_inicial_centavos,
             ativa=True,
             criada_em=agora(),
+            limite_centavos=dados.limite_centavos,
+            dia_fechamento=dados.dia_fechamento,
+            dia_vencimento=dados.dia_vencimento,
         )
         return self.repositorio.inserir_conta(conta)
 
     def atualizar_conta(self, espaco: Espaco, id: str, dados: AtualizacaoConta) -> Conta:
         conta = self._conta(espaco, id)
+        if erros := regras.conferir_conta(dados, conta):
+            raise ErroValidacao(erros)
         conta.nome = dados.nome
         conta.tipo = dados.tipo
         conta.ativa = dados.ativa
+        conta.limite_centavos = dados.limite_centavos
+        conta.dia_fechamento = dados.dia_fechamento
+        conta.dia_vencimento = dados.dia_vencimento
         return self.repositorio.atualizar_conta(conta)
 
     def _conta(self, espaco: Espaco, id: str) -> Conta:
@@ -114,6 +132,128 @@ class ServicoLivroCaixa:
         if conta is None:
             raise ErroNaoEncontrado("Conta não encontrada.")
         return conta
+
+    # --- Cartões de crédito ---
+
+    def cartoes(self, espaco: Espaco) -> list[tuple[Conta, int, ResumoDoCartao]]:
+        """Os cartões do espaço com o painel de cada um."""
+        somas = self.repositorio.somar_partidas_por_conta(espaco.id)
+        return [
+            self._com_resumo(espaco, cartao, regras.saldo_da_conta(cartao, somas))
+            for cartao in self.repositorio.listar_contas(espaco.id)
+            if cartao.cartao
+        ]
+
+    def cartao(self, espaco: Espaco, id: str) -> tuple[Conta, int, ResumoDoCartao]:
+        cartao = self._cartao(espaco, id)
+        saldo = regras.saldo_da_conta(cartao, self.repositorio.somar_partidas_por_conta(espaco.id))
+        return self._com_resumo(espaco, cartao, saldo)
+
+    def _com_resumo(self, espaco: Espaco, cartao: Conta, saldo: int) -> tuple[Conta, int, ResumoDoCartao]:
+        hoje = self.hoje(espaco)
+        aberta = cartoes.periodo_da_fatura(cartao, cartoes.referencia_da_data(cartao, hoje))
+        # Da fatura atual em diante: o que veio antes já está no saldo.
+        lancamentos = self.repositorio.listar_lancamentos(espaco.id, aberta.inicio, None, LIMITE_DO_CARTAO, cartao.id)
+        return cartao, saldo, cartoes.resumir(cartao, saldo, lancamentos, hoje)
+
+    def fatura(
+        self, espaco: Espaco, id: str, referencia: Referencia
+    ) -> tuple[Conta, PeriodoDaFatura, SituacaoDaFatura, list[Lancamento]]:
+        """Uma fatura do cartão (referência = ano e mês do vencimento) com as
+        compras, os créditos e os pagamentos do período dela."""
+        cartao = self._cartao(espaco, id)
+        periodo = cartoes.periodo_da_fatura(cartao, referencia)
+        atual = cartoes.referencia_da_data(cartao, self.hoje(espaco))
+        lancamentos = self.repositorio.listar_lancamentos(
+            espaco.id, periodo.inicio, periodo.ultimo_dia, LIMITE_DO_CARTAO, cartao.id
+        )
+        situacao = cartoes.situacao_da_fatura(referencia, atual)
+        return cartao, periodo, situacao, self._marcar_estornados(espaco, lancamentos)
+
+    def comprar(self, espaco: Espaco, cartao_id: str, dados: NovaCompra, uid: str) -> list[Lancamento]:
+        """Compra no cartão: uma despesa por parcela, cada uma na fatura
+        seguinte à da anterior. Todas ocupam o limite desde já.
+
+        As parcelas são gravadas uma a uma. Se a gravação parar no meio,
+        excluir qualquer parcela leva as que entraram (mesmo compra_id)."""
+        cartao = self._cartao(espaco, cartao_id)
+        categoria = self.repositorio.buscar_categoria(espaco.id, dados.categoria_id)
+        if erros := regras.conferir_compra(dados, cartao, categoria):
+            raise ErroValidacao(erros)
+
+        parcelada = dados.parcelas > 1
+        compra_id = uuid4().hex if parcelada else None
+        valores = cartoes.valores_das_parcelas(dados.valor_centavos, dados.parcelas)
+        datas = cartoes.datas_das_parcelas(cartao, dados.data, dados.parcelas)
+        instante = agora()
+        gravados = []
+        for numero, (valor, data) in enumerate(zip(valores, datas, strict=True), start=1):
+            despesa = NovoLancamento(
+                tipo=TipoLancamento.DESPESA,
+                descricao=dados.descricao,
+                data=data,
+                valor_centavos=valor,
+                conta_id=cartao.id,
+                categoria_id=categoria.id,
+            )
+            lancamento = Lancamento(
+                espaco_id=espaco.id,
+                tipo=despesa.tipo,
+                descricao=despesa.descricao,
+                data=despesa.data,
+                valor_centavos=despesa.valor_centavos,
+                conta_id=despesa.conta_id,
+                categoria_id=despesa.categoria_id,
+                partidas=regras.montar_partidas(despesa),
+                criado_em=instante,
+                criado_por=uid,
+                divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
+                compra_id=compra_id,
+                parcela=numero if parcelada else None,
+                parcelas=dados.parcelas if parcelada else None,
+            )
+            gravados.append(self._gravar(lancamento))
+        return gravados
+
+    def pagar_fatura(self, espaco: Espaco, cartao_id: str, dados: NovoPagamento, uid: str) -> Lancamento:
+        """Transferência da conta para o cartão: sai da conta (débito) e
+        libera o limite do cartão no mesmo valor."""
+        cartao = self._cartao(espaco, cartao_id)
+        conta = self.repositorio.buscar_conta(espaco.id, dados.conta_id)
+        if erros := regras.conferir_pagamento(conta):
+            raise ErroValidacao(erros)
+        transferencia = NovoLancamento(
+            tipo=TipoLancamento.TRANSFERENCIA,
+            descricao=dados.descricao or f"Pagamento da fatura · {cartao.nome}"[:TAMANHO_MAXIMO_DA_DESCRICAO],
+            data=dados.data,
+            valor_centavos=dados.valor_centavos,
+            conta_id=conta.id,
+            conta_destino_id=cartao.id,
+        )
+        return self._gravar(
+            Lancamento(
+                espaco_id=espaco.id,
+                tipo=transferencia.tipo,
+                descricao=transferencia.descricao,
+                data=transferencia.data,
+                valor_centavos=transferencia.valor_centavos,
+                conta_id=transferencia.conta_id,
+                conta_destino_id=transferencia.conta_destino_id,
+                partidas=regras.montar_partidas(transferencia),
+                criado_em=agora(),
+                criado_por=uid,
+            )
+        )
+
+    def _cartao(self, espaco: Espaco, id: str) -> Conta:
+        cartao = self.repositorio.buscar_conta(espaco.id, id)
+        if cartao is None or not cartao.cartao:
+            raise ErroNaoEncontrado("Cartão não encontrado.")
+        return cartao
+
+    @staticmethod
+    def hoje(espaco: Espaco) -> date:
+        return datetime.now(ZoneInfo(espaco.fuso)).date()
 
     # --- Categorias ---
 
@@ -146,10 +286,14 @@ class ServicoLivroCaixa:
 
     # --- Lançamentos ---
 
-    def lancamentos(self, espaco: Espaco, de: date | None, ate: date | None, limite: int) -> list[Lancamento]:
+    def lancamentos(
+        self, espaco: Espaco, de: date | None, ate: date | None, limite: int, conta_id: str | None = None
+    ) -> list[Lancamento]:
         if de and ate and de > ate:
             raise ErroValidacao({"ate": "A data final vem antes da inicial."})
-        lancamentos = self.repositorio.listar_lancamentos(espaco.id, de, ate, limite)
+        if conta_id:
+            self._conta(espaco, conta_id)
+        lancamentos = self.repositorio.listar_lancamentos(espaco.id, de, ate, limite, conta_id)
         return self._marcar_estornados(espaco, lancamentos)
 
     def lancamento(self, espaco: Espaco, id: str) -> Lancamento:
@@ -190,8 +334,14 @@ class ServicoLivroCaixa:
 
         O estorno sai antes do original: se a operação parar no meio, sobra o
         original sem estorno, que é um estado válido. A segunda passada pega
-        um estorno gravado entre a leitura e a exclusão."""
+        um estorno gravado entre a leitura e a exclusão.
+
+        Parcela de compra no cartão leva a compra inteira: uma parcela sozinha
+        não existe, porque o limite foi ocupado pelo total."""
         lancamento = self.lancamento(espaco, id)
+        if lancamento.compra_id:
+            self.repositorio.excluir_compra(espaco.id, lancamento.compra_id)
+            return
         self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
         self.repositorio.excluir_lancamento(espaco.id, lancamento.id)
         self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
@@ -209,6 +359,8 @@ class ServicoLivroCaixa:
         original continua no histórico, e a divisão entre pessoas vem junto
         (o racha também é desfeito)."""
         original = self.lancamento(espaco, id)
+        if original.compra_id:
+            raise ErroConflito("Compra parcelada não se estorna parcela por parcela. Para desfazer, exclua a compra.")
         if original.estorno_de:
             raise ErroConflito("Um estorno não pode ser estornado.")
         if original.estornado_por:

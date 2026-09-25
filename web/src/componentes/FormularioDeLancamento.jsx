@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import AvisoComAtalho from './AvisoComAtalho';
 import Campo from './Campo';
 import DivisaoEntrePessoas from './DivisaoEntrePessoas';
-import Icone from './Icone';
 import Seletor from './Seletor';
 import SeletorDeData from './SeletorDeData';
 import { useToast } from './toast/useToast';
@@ -27,10 +26,11 @@ const formularioVazio = (contas) => ({
 const opcoesDeConta = (contas) => contas.map((conta) => ({ valor: conta.id, rotulo: conta.nome }));
 
 // Formulário do "+ Novo lançamento" (dentro do modal): receita, despesa ou
-// transferência, com o racha entre pessoas nas duas primeiras. Confere tudo
-// antes de ir à API e põe o foco no primeiro campo com erro. aoLancar recebe
-// o lançamento criado.
-export default function FormularioDeLancamento({ espacoId, contas, categorias, pessoasConhecidas, aoLancar, aoCancelar, aoMudarOcupado }) {
+// transferência entre contas, com o racha entre pessoas nas duas primeiras.
+// Confere tudo antes de ir à API e põe o foco no primeiro campo com erro.
+// aoLancar recebe o lançamento criado. Compras no crédito não entram aqui: com
+// cartões cadastrados, o formulário aponta a fatura (temCartoes).
+export default function FormularioDeLancamento({ espacoId, contas, temCartoes = false, categorias, pessoasConhecidas, aoLancar, aoCancelar, aoMudarOcupado }) {
   const toast = useToast();
   const [formulario, setFormulario] = useState(() => formularioVazio(contas));
   const [erros, setErros] = useState({});
@@ -38,13 +38,14 @@ export default function FormularioDeLancamento({ espacoId, contas, categorias, p
 
   if (contas.length === 0) {
     return (
-      <div className="vazio compacto">
-        <p>Cadastre uma conta antes de lançar: todo lançamento sai de uma conta ou entra nela.</p>
-        <Link className="botao" to="/contas">
-          <Icone nome="mais" tamanho={16} />
-          Cadastrar conta
-        </Link>
-      </div>
+      <AvisoComAtalho
+        icone="contas"
+        titulo="Nenhuma conta para lançar"
+        atalho={{ para: '/contas?cadastrar=conta', rotulo: 'Cadastrar conta', icone: 'contas' }}
+        aoFechar={aoCancelar}
+      >
+        Todo lançamento sai de uma conta ou entra nela. Cadastre a conta (com o saldo de hoje) e volte para lançar.
+      </AvisoComAtalho>
     );
   }
 
@@ -101,6 +102,11 @@ export default function FormularioDeLancamento({ espacoId, contas, categorias, p
 
   return (
     <form onSubmit={enviar} noValidate>
+      {temCartoes && (
+        <AvisoComAtalho icone="cartao" compacto atalho={{ para: '/contas#cartoes', rotulo: 'Abrir cartões', icone: 'cartao' }}>
+          Compra no crédito entra na fatura do cartão, não aqui.
+        </AvisoComAtalho>
+      )}
       <div className="abas largas" role="group" aria-label="Tipo de lançamento">
         {TIPOS_DE_LANCAMENTO.map((tipo) => (
           <button key={tipo.valor} type="button" aria-pressed={formulario.tipo === tipo.valor} onClick={() => mudar('tipo', tipo.valor)}>
@@ -134,10 +140,16 @@ export default function FormularioDeLancamento({ espacoId, contas, categorias, p
           <Campo elemento={Seletor} rotulo="Categoria" name="categoria_id" placeholder="Escolha a categoria"
             opcoes={categoriasDoTipo.map((categoria) => ({ valor: categoria.id, rotulo: categoria.nome, cor: categoria.cor }))}
             value={formulario.categoria_id}
-            onChange={(evento) => mudar('categoria_id', evento.target.value)} erro={erros.categoria_id}
-            dica={categoriasDoTipo.length === 0 ? 'Nenhuma categoria ativa deste tipo. Crie uma em Categorias.' : undefined} />
+            onChange={(evento) => mudar('categoria_id', evento.target.value)} erro={erros.categoria_id} />
         )}
       </div>
+
+      {!transferencia && categoriasDoTipo.length === 0 && (
+        <AvisoComAtalho compacto
+          atalho={{ para: `/categorias?cadastrar=${formulario.tipo}`, rotulo: 'Criar categoria', icone: 'categorias' }}>
+          Nenhuma categoria de {formulario.tipo === 'DESPESA' ? 'despesa' : 'receita'} ativa.
+        </AvisoComAtalho>
+      )}
 
       {!transferencia && (
         <DivisaoEntrePessoas

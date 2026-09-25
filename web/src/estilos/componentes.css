@@ -574,3 +574,74 @@ button.item-do-menu.perigo > .icone {
   height: var(--tamanho-icone-botao-compacto);
   min-height: var(--tamanho-icone-botao-compacto);
 }
+
+/* --------------------------------------------------- Aviso com atalho */
+
+/* Aviso que depende de outro cadastro: símbolo e texto em cima; embaixo,
+   fechar (secundário) e o atalho (principal), na ordem dos diálogos. */
+.aviso-com-atalho {
+  display: grid;
+  grid-template-columns: var(--tamanho-simbolo) minmax(0, 1fr);
+  gap: var(--espaco-6) var(--espaco-7);
+  align-items: start;
+}
+
+.aviso-com-atalho .simbolo {
+  display: grid;
+  place-items: center;
+  width: var(--tamanho-simbolo);
+  height: var(--tamanho-simbolo);
+  border-radius: var(--raio);
+  background: var(--marca-suave);
+  color: var(--marca);
+}
+
+.aviso-com-atalho .texto-do-aviso {
+  display: grid;
+  gap: var(--espaco-2);
+  align-self: center;
+}
+
+.aviso-com-atalho .acoes-do-aviso {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: var(--espaco-4);
+  justify-content: flex-end;
+}
+
+/* Dentro de um formulário: uma faixa só, com o atalho à direita. */
+.aviso-com-atalho.compacto {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  padding: var(--espaco-5) var(--espaco-6);
+  border: var(--espessura) solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--fundo);
+  font-size: var(--fonte-apoio);
+}
+
+.aviso-com-atalho.compacto .simbolo {
+  width: auto;
+  height: auto;
+  background: none;
+}
+
+.aviso-com-atalho.compacto .acoes-do-aviso {
+  grid-column: auto;
+}
+
+.aviso-com-atalho.compacto a.botao {
+  min-height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-6);
+}
+
+@media (max-width: 560px) {
+  .aviso-com-atalho.compacto {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .aviso-com-atalho.compacto .acoes-do-aviso {
+    grid-column: 1 / -1;
+  }
+}

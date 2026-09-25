@@ -1,15 +1,18 @@
 // Testes das regras das telas do livro-caixa: funções puras, sem API.
 import { describe, expect, it } from 'vitest';
 import {
+  corpoDoCartao,
   corpoDoLancamento,
   errosDaApi,
   estaNoMes,
   intervaloDoMes,
+  lancamentosDasContas,
   mesDe,
   mudarMes,
   ordemDoLancamento,
   paraExtrato,
   saldoTotal,
+  validarCartao,
   validarCategoria,
   validarConta,
   validarLancamento,
@@ -17,9 +20,10 @@ import {
 
 // Respostas da API com dados fictícios.
 const CONTAS = [
-  { id: 'c1', nome: 'Conta corrente', saldo_centavos: 100000 },
-  { id: 'c2', nome: 'Poupança', saldo_centavos: 50000 },
+  { id: 'c1', nome: 'Conta corrente', tipo: 'CORRENTE', saldo_centavos: 100000 },
+  { id: 'c2', nome: 'Poupança', tipo: 'POUPANCA', saldo_centavos: 50000 },
 ];
+const CARTAO = { id: 'v1', nome: 'Cartão Roxo', tipo: 'CARTAO_CREDITO', saldo_centavos: -30000 };
 const CATEGORIAS = [
   { id: 'k1', nome: 'Mercado', tipo: 'DESPESA', cor: 'mercado' },
   { id: 'k2', nome: 'Salário', tipo: 'RECEITA', cor: 'entrada' },
@@ -45,7 +49,7 @@ describe('paraExtrato', () => {
 
     expect(linha).toEqual({
       id: 'l1', data: '2026-09-19', descricao: 'Supermercado', tipo: 'despesa', categoria: 'Mercado', cor: 'mercado',
-      conta: 'Conta corrente', valor: -21437, pessoas: [], estorno: false, estornado: false,
+      conta: 'Conta corrente', valor: -21437, pessoas: [], estorno: false, estornado: false, parcela: null, noCartao: false,
     });
   });
 
@@ -107,10 +111,68 @@ describe('paraExtrato', () => {
   });
 });
 
+describe('cartão de crédito no extrato', () => {
+  const pagamento = lancamento({
+    id: 'p1', tipo: 'TRANSFERENCIA', data: '2026-09-10', descricao: 'Pagamento da fatura', valor_centavos: 30000,
+    conta_id: 'c1', conta_destino_id: 'v1',
+    partidas: [{ conta_id: 'c1', categoria_id: null, valor_centavos: -30000 }, { conta_id: 'v1', categoria_id: null, valor_centavos: 30000 }],
+  });
+  const parcela = lancamento({
+    id: 'q2', tipo: 'DESPESA', data: '2026-10-20', descricao: 'Geladeira', valor_centavos: 100000,
+    conta_id: 'v1', categoria_id: 'k1', compra_id: 'compra-1', parcela: 2, parcelas: 3,
+    partidas: [{ conta_id: 'v1', categoria_id: null, valor_centavos: -100000 }, { conta_id: null, categoria_id: 'k1', valor_centavos: 100000 }],
+  });
+
+  it('pagamento da fatura é saída no extrato da conta, e não transferência neutra', () => {
+    const [linha] = paraExtrato([pagamento], [...CONTAS, CARTAO], CATEGORIAS);
+
+    expect(linha).toMatchObject({ tipo: 'pagamento', categoria: 'Pagamento de fatura', conta: 'Conta corrente → Cartão Roxo', valor: -30000 });
+  });
+
+  it('na fatura, o pagamento entra positivo e a parcela sai com o número dela', () => {
+    const [pago, compra] = paraExtrato([pagamento, parcela], [...CONTAS, CARTAO], CATEGORIAS, { pontoDeVista: 'v1' });
+
+    expect(pago).toMatchObject({ valor: 30000, conta: 'Da conta Conta corrente' });
+    expect(compra).toMatchObject({ valor: -100000, parcela: { numero: 2, total: 3 }, conta: 'Parcela 2 de 3', noCartao: true });
+  });
+
+  it('o extrato das contas deixa as compras no cartão de fora e mantém o pagamento', () => {
+    expect(lancamentosDasContas([pagamento, parcela], [...CONTAS, CARTAO]).map((item) => item.id)).toEqual(['p1']);
+  });
+});
+
 describe('saldoTotal', () => {
   it('soma o saldo de todas as contas', () => {
     expect(saldoTotal(CONTAS)).toBe(150000);
     expect(saldoTotal([])).toBe(0);
+  });
+
+  it('deixa a dívida do cartão fora do saldo em contas', () => {
+    expect(saldoTotal([...CONTAS, CARTAO])).toBe(150000);
+  });
+});
+
+describe('validarCartao e corpoDoCartao', () => {
+  const completo = { nome: 'Cartão Roxo', limite: '5.000,00', diaFechamento: '3', diaVencimento: '10', ativa: true };
+
+  it('aceita o cartão completo e monta o corpo em centavos e números', () => {
+    expect(validarCartao(completo)).toEqual({});
+    expect(corpoDoCartao(completo)).toEqual({
+      nome: 'Cartão Roxo', tipo: 'CARTAO_CREDITO', limite_centavos: 500000, dia_fechamento: 3, dia_vencimento: 10,
+    });
+    expect(corpoDoCartao(completo, { comAtiva: true }).ativa).toBe(true);
+  });
+
+  it('aponta limite, fechamento e vencimento que faltam', () => {
+    expect(Object.keys(validarCartao({ nome: 'X', limite: '', diaFechamento: '', diaVencimento: '' }))).toEqual([
+      'limite', 'diaFechamento', 'diaVencimento',
+    ]);
+  });
+
+  it('recusa limite zero e vencimento no dia do fechamento', () => {
+    expect(validarCartao({ ...completo, limite: '0', diaVencimento: '3' })).toMatchObject({
+      limite: expect.any(String), diaVencimento: expect.any(String),
+    });
   });
 });
 
@@ -209,6 +271,14 @@ describe('validarConta e validarCategoria', () => {
       saldoInicial: 'Valor inválido. Use o formato 1.500,00 (ou -150,00 se estiver no vermelho).',
     });
     expect(validarCategoria({ nome: 'x'.repeat(61) })).toEqual({ nome: 'Use no máximo 60 caracteres.' });
+  });
+});
+
+describe('errosDaApi (campos do cartão)', () => {
+  it('traduz limite e dias da fatura para os campos do formulário', () => {
+    expect(errosDaApi({ limite_centavos: 'a', dia_fechamento: 'b', dia_vencimento: 'c' })).toEqual({
+      limite: 'a', diaFechamento: 'b', diaVencimento: 'c',
+    });
   });
 });
 

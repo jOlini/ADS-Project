@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import Campo from '../componentes/Campo';
 import Carregando from '../componentes/Carregando';
@@ -7,6 +7,7 @@ import Icone from '../componentes/Icone';
 import Seletor from '../componentes/Seletor';
 import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
+import { useFocoAoChegar } from '../componentes/useFocoAoChegar';
 import { primeiroCampoComErro } from '../regras/cadastro';
 import { CORES_DE_CATEGORIA, errosDaApi, ORDEM_DA_CATEGORIA, validarCategoria } from '../regras/livroCaixa';
 import { apiConfigurada, atualizarCategoria, criarCategoria, listarCategorias } from '../servicos/livroCaixa';
@@ -27,18 +28,23 @@ const rotuloDaCor = (cor) => CORES_DE_CATEGORIA.find((item) => item.valor === co
 
 // Categorias: o "para onde foi" das despesas e o "de onde veio" das receitas.
 // O espaço já nasce com as mais comuns; aqui a pessoa cria, renomeia,
-// recolore ou desativa. O tipo não muda depois de criado.
+// recolore ou desativa. O tipo não muda depois de criado. Um atalho de outra
+// tela chega com ?cadastrar=DESPESA (ou RECEITA): o formulário já vem com o
+// tipo escolhido e o foco no nome.
 export default function Categorias() {
   const { espaco } = useOutletContext();
   const toast = useToast();
+  const [parametros] = useSearchParams();
+  const tipoDoAtalho = TIPOS_DE_CATEGORIA.find((item) => item.valor === parametros.get('cadastrar'))?.valor;
   const [emEdicao, setEmEdicao] = useState(null);
-  const [formulario, setFormulario] = useState(NOVA);
+  const [formulario, setFormulario] = useState(() => ({ ...NOVA, tipo: tipoDoAtalho ?? NOVA.tipo }));
   const [erros, setErros] = useState({});
   const [enviando, setEnviando] = useState(false);
 
   const espacoId = espaco.dados?.id;
   const buscarCategorias = useMemo(() => (espacoId ? () => listarCategorias(espacoId) : null), [espacoId]);
   const categorias = useCarga(buscarCategorias);
+  useFocoAoChegar(Boolean(tipoDoAtalho), 'formulario-da-categoria');
 
   if (!apiConfigurada) {
     return (

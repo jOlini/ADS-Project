@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
+import AvisoComAtalho from '../componentes/AvisoComAtalho';
 import CampoDeBusca from '../componentes/CampoDeBusca';
 import Carregando from '../componentes/Carregando';
-import Confirmacao from '../componentes/Confirmacao';
 import Extrato from '../componentes/Extrato';
 import FormularioDeLancamento from '../componentes/FormularioDeLancamento';
 import Icone from '../componentes/Icone';
@@ -11,19 +11,26 @@ import ImportarExtrato from '../componentes/ImportarExtrato';
 import Menu from '../componentes/Menu';
 import Modal from '../componentes/Modal';
 import SeletorDeMes from '../componentes/SeletorDeMes';
-import { useToast } from '../componentes/toast/useToast';
+import { useAcoesDoExtrato } from '../componentes/useAcoesDoExtrato';
 import { useCarga } from '../componentes/useCarga';
 import { buscarNoExtrato } from '../regras/busca';
 import { nomeDoMes } from '../regras/calendario';
 import { formatarBRL } from '../regras/dinheiro';
-import { formatarData } from '../regras/datas';
 import { dataMaisRecente } from '../regras/importacao';
-import { estaNoMes, intervaloDoMes, mesDe, mudarMes, paraExtrato, saldoTotal } from '../regras/livroCaixa';
+import {
+  cartoesDe,
+  contasBancarias,
+  estaNoMes,
+  intervaloDoMes,
+  lancamentosDasContas,
+  mesDe,
+  mudarMes,
+  paraExtrato,
+  saldoTotal,
+} from '../regras/livroCaixa';
 import { agruparPorDia, filtrarDias, saldoAntesDe, somarMes } from '../regras/resumo';
 import {
   apiConfigurada,
-  estornar,
-  excluir,
   LIMITE_DE_LANCAMENTOS,
   listarCategorias,
   listarContas,
@@ -60,64 +67,46 @@ async function carregarMes(espacoId, mes) {
   return { doMes, depois };
 }
 
-// O que cada ação faz, dito no próprio menu da linha: estornar deixa rastro,
-// excluir não.
-function acoesDaLinha(linha, { aoEstornar, aoExcluir }) {
-  const itens = [];
-  if (!linha.estorno && !linha.estornado) {
-    itens.push({
-      id: 'estornar',
-      rotulo: 'Estornar',
-      descricao: 'Lança hoje o valor contrário. O original fica no extrato, riscado.',
-      icone: 'estornar',
-      aoEscolher: () => aoEstornar(linha),
-    });
-  }
-  itens.push({
-    id: 'excluir',
-    rotulo: 'Excluir',
-    descricao: linha.estorno
-      ? 'Apaga este estorno. O original volta a contar no saldo.'
-      : 'Apaga de vez, sem histórico. Para erro de digitação ou duplicado.',
-    icone: 'excluir',
-    perigo: true,
-    aoEscolher: () => aoExcluir(linha),
-  });
-  return itens;
-}
-
-// Lançamentos: o extrato de um mês ocupando a tela, com rolagem própria. No
-// topo, a barra com "+ Novo lançamento" e "Importar CSV" (os dois abrem um
-// modal); logo abaixo, o mês, a busca e o filtro. Cada linha tem o menu com
-// Estornar (lançamento inverso, o histórico fica) e Excluir (apaga de vez).
+// Lançamentos: o extrato das contas num mês, ocupando a tela, com rolagem
+// própria. Só o que mexe no dinheiro das contas (lançamentos, débitos, PIX,
+// transferências e o pagamento de fatura); as compras no crédito ficam na
+// fatura do cartão, em Contas & Cartões. No topo, a barra com "+ Novo
+// lançamento" e "Importar CSV" (os dois abrem um modal); logo abaixo, o mês,
+// a busca e o filtro. Cada linha tem o menu com Estornar (lançamento inverso,
+// o histórico fica) e Excluir (apaga de vez).
 export default function Lancamentos() {
   const { espaco } = useOutletContext();
-  const toast = useToast();
   const [mes, setMes] = useState(() => mesDe(new Date()));
   const [filtro, setFiltro] = useState('tudo');
   const [busca, setBusca] = useState('');
   const [modal, setModal] = useState(null);
   const [modalOcupado, setModalOcupado] = useState(false);
-  const [aEstornar, setAEstornar] = useState(null);
-  const [aExcluir, setAExcluir] = useState(null);
-  const [ocupado, setOcupado] = useState(false);
 
   const espacoId = espaco.dados?.id;
   const buscarCadastros = useMemo(() => (espacoId ? () => carregarCadastros(espacoId) : null), [espacoId]);
   const buscarMes = useMemo(() => (espacoId ? () => carregarMes(espacoId, mes) : null), [espacoId, mes]);
   const cadastros = useCarga(buscarCadastros);
   const extrato = useCarga(buscarMes);
+  const acoes = useAcoesDoExtrato({
+    espacoId,
+    aoMudar: () => {
+      cadastros.recarregar();
+      extrato.recarregar();
+    },
+  });
 
   const contas = useMemo(() => cadastros.dados?.contas ?? [], [cadastros.dados]);
   const categorias = useMemo(() => cadastros.dados?.categorias ?? [], [cadastros.dados]);
-  const contasAtivas = contas.filter((conta) => conta.ativa);
+  // Lançar e importar aqui é só nas contas; o cartão tem a fatura dele.
+  const contasAtivas = contasBancarias(contas).filter((conta) => conta.ativa);
+  const temCartoes = cartoesDe(contas).length > 0;
 
   const visao = useMemo(() => {
     if (!cadastros.dados || !extrato.dados) {
       return null;
     }
-    const linhasDoMes = paraExtrato(extrato.dados.doMes, contas, categorias);
-    const depois = paraExtrato(extrato.dados.depois, contas, categorias);
+    const linhasDoMes = paraExtrato(lancamentosDasContas(extrato.dados.doMes, contas), contas, categorias);
+    const depois = paraExtrato(lancamentosDasContas(extrato.dados.depois, contas), contas, categorias);
     const saldoNoFimDoMes = saldoAntesDe(depois, saldoTotal(contas));
     return {
       dias: agruparPorDia(linhasDoMes, saldoNoFimDoMes),
@@ -182,36 +171,6 @@ export default function Lancamentos() {
       setMes(mesDe(ultima));
     }
     recarregar();
-  }
-
-  async function confirmarEstorno() {
-    setOcupado(true);
-    try {
-      const estorno = await estornar(espacoId, aEstornar.id);
-      toast.sucesso(`Entrou em ${formatarData(estorno.data)}, com o valor no sentido contrário.`, { titulo: 'Lançamento estornado' });
-      setAEstornar(null);
-      recarregar();
-    } catch (erro) {
-      toast.erro(erro.message, { titulo: 'Estorno não registrado' });
-    } finally {
-      setOcupado(false);
-    }
-  }
-
-  async function confirmarExclusao() {
-    setOcupado(true);
-    try {
-      await excluir(espacoId, aExcluir.id);
-      toast.sucesso(aExcluir.estornado ? 'O estorno dele saiu junto.' : 'Ele saiu do extrato e do saldo.', {
-        titulo: `"${aExcluir.descricao}" excluído`,
-      });
-      setAExcluir(null);
-      recarregar();
-    } catch (erro) {
-      toast.erro(erro.message, { titulo: 'Lançamento não excluído' });
-    } finally {
-      setOcupado(false);
-    }
   }
 
   const filtrado = filtro !== 'tudo' || busca.trim() !== '';
@@ -284,9 +243,7 @@ export default function Lancamentos() {
             <Extrato
               dias={diasVisiveis}
               mostrarSaldo={!filtrado && visao.saldoConfiavel}
-              acoes={(linha) => (
-                <Menu rotulo={`Ações de ${linha.descricao}`} itens={acoesDaLinha(linha, { aoEstornar: setAEstornar, aoExcluir: setAExcluir })} />
-              )}
+              acoes={(linha) => <Menu rotulo={`Ações de ${linha.descricao}`} itens={acoes.itens(linha)} />}
             />
           ) : (
             <div className="vazio">
@@ -301,6 +258,12 @@ export default function Lancamentos() {
                     ? 'Os lançamentos aparecem aqui depois que você cadastrar uma conta.'
                     : 'Use "Novo lançamento" para registrar o que entrou ou saiu, ou traga o extrato do banco com "Importar CSV".'}
               </p>
+              {!filtrado && contasAtivas.length === 0 && (
+                <Link className="botao" to="/contas?cadastrar=conta">
+                  <Icone nome="contas" tamanho={16} />
+                  Cadastrar conta
+                </Link>
+              )}
             </div>
           )}
         </div>
@@ -310,6 +273,7 @@ export default function Lancamentos() {
         <FormularioDeLancamento
           espacoId={espacoId}
           contas={contasAtivas}
+          temCartoes={temCartoes}
           categorias={categorias}
           pessoasConhecidas={pessoasConhecidas}
           aoLancar={aposLancar}
@@ -321,7 +285,15 @@ export default function Lancamentos() {
       <Modal aberta={modal === 'importar'} titulo="Importar CSV" largura="larga" aoFechar={fecharModal} ocupado={modalOcupado}
         descricao="Traga o extrato exportado pelo banco. Nada é gravado antes de você conferir.">
         {contasAtivas.length === 0 ? (
-          <p className="discreto">Cadastre uma conta antes de importar: o extrato entra numa conta.</p>
+          <AvisoComAtalho
+            icone="contas"
+            titulo="Nenhuma conta para receber o extrato"
+            atalho={{ para: '/contas?cadastrar=conta', rotulo: 'Cadastrar conta', icone: 'contas' }}
+            aoFechar={fecharModal}
+          >
+            O extrato do banco entra numa conta. Cadastre a conta (com o saldo de hoje) e volte para importar. A fatura do
+            cartão de crédito se importa na tela do cartão, em Contas & Cartões.
+          </AvisoComAtalho>
         ) : (
           <ImportarExtrato
             espacoId={espacoId}
@@ -334,43 +306,7 @@ export default function Lancamentos() {
         )}
       </Modal>
 
-      <Confirmacao
-        aberta={Boolean(aEstornar)}
-        titulo={aEstornar ? `Estornar "${aEstornar.descricao}"?` : ''}
-        rotuloDeConfirmar="Estornar"
-        ocupado={ocupado}
-        aoConfirmar={confirmarEstorno}
-        aoCancelar={() => !ocupado && setAEstornar(null)}
-      >
-        {aEstornar && (
-          <p>
-            Entra hoje um lançamento de {formatarBRL(Math.abs(aEstornar.valor))} no sentido contrário, e o saldo volta ao que
-            era. O original continua no extrato, marcado como estornado: o histórico fica. Um lançamento só pode ser estornado
-            uma vez.
-          </p>
-        )}
-      </Confirmacao>
-
-      <Confirmacao
-        aberta={Boolean(aExcluir)}
-        titulo={aExcluir ? `Excluir "${aExcluir.descricao}"?` : ''}
-        rotuloDeConfirmar="Excluir"
-        perigo
-        ocupado={ocupado}
-        aoConfirmar={confirmarExclusao}
-        aoCancelar={() => !ocupado && setAExcluir(null)}
-      >
-        {aExcluir && (
-          <>
-            <p>
-              O lançamento de {formatarBRL(Math.abs(aExcluir.valor))} some do extrato e do saldo, sem deixar registro. Use para
-              erro de digitação ou lançamento duplicado; para desfazer mantendo o histórico, use Estornar.
-            </p>
-            {aExcluir.estornado && <p>O estorno dele também será excluído.</p>}
-            {aExcluir.estorno && <p>O lançamento original volta a contar no saldo.</p>}
-          </>
-        )}
-      </Confirmacao>
+      {acoes.dialogos}
     </div>
   );
 }

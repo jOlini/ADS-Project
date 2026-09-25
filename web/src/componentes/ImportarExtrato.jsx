@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import AvisoComAtalho from './AvisoComAtalho';
 import Campo from './Campo';
 import Icone from './Icone';
 import MapeamentoDeColunas from './MapeamentoDeColunas';
@@ -45,12 +46,16 @@ const opcoesDoTipo = (categorias, tipo) =>
 //    pede para ajustar. Ela diz o que é cada coluna.
 // 3. Conferir: a API simula e mostra linha por linha o que entraria (linha
 //    já importada antes aparece e não entra de novo); "Importar" grava.
-export default function ImportarExtrato({ espacoId, contas, categorias, aoImportar, aoCancelar, aoMudarOcupado }) {
+//
+// Com contaFixa (a fatura de um cartão de crédito), o arquivo entra direto
+// naquele cartão e a escolha de conta some: saídas viram compras na fatura, e
+// entradas, créditos (estorno, reembolso).
+export default function ImportarExtrato({ espacoId, contas = [], contaFixa = null, categorias, aoImportar, aoCancelar, aoMudarOcupado }) {
   const toast = useToast();
   const idDoArquivo = useId();
   const [etapa, setEtapa] = useState('arquivo');
   const [destino, setDestino] = useState(() => ({
-    conta_id: contas.length === 1 ? contas[0].id : '',
+    conta_id: contaFixa?.id ?? (contas.length === 1 ? contas[0].id : ''),
     categoria_despesa_id: categoriaSugerida(categorias, 'DESPESA'),
     categoria_receita_id: categoriaSugerida(categorias, 'RECEITA'),
   }));
@@ -193,6 +198,7 @@ export default function ImportarExtrato({ espacoId, contas, categorias, aoImport
 
   const novas = previa?.resposta.novas ?? 0;
   const indiceDaEtapa = ETAPAS.findIndex((item) => item.id === etapa);
+  const semCategorias = opcoesDoTipo(categorias, 'DESPESA').length === 0 || opcoesDoTipo(categorias, 'RECEITA').length === 0;
 
   return (
     <div className="importacao">
@@ -211,7 +217,7 @@ export default function ImportarExtrato({ espacoId, contas, categorias, aoImport
         <form onSubmit={continuar} noValidate>
           <div className="campo">
             <span className="rotulo-do-campo" id={`${idDoArquivo}-rotulo`}>
-              Arquivo CSV do banco
+              {contaFixa ? 'Arquivo CSV da fatura' : 'Arquivo CSV do banco'}
             </span>
             <label className={`zona-de-arquivo${erros.arquivo ? ' com-erro' : ''}`}>
               <input
@@ -228,7 +234,9 @@ export default function ImportarExtrato({ espacoId, contas, categorias, aoImport
               <Icone nome="importar" tamanho={20} />
               <span className="texto-da-zona">
                 <b>{arquivo ? arquivo.name : 'Escolher arquivo'}</b>
-                <small>{arquivo ? 'Clique para trocar' : 'O extrato exportado pelo banco, em .csv'}</small>
+                <small>
+                  {arquivo ? 'Clique para trocar' : contaFixa ? 'A fatura exportada pelo banco, em .csv' : 'O extrato exportado pelo banco, em .csv'}
+                </small>
               </span>
             </label>
             <span id={`${idDoArquivo}-dica`} className="dica-do-campo">
@@ -241,9 +249,16 @@ export default function ImportarExtrato({ espacoId, contas, categorias, aoImport
             )}
           </div>
 
-          <Campo elemento={Seletor} rotulo="Conta do extrato" name="conta_id" placeholder="Escolha a conta"
-            opcoes={contas.map((conta) => ({ valor: conta.id, rotulo: conta.nome }))}
-            value={destino.conta_id} onChange={(evento) => mudarDestino('conta_id', evento.target.value)} erro={erros.conta_id} />
+          {contaFixa ? (
+            <p className="dica-do-campo">
+              As compras entram como saídas na fatura de {contaFixa.nome}. Se aparecerem como entradas na conferência, use
+              &quot;Ajustar colunas&quot; e marque &quot;Inverter o sinal dos valores&quot;.
+            </p>
+          ) : (
+            <Campo elemento={Seletor} rotulo="Conta do extrato" name="conta_id" placeholder="Escolha a conta"
+              opcoes={contas.map((conta) => ({ valor: conta.id, rotulo: conta.nome }))}
+              value={destino.conta_id} onChange={(evento) => mudarDestino('conta_id', evento.target.value)} erro={erros.conta_id} />
+          )}
 
           <div className="duas-colunas">
             <Campo elemento={Seletor} rotulo="Categoria das saídas" name="categoria_despesa_id" placeholder="Escolha"
@@ -256,6 +271,11 @@ export default function ImportarExtrato({ espacoId, contas, categorias, aoImport
           <p className="dica-do-campo">
             Se o arquivo tiver uma coluna de categoria com o nome de uma categoria sua, a linha vai para ela.
           </p>
+          {semCategorias && (
+            <AvisoComAtalho compacto atalho={{ para: '/categorias', rotulo: 'Abrir categorias', icone: 'categorias' }}>
+              A importação precisa de uma categoria ativa de despesa e outra de receita.
+            </AvisoComAtalho>
+          )}
 
           <div className="acoes-do-formulario">
             <button type="button" className="secundario" onClick={aoCancelar} disabled={Boolean(ocupado)}>

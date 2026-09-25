@@ -10,7 +10,7 @@ import { apiConfigurada } from '../servicos/livroCaixa';
 // desligadas, com a versão ao lado, como antes.
 const ITENS_DO_LIVRO_CAIXA = [
   { para: '/lancamentos', icone: 'lancamentos', rotulo: 'Lançamentos' },
-  { para: '/contas', icone: 'contas', rotulo: 'Contas' },
+  { para: '/contas', icone: 'contas', rotulo: 'Contas & Cartões' },
   { para: '/categorias', icone: 'categorias', rotulo: 'Categorias' },
 ];
 const ITENS_FUTUROS = [

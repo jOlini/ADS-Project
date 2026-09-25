@@ -21,6 +21,8 @@ LIMITE_EM_CENTAVOS = 100_000_000_000
 TAMANHO_MAXIMO_DO_CSV = 500_000
 # Pessoas numa divisão (racha) de um lançamento.
 MAXIMO_DE_PESSOAS = 20
+# Parcelas de uma compra no cartão de crédito (4 anos).
+MAXIMO_DE_PARCELAS = 48
 
 
 class TipoEspaco(StrEnum):
@@ -38,6 +40,15 @@ class TipoConta(StrEnum):
     POUPANCA = "POUPANCA"
     CARTEIRA = "CARTEIRA"
     INVESTIMENTO = "INVESTIMENTO"
+    # Conta de dívida: compra no crédito deixa o saldo negativo (o que se
+    # deve), e o pagamento da fatura é uma transferência de uma conta para ele.
+    CARTAO_CREDITO = "CARTAO_CREDITO"
+
+
+class SituacaoDaFatura(StrEnum):
+    ABERTA = "ABERTA"  # o período dela contém hoje: ainda recebe compras
+    FECHADA = "FECHADA"
+    FUTURA = "FUTURA"  # só parcelas de compras já feitas
 
 
 class TipoCategoria(StrEnum):
@@ -109,7 +120,16 @@ class Conta:
     saldo_inicial_centavos: int
     ativa: bool
     criada_em: datetime
+    # Só cartão de crédito: o limite e os dias do mês em que a fatura fecha e
+    # vence. Nas outras contas ficam vazios.
+    limite_centavos: int | None = None
+    dia_fechamento: int | None = None
+    dia_vencimento: int | None = None
     id: str | None = None
+
+    @property
+    def cartao(self) -> bool:
+        return self.tipo == TipoConta.CARTAO_CREDITO
 
 
 @dataclass
@@ -165,6 +185,11 @@ class Lancamento:
     # importada de novo não vira outro lançamento.
     chave_importacao: str | None = None
     divisao: list[Parte] = field(default_factory=list)
+    # Compra parcelada no cartão: cada parcela é um lançamento, na data da
+    # fatura em que ela cai, e todas levam o mesmo compra_id.
+    compra_id: str | None = None
+    parcela: int | None = None
+    parcelas: int | None = None
     id: str | None = None
     # Calculado na leitura (id do estorno deste lançamento); não é gravado.
     estornado_por: str | None = field(default=None, compare=False)
@@ -203,23 +228,36 @@ Descricao = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1
 Identificador = Annotated[str, StringConstraints(min_length=1, max_length=64)]
 Booleano = Annotated[bool, Field(strict=True)]
 Data = Annotated[date, BeforeValidator(_data_sem_numero)]
+# Dia do mês. 29, 30 e 31 viram o último dia nos meses mais curtos.
+DiaDoMes = Annotated[int, Field(strict=True, ge=1, le=31)]
 
 
 class NovaConta(Entrada):
+    """Cartão de crédito (tipo CARTAO_CREDITO) pede limite e os dias de
+    fechamento e vencimento da fatura; as outras contas não os aceitam
+    (regras.conferir_conta)."""
+
     nome: Nome
     tipo: TipoConta
     # Dinheiro que já estava na conta antes do primeiro lançamento. Fixo depois
     # de criado: mudá-lo reescreveria o saldo de todos os dias passados.
     saldo_inicial_centavos: Centavos = 0
+    limite_centavos: CentavosPositivos | None = None
+    dia_fechamento: DiaDoMes | None = None
+    dia_vencimento: DiaDoMes | None = None
 
 
 class AtualizacaoConta(Entrada):
     """PUT substitui a parte editável inteira. Desativar tira a conta das
-    escolhas de novos lançamentos, sem apagar o histórico."""
+    escolhas de novos lançamentos, sem apagar o histórico. Conta não vira
+    cartão, nem cartão vira conta."""
 
     nome: Nome
     tipo: TipoConta
     ativa: Booleano
+    limite_centavos: CentavosPositivos | None = None
+    dia_fechamento: DiaDoMes | None = None
+    dia_vencimento: DiaDoMes | None = None
 
 
 class NovaCategoria(Entrada):
@@ -258,6 +296,30 @@ class NovoLancamento(Entrada):
     categoria_id: Identificador | None = None
     conta_destino_id: Identificador | None = None
     divisao: Annotated[list[NovaParte], Field(max_length=MAXIMO_DE_PESSOAS)] = []
+
+
+class NovaCompra(Entrada):
+    """Compra no cartão de crédito. Em parcelas, cada uma vira uma despesa no
+    cartão, a primeira na data da compra e as outras um mês depois da
+    anterior: cada parcela cai numa fatura. O valor é o total da compra.
+    Racha (divisao) só na compra à vista."""
+
+    descricao: Descricao
+    data: Data
+    valor_centavos: CentavosPositivos
+    categoria_id: Identificador
+    parcelas: Annotated[int, Field(strict=True, ge=1, le=MAXIMO_DE_PARCELAS)] = 1
+    divisao: Annotated[list[NovaParte], Field(max_length=MAXIMO_DE_PESSOAS)] = []
+
+
+class NovoPagamento(Entrada):
+    """Pagamento da fatura: sai da conta indicada (conta_id, nunca um cartão)
+    e entra no cartão, liberando o limite."""
+
+    conta_id: Identificador
+    valor_centavos: CentavosPositivos
+    data: Data
+    descricao: Descricao | None = None
 
 
 TextoDoCsv = Annotated[str, StringConstraints(min_length=1, max_length=TAMANHO_MAXIMO_DO_CSV)]
@@ -339,6 +401,10 @@ class ContaResposta(BaseModel):
     saldo_centavos: int
     ativa: bool
     criada_em: datetime
+    # Só cartão de crédito; null nas outras contas.
+    limite_centavos: int | None
+    dia_fechamento: int | None
+    dia_vencimento: int | None
 
     @classmethod
     def de(cls, conta: Conta, saldo_centavos: int) -> "ContaResposta":
@@ -350,6 +416,9 @@ class ContaResposta(BaseModel):
             saldo_centavos=saldo_centavos,
             ativa=conta.ativa,
             criada_em=conta.criada_em,
+            limite_centavos=conta.limite_centavos,
+            dia_fechamento=conta.dia_fechamento,
+            dia_vencimento=conta.dia_vencimento,
         )
 
 
@@ -395,6 +464,9 @@ class LancamentoResposta(BaseModel):
     divisao: list[ParteResposta]
     estorno_de: str | None
     estornado_por: str | None
+    compra_id: str | None
+    parcela: int | None
+    parcelas: int | None
     criado_em: datetime
 
     @classmethod
@@ -419,8 +491,83 @@ class LancamentoResposta(BaseModel):
             divisao=[ParteResposta(pessoa=parte.pessoa, valor_centavos=parte.valor_centavos) for parte in lancamento.divisao],
             estorno_de=lancamento.estorno_de,
             estornado_por=lancamento.estornado_por,
+            compra_id=lancamento.compra_id,
+            parcela=lancamento.parcela,
+            parcelas=lancamento.parcelas,
             criado_em=lancamento.criado_em,
         )
+
+
+class PeriodoDaFaturaResposta(BaseModel):
+    # Ano e mês do vencimento (AAAA-MM): o nome da fatura.
+    referencia: str
+    # Primeiro dia cujas compras entram nesta fatura.
+    inicio: date
+    # Dia em que a fatura fecha: a compra feita nele já vai para a próxima.
+    fechamento: date
+    vencimento: date
+
+    @classmethod
+    def de(cls, periodo) -> "PeriodoDaFaturaResposta":
+        ano, mes = periodo.referencia
+        return cls(
+            referencia=f"{ano:04d}-{mes:02d}",
+            inicio=periodo.inicio,
+            fechamento=periodo.fechamento,
+            vencimento=periodo.vencimento,
+        )
+
+
+class CartaoResposta(BaseModel):
+    """Painel do cartão de crédito. Todos os valores em centavos."""
+
+    id: str
+    nome: str
+    ativa: bool
+    limite_centavos: int
+    dia_fechamento: int
+    dia_vencimento: int
+    # Saldo do cartão no livro-caixa: negativo é o que se deve.
+    saldo_centavos: int
+    # Quanto do limite está ocupado (todas as faturas e parcelas futuras).
+    usado_centavos: int
+    # Limite menos o usado; negativo quando o limite foi ultrapassado.
+    disponivel_centavos: int
+    fatura_atual: PeriodoDaFaturaResposta
+    fatura_atual_centavos: int
+    # Faturas já fechadas ainda não pagas, e a última fechada (vencimento).
+    a_pagar_centavos: int
+    ultima_fechada: PeriodoDaFaturaResposta
+    parcelamentos_futuros_centavos: int
+
+    @classmethod
+    def de(cls, cartao: Conta, saldo_centavos: int, resumo) -> "CartaoResposta":
+        return cls(
+            id=cartao.id,
+            nome=cartao.nome,
+            ativa=cartao.ativa,
+            limite_centavos=cartao.limite_centavos,
+            dia_fechamento=cartao.dia_fechamento,
+            dia_vencimento=cartao.dia_vencimento,
+            saldo_centavos=saldo_centavos,
+            usado_centavos=resumo.usado,
+            disponivel_centavos=resumo.disponivel,
+            fatura_atual=PeriodoDaFaturaResposta.de(resumo.fatura_atual),
+            fatura_atual_centavos=resumo.total_da_fatura_atual,
+            a_pagar_centavos=resumo.a_pagar,
+            ultima_fechada=PeriodoDaFaturaResposta.de(resumo.ultima_fechada),
+            parcelamentos_futuros_centavos=resumo.parcelamentos_futuros,
+        )
+
+
+class FaturaResposta(PeriodoDaFaturaResposta):
+    cartao_id: str
+    situacao: SituacaoDaFatura
+    # Compras menos créditos (estornos, reembolsos) do período.
+    total_centavos: int
+    # Pagamentos recebidos no período (quitam faturas, não mudam o total).
+    pagamentos_centavos: int
+    lancamentos: list[LancamentoResposta]
 
 
 class LinhaImportadaResposta(BaseModel):

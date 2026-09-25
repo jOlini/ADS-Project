@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import AreaDoCliente from './componentes/AreaDoCliente';
 import Layout from './componentes/Layout';
 import Cadastro from './paginas/Cadastro';
+import Cartao from './paginas/Cartao';
 import Categorias from './paginas/Categorias';
 import Contas from './paginas/Contas';
 import Lancamentos from './paginas/Lancamentos';
@@ -23,6 +24,8 @@ export default function AppRoutes() {
           <Route path="principal" element={<Principal />} />
           <Route path="lancamentos" element={<Lancamentos />} />
           <Route path="contas" element={<Contas />} />
+          {/* Dentro de /contas: o item "Contas & Cartões" do menu fica marcado. */}
+          <Route path="contas/cartoes/:cartaoId" element={<Cartao />} />
           <Route path="categorias" element={<Categorias />} />
         </Route>
         {/* Qualquer outro endereço volta para o login. */}

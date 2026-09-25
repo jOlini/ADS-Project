@@ -20,6 +20,9 @@ function iconeDoLancamento(lancamento) {
   if (lancamento.tipo === 'transferencia') {
     return 'transferencia';
   }
+  if (lancamento.tipo === 'pagamento') {
+    return 'cartao';
+  }
   return lancamento.valor > 0 ? 'entrada' : 'saida';
 }
 
@@ -47,7 +50,7 @@ export default function Extrato({ dias, mostrarSaldo = true, acoes }) {
           <span className="descricao">
             <b>{lancamento.descricao}</b>
             <small>
-              {lancamento.categoria} · {lancamento.conta}
+              {[lancamento.categoria, lancamento.conta].filter(Boolean).join(' · ')}
               {lancamento.estornado && <span className="etiqueta">Estornado</span>}
             </small>
             {lancamento.pessoas?.length > 0 && (

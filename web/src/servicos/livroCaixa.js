@@ -6,8 +6,10 @@
 // VITE_API_URL vazio (caso do GitHub Pages, que não tem API hospedada):
 // apiConfigurada é false e as telas do livro-caixa mostram o aviso.
 import { auth } from '../firebase';
+import { enderecoDaApi } from './enderecoDaApi';
 
-const URL_DA_API = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
+// Aberta pela rede local, a página chama a API no IP de onde veio.
+const URL_DA_API = enderecoDaApi(import.meta.env.VITE_API_URL, globalThis.location?.hostname);
 
 export const apiConfigurada = Boolean(URL_DA_API);
 
@@ -75,6 +77,38 @@ export function atualizarConta(espacoId, contaId, conta) {
   return chamar(doEspaco(espacoId, `/contas/${encodeURIComponent(contaId)}`), { metodo: 'PUT', corpo: conta });
 }
 
+// ------------------------------------------------ Cartões de crédito
+// O cartão é criado e editado como conta (tipo CARTAO_CREDITO, com limite e
+// os dias de fechamento e vencimento). Aqui ficam o painel, as faturas, a
+// compra (à vista ou parcelada) e o pagamento da fatura.
+
+const doCartao = (espacoId, cartaoId, resto = '') => doEspaco(espacoId, `/cartoes/${encodeURIComponent(cartaoId)}${resto}`);
+
+// Cada cartão com limite, disponível, fatura atual, a pagar e parcelas futuras.
+export function listarCartoes(espacoId) {
+  return chamar(doEspaco(espacoId, '/cartoes'));
+}
+
+export function buscarCartao(espacoId, cartaoId) {
+  return chamar(doCartao(espacoId, cartaoId));
+}
+
+// referencia: 'AAAA-MM', o mês do vencimento da fatura.
+export function buscarFatura(espacoId, cartaoId, referencia) {
+  return chamar(doCartao(espacoId, cartaoId, `/faturas/${encodeURIComponent(referencia)}`));
+}
+
+// { descricao, data, valor_centavos (total), categoria_id, parcelas, divisao? }.
+// Devolve as parcelas criadas (uma só, à vista).
+export function comprarNoCartao(espacoId, cartaoId, compra) {
+  return chamar(doCartao(espacoId, cartaoId, '/compras'), { metodo: 'POST', corpo: compra });
+}
+
+// { conta_id, valor_centavos, data }: sai da conta e libera o limite.
+export function pagarFatura(espacoId, cartaoId, pagamento) {
+  return chamar(doCartao(espacoId, cartaoId, '/pagamentos'), { metodo: 'POST', corpo: pagamento });
+}
+
 export function listarCategorias(espacoId) {
   return chamar(doEspaco(espacoId, '/categorias'));
 }
@@ -90,14 +124,18 @@ export function atualizarCategoria(espacoId, categoriaId, categoria) {
 // Limite da API para uma consulta.
 export const LIMITE_DE_LANCAMENTOS = 1000;
 
-// { de, ate } em ISO, ambos opcionais. Do mais recente para o mais antigo.
-export function listarLancamentos(espacoId, { de, ate } = {}) {
+// { de, ate, contaId }, todos opcionais (datas em ISO). Com contaId, só os
+// lançamentos que mexem naquela conta. Do mais recente para o mais antigo.
+export function listarLancamentos(espacoId, { de, ate, contaId } = {}) {
   const filtro = new URLSearchParams({ limite: String(LIMITE_DE_LANCAMENTOS) });
   if (de) {
     filtro.set('de', de);
   }
   if (ate) {
     filtro.set('ate', ate);
+  }
+  if (contaId) {
+    filtro.set('conta_id', contaId);
   }
   return chamar(doEspaco(espacoId, `/lancamentos?${filtro}`));
 }

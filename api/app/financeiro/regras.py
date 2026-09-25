@@ -14,12 +14,16 @@ nenhum saldo fica "descolado" do histórico que o explica.
 
 from app.financeiro.importacao import normalizar
 from app.financeiro.modelos import (
+    AtualizacaoConta,
     Categoria,
     Conta,
     CorCategoria,
+    NovaCompra,
+    NovaConta,
     NovoLancamento,
     Partida,
     TipoCategoria,
+    TipoConta,
     TipoLancamento,
 )
 
@@ -39,6 +43,35 @@ CATEGORIAS_INICIAIS: list[tuple[str, TipoCategoria, CorCategoria]] = [
 ]
 
 OBRIGATORIO = "Campo obrigatório."
+CAMPOS_DO_CARTAO = ("limite_centavos", "dia_fechamento", "dia_vencimento")
+CARTAO_NAO_TRANSFERE = "Cartão de crédito não é origem de transferência. Para quitar a fatura, use Pagar fatura."
+
+
+def conferir_conta(dados: NovaConta | AtualizacaoConta, atual: Conta | None = None) -> dict[str, str]:
+    """Erros por campo de uma conta nova (atual = None) ou editada.
+
+    Cartão de crédito pede limite e os dias de fechamento e vencimento; as
+    outras contas não têm nada disso. O tipo muda livremente entre as contas
+    comuns, mas conta não vira cartão, nem o contrário: os lançamentos dela
+    mudariam de sentido (dinheiro guardado virando dívida)."""
+    cartao = dados.tipo == TipoConta.CARTAO_CREDITO
+    if atual is not None and atual.cartao != cartao:
+        return {"tipo": "Conta não vira cartão de crédito, nem cartão vira conta. Crie outro cadastro."}
+
+    erros: dict[str, str] = {}
+    for campo in CAMPOS_DO_CARTAO:
+        preenchido = getattr(dados, campo) is not None
+        if cartao and not preenchido:
+            erros[campo] = OBRIGATORIO
+        elif not cartao and preenchido:
+            erros[campo] = "Só cartão de crédito tem limite, fechamento e vencimento."
+    if cartao and dados.dia_fechamento is not None and dados.dia_fechamento == dados.dia_vencimento:
+        erros["dia_vencimento"] = "A fatura vence depois de fechar: use um dia diferente do fechamento."
+    # A dívida do cartão nasce das compras, cada uma na sua fatura. Uma dívida
+    # inicial não teria fatura nem data.
+    if cartao and isinstance(dados, NovaConta) and dados.saldo_inicial_centavos != 0:
+        erros["saldo_inicial_centavos"] = "O cartão começa sem dívida: importe a fatura ou lance as compras."
+    return erros
 
 
 def conferir_lancamento(
@@ -62,20 +95,22 @@ def conferir_divisao(dados: NovoLancamento) -> dict[str, str]:
     """Racha: cada pessoa uma vez só e a soma das partes até o valor do
     lançamento. O que sobra é a parte de quem lançou; transferência entre
     contas próprias não tem o que dividir."""
-    erros: dict[str, str] = {}
     if not dados.divisao:
-        return erros
+        return {}
     if dados.tipo == TipoLancamento.TRANSFERENCIA:
-        erros["divisao"] = "Transferência entre contas não se divide entre pessoas."
-        return erros
+        return {"divisao": "Transferência entre contas não se divide entre pessoas."}
+    return _conferir_partes(dados.divisao, dados.valor_centavos)
 
+
+def _conferir_partes(divisao: list, valor_centavos: int) -> dict[str, str]:
+    erros: dict[str, str] = {}
     vistas: set[str] = set()
-    for indice, parte in enumerate(dados.divisao):
+    for indice, parte in enumerate(divisao):
         nome = " ".join(parte.pessoa.split()).casefold()
         if nome in vistas:
             erros[f"divisao.{indice}.pessoa"] = "Esta pessoa já está na divisão."
         vistas.add(nome)
-    if sum(parte.valor_centavos for parte in dados.divisao) > dados.valor_centavos:
+    if sum(parte.valor_centavos for parte in divisao) > valor_centavos:
         erros["divisao"] = "As partes somam mais que o valor do lançamento."
     return erros
 
@@ -92,6 +127,9 @@ def _conferir_contas_e_categoria(
         erros["conta_id"] = erro
 
     if dados.tipo == TipoLancamento.TRANSFERENCIA:
+        # O dinheiro vai de uma conta para o cartão (pagamento), nunca sai dele.
+        if conta is not None and conta.cartao:
+            erros["conta_id"] = CARTAO_NAO_TRANSFERE
         if dados.categoria_id is not None:
             erros["categoria_id"] = "Transferência entre contas não tem categoria."
         if dados.conta_destino_id is None:
@@ -127,6 +165,33 @@ def conferir_importacao(
     if erro := _erro_da_categoria(categoria_receita, TipoCategoria.RECEITA):
         erros["categoria_receita_id"] = erro
     return erros
+
+
+def conferir_compra(dados: NovaCompra, cartao: Conta | None, categoria: Categoria | None) -> dict[str, str]:
+    """Erros por campo de uma compra no cartão. cartao já é o do espaço e do
+    tipo certo (o serviço responde 404 antes, se não for)."""
+    erros: dict[str, str] = {}
+    if cartao is not None and not cartao.ativa:
+        erros["cartao"] = "Cartão desativado: reative-o para lançar compras."
+    if erro := _erro_da_categoria(categoria, TipoCategoria.DESPESA):
+        erros["categoria_id"] = erro
+    if dados.parcelas > dados.valor_centavos:
+        erros["parcelas"] = "Cada parcela precisa de pelo menos um centavo."
+    if dados.divisao and dados.parcelas > 1:
+        erros["divisao"] = "A divisão entre pessoas vale só para compra à vista."
+    elif dados.divisao:
+        erros.update(_conferir_partes(dados.divisao, dados.valor_centavos))
+    return erros
+
+
+def conferir_pagamento(conta: Conta | None) -> dict[str, str]:
+    """A conta de onde sai o pagamento da fatura: do espaço, ativa e que não
+    seja um cartão (cartão não paga cartão)."""
+    if erro := _erro_da_conta(conta):
+        return {"conta_id": erro}
+    if conta.cartao:
+        return {"conta_id": "O pagamento sai de uma conta, não de um cartão de crédito."}
+    return {}
 
 
 def categoria_pelo_nome(categorias: list[Categoria], nome: str | None, tipo: TipoCategoria) -> Categoria | None:

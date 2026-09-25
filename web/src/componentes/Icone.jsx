@@ -98,6 +98,12 @@ const TRACOS = {
       <circle cx="19" cy="12" r="1.2" />
     </>
   ),
+  cartao: (
+    <>
+      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+      <path d="M2.5 10h19M6.5 15h4" />
+    </>
+  ),
   importar: <path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />,
   colunas: (
     <>

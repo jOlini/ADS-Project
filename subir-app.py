@@ -23,9 +23,11 @@ Pessoal Finance (ADS-Project) — helper de inicialização local.
        uma as imagens de base, com até 3 tentativas. Imagem já presente é pulada.
     4. Containers: "docker compose up -d --build" (MongoDB + API) e espera os
        healthchecks.
-    5. Front-end: sobe o Vite em segundo plano na porta 5173. Se já estiver no ar,
-       reaproveita.
-    6. Painel: imprime os links importantes e como entrar no painel administrativo.
+    5. Front-end: sobe o Vite em segundo plano na porta 5173, aberto para a rede
+       local (--host 0.0.0.0): celular e outros computadores da mesma rede
+       abrem o app pelo IP desta máquina. Se já estiver no ar, reaproveita.
+    6. Painel: imprime os links importantes, os endereços Local e Network (rede
+       local) e como entrar no painel administrativo.
 
 Só usa a biblioteca padrão: roda com o Python do sistema, antes do ".venv",
 mesmo que ele seja antigo demais para a API (ex.: 3.10).
@@ -84,7 +86,11 @@ LOG_WEB = PASTA_ESTADO / "web.log"
 PORTA_API = 8081
 PORTA_WEB = 5173
 URL_API = f"http://localhost:{PORTA_API}"
-URL_WEB = f"http://localhost:{PORTA_WEB}/ADS-Project/"
+CAMINHO_WEB = "/ADS-Project/"
+URL_WEB = f"http://localhost:{PORTA_WEB}{CAMINHO_WEB}"
+# O Vite escuta em todas as interfaces: a área do cliente abre pelo IP desta
+# máquina em qualquer aparelho da mesma rede.
+HOST_DA_REDE = "0.0.0.0"
 # Texto do <title> das duas interfaces: confirma que a porta é mesmo deste projeto.
 MARCA_DO_APP = "Pessoal Finance"
 
@@ -295,6 +301,27 @@ def encerrar_processo(pid: int, nome: str) -> bool:
             return True
         time.sleep(0.5)
     return not processo_ativo(pid, nome)
+
+
+def ip_na_rede() -> str | None:
+    """IPv4 desta máquina na rede local: o da interface da rota padrão, o
+    mesmo que outro aparelho da rede usa para chegar aqui.
+
+    O "connect" de um socket UDP não manda pacote nenhum: só faz o sistema
+    escolher a interface. Assim os adaptadores virtuais (WSL, Docker), que
+    outro aparelho não alcança, ficam de fora."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as conexao:
+            conexao.connect(("10.255.255.255", 1))
+            ip = conexao.getsockname()[0]
+    except OSError:
+        return None
+    return None if ip.startswith(("127.", "0.", "169.254.")) else ip
+
+
+def url_web_na_rede() -> str | None:
+    ip = ip_na_rede()
+    return f"http://{ip}:{PORTA_WEB}{CAMINHO_WEB}" if ip else None
 
 
 def endereco_do_repositorio() -> str:
@@ -684,6 +711,11 @@ def subir_containers(reconstruir: bool) -> bool:
     comando = ["docker", "compose", "up", "-d"]
     if reconstruir:
         comando.append("--build")
+    # Aberta pela rede (http://<ip>:5173), a área do cliente chama a API de
+    # outra origem: o compose repassa esta variável à API, que a soma ao
+    # CORS_ORIGENS. Nada é gravado no api/.env, porque o IP muda de rede em rede.
+    ip = ip_na_rede()
+    os.environ["CORS_ORIGENS_REDE"] = f"http://{ip}:{PORTA_WEB}" if ip else ""
     passo(" ".join(comando))
     if rodar(comando).returncode != 0:
         erro("O 'docker compose up' falhou. Veja a mensagem acima.")
@@ -735,11 +767,17 @@ def subir_front_end() -> bool:
     titulo("Front-end (Vite)")
     estado = vite_do_script_ativo()
     if estado and e_deste_projeto(URL_WEB):
-        ok(f"Vite já no ar (PID {estado['pid']}). Nada foi reiniciado.")
-        return True
+        if estado.get("rede"):
+            ok(f"Vite já no ar (PID {estado['pid']}). Nada foi reiniciado.")
+            return True
+        # Subido por uma versão anterior do script, só para esta máquina.
+        passo("Vite no ar sem acesso pela rede local. Reiniciando com --host...")
+        parar_front_end(silencioso=True)
     if porta_em_uso(PORTA_WEB):
         if e_deste_projeto(URL_WEB):
             ok("Vite já rodando fora deste script (um 'npm run dev' aberto). Reaproveitado.")
+            if not e_deste_projeto(url_web_na_rede() or ""):
+                aviso("Esse Vite não atende pela rede local: feche o 'npm run dev' e rode de novo para abrir no celular.")
             return True
         erro(f"A porta {PORTA_WEB} está ocupada por outro programa.")
         return False
@@ -753,14 +791,14 @@ def subir_front_end() -> bool:
     PASTA_ESTADO.mkdir(exist_ok=True)
     # Chama o node direto, sem o "npm run dev": assim o PID salvo é o do
     # próprio Vite, e o "down" encerra o processo certo.
-    comando = [node, str(vite), "--port", str(PORTA_WEB), "--strictPort"]
+    comando = [node, str(vite), "--port", str(PORTA_WEB), "--strictPort", "--host", HOST_DA_REDE]
     # O Vite continua rodando depois que este terminal fecha.
     opcoes: dict = {"stdin": subprocess.DEVNULL, "stderr": subprocess.STDOUT, "cwd": PASTA_WEB}
     if platform.system() == "Windows":
         opcoes["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
     else:
         opcoes["start_new_session"] = True
-    passo(f"Subindo o Vite em segundo plano na porta {PORTA_WEB}...")
+    passo(f"Subindo o Vite em segundo plano na porta {PORTA_WEB}, aberto para a rede local...")
     with LOG_WEB.open("wb") as log:
         processo = subprocess.Popen(comando, stdout=log, **opcoes)
 
@@ -768,8 +806,10 @@ def subir_front_end() -> bool:
     while time.monotonic() < limite:
         if e_deste_projeto(URL_WEB):
             ESTADO_WEB.write_text(
-                json.dumps({"pid": processo.pid, "porta": PORTA_WEB, "inicio": datetime.now().isoformat(timespec="seconds")},
-                           indent=2),
+                json.dumps(
+                    {"pid": processo.pid, "porta": PORTA_WEB, "rede": True, "inicio": datetime.now().isoformat(timespec="seconds")},
+                    indent=2,
+                ),
                 encoding="utf-8",
             )
             ok(f"Vite no ar (PID {processo.pid}). Log: {LOG_WEB.relative_to(RAIZ)}")
@@ -868,6 +908,7 @@ def painel() -> None:
         f"{'Documentação'.ljust(26)} README.md {PONTO} DOCS_API.md",
     ]
     caixa("PESSOAL FINANCE - AMBIENTE LOCAL", [local, nuvem, acesso])
+    enderecos_da_area_do_cliente()
     print("   Logs da API:   docker compose logs -f api")
     print(f"   Logs do Vite:  {LOG_WEB.relative_to(RAIZ)}")
     print("   Testes:        python subir-app.py testes")
@@ -878,6 +919,25 @@ def painel() -> None:
 # =============================================================================
 # Comandos
 # =============================================================================
+def enderecos_da_area_do_cliente() -> None:
+    """Local e Network da área do cliente, no formato do próprio Vite."""
+    if not e_deste_projeto(URL_WEB):
+        return
+    seta = "➜" if UNICODE_OK else "->"
+    na_rede = url_web_na_rede()
+    print(f"   {_cor(seta, '1;32')}  {'Local:'.ljust(9)}{_cor(URL_WEB, '36')}")
+    if not na_rede:
+        print(f"   {_cor(seta, '1;32')}  {'Network:'.ljust(9)}nenhuma rede local encontrada")
+    elif e_deste_projeto(na_rede):
+        print(f"   {_cor(seta, '1;32')}  {'Network:'.ljust(9)}{_cor(na_rede, '36')}")
+        passo("Na mesma rede (Wi-Fi ou cabo), abra o endereço Network no celular ou em outro computador.")
+        passo("Não abriu? Libere o Node.js no Firewall do Windows (rede privada). Em rede de empresa, ele pode estar bloqueado.")
+    else:
+        print(f"   {_cor(seta, '1;32')}  {'Network:'.ljust(9)}{na_rede} (sem resposta)")
+        aviso("O Vite não atende pela rede. Rode 'python subir-app.py up' para reiniciá-lo com --host.")
+    print()
+
+
 def comando_up(reconstruir: bool, com_web: bool) -> int:
     print(_cor("Pessoal Finance — subindo o ambiente local", "1;36"))
     if not garantir_configuracao():
