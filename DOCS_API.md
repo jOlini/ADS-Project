@@ -362,8 +362,8 @@ sequenceDiagram
 
 ## Parte 6 – Livro-caixa do cliente final
 
-O cliente final (área do cliente em React) registra o próprio dinheiro: contas, categorias, receitas, despesas e
-transferências. Ele não tem cadastro na API: entra pelo Firebase Authentication e manda o **ID token do
+O cliente final (área do cliente em React) registra o próprio dinheiro: contas, cartões de crédito, categorias,
+receitas, despesas e transferências. Ele não tem cadastro na API: entra pelo Firebase Authentication e manda o **ID token do
 Firebase** no cabeçalho `Authorization: Bearer <token>`. A API valida o token e usa o `uid` como identidade.
 
 Código: [`api/app/financeiro/`](api/app/financeiro) e [`api/app/firebase.py`](api/app/firebase.py).
@@ -377,18 +377,23 @@ Todos exigem o ID token do Firebase. Tudo que é do cliente fica sob um **espaç
 | `GET` | `/espacos` | Listar meus espaços; no primeiro acesso, cria o espaço pessoal com as categorias iniciais | `200 OK` | `401`, `503` |
 | `GET` | `/espacos/{espaco_id}` | Consultar um espaço | `200 OK` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/contas` | Listar contas com o saldo de cada uma | `200 OK` | `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial) | `201 Created` + `Location` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial) ou cartão de crédito (tipo `CARTAO_CREDITO`, com limite, fechamento e vencimento) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/contas/{conta_id}` | Consultar conta e saldo | `200 OK` | `401`, `404` |
-| `PUT` | `/espacos/{espaco_id}/contas/{conta_id}` | Renomear, trocar o tipo, desativar ou reativar | `200 OK` | `400`, `401`, `404` |
+| `PUT` | `/espacos/{espaco_id}/contas/{conta_id}` | Renomear, trocar o tipo, desativar ou reativar; no cartão, também limite e dias da fatura | `200 OK` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/cartoes` | Listar cartões com limite total e disponível, fatura atual, a pagar e parcelamentos futuros | `200 OK` | `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/cartoes/{cartao_id}` | Consultar o painel de um cartão | `200 OK` | `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/cartoes/{cartao_id}/faturas/{AAAA-MM}` | Consultar uma fatura (mês do vencimento): compras, créditos e pagamentos do período | `200 OK` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/cartoes/{cartao_id}/compras` | Lançar compra no cartão, à vista ou parcelada (uma despesa por parcela) | `201 Created` (parcelas criadas) | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/cartoes/{cartao_id}/pagamentos` | Pagar a fatura: sai da conta indicada e libera o limite | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/categorias` | Listar categorias | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/categorias` | Criar categoria (nome, tipo, cor) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Consultar categoria | `200 OK` | `401`, `404` |
 | `PUT` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Renomear, recolorir, desativar ou reativar | `200 OK` | `400`, `401`, `404` |
-| `GET` | `/espacos/{espaco_id}/lancamentos?de=&ate=&limite=` | Listar lançamentos do mais recente ao mais antigo (período opcional, até 1000) | `200 OK` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/lancamentos?de=&ate=&limite=&conta_id=` | Listar lançamentos do mais recente ao mais antigo (período e conta opcionais, até 1000) | `200 OK` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência (com divisão entre pessoas, opcional) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Consultar lançamento | `200 OK` | `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}/estorno` | Estornar: cria o lançamento inverso, com a data de hoje | `201 Created` + `Location` | `401`, `404`, `409` |
-| `DELETE` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Excluir: apaga o lançamento de vez (e o estorno dele, se houver) | `204 No Content` | `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}/estorno` | Estornar: cria o lançamento inverso, com a data de hoje (parcela de compra no cartão: `409`) | `201 Created` + `Location` | `401`, `404`, `409` |
+| `DELETE` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Excluir: apaga o lançamento de vez (e o estorno dele, se houver; numa parcela, a compra inteira) | `204 No Content` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/pessoas` | Listar os nomes já usados em divisões (para a tela sugerir) | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/importacoes/estrutura` | Mostrar o começo do CSV em células e sugerir as colunas (nada é gravado) | `200 OK` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/importacoes` | Importar o extrato do banco em CSV, ou só simular (`simular: true`) | `200 OK` (relatório por linha) | `400`, `401`, `404` |
@@ -475,6 +480,72 @@ Regras de coerência (resposta `400` com o erro no campo):
 Estorno: `409` para um lançamento já estornado ("Este lançamento já foi estornado.") e para o estorno de um
 estorno ("Um estorno não pode ser estornado."). Um índice único no MongoDB garante um estorno por lançamento
 mesmo com duas requisições simultâneas; a listagem mostra `estornado_por` no original.
+
+### Cartão de crédito e fatura
+
+O cartão é uma **conta de dívida** (`tipo: "CARTAO_CREDITO"`), no mesmo livro-caixa de partidas dobradas. A
+compra no crédito deixa o saldo dele negativo (o que se deve); o pagamento da fatura é uma transferência de uma
+conta para o cartão, que devolve o saldo para perto de zero e libera o limite:
+
+| Lançamento | Partidas |
+|---|---|
+| Compra de R$ 120,00 no cartão (Mercado) | cartão `−12000` · categoria Mercado `+12000` |
+| Pagamento de R$ 120,00 da fatura | conta corrente `−12000` · cartão `+12000` |
+
+Criar um cartão:
+
+```http
+POST /espacos/<espaco_id>/contas
+Content-Type: application/json
+
+{ "nome": "Cartão Roxo", "tipo": "CARTAO_CREDITO", "limite_centavos": 600000,
+  "dia_fechamento": 3, "dia_vencimento": 10 }
+```
+
+- **Só o cartão** tem `limite_centavos`, `dia_fechamento` e `dia_vencimento` (obrigatórios nele, recusados nas
+  outras contas). O cartão começa sem dívida (`saldo_inicial_centavos` diferente de zero é `400`): a dívida nasce
+  das compras, cada uma na sua fatura. Conta não vira cartão pelo `PUT`, nem o contrário (os lançamentos mudariam
+  de sentido).
+- **Ciclo da fatura:** a fatura leva o mês do vencimento (`2026-10` vence em outubro). Ela fecha no dia de
+  fechamento do mesmo mês, se ele vem antes do vencimento, ou do mês anterior. A compra feita **no dia do
+  fechamento já vai para a fatura seguinte**. Dias 29 a 31 viram o último dia nos meses mais curtos, sem buraco
+  entre uma fatura e outra.
+- **Compra parcelada** (`POST .../compras` com `parcelas` de 1 a 48): uma despesa por parcela, a primeira na fatura
+  da data da compra e cada uma das outras na fatura seguinte; o centavo que sobra da divisão vai para a primeira
+  (R$ 10,00 em 3x = 3,34 + 3,33 + 3,33). Todas levam o mesmo `compra_id`, com `parcela` e `parcelas`, e ocupam o
+  limite desde já, como no banco. Excluir qualquer parcela exclui a compra inteira; parcela não se estorna
+  (`409`). Racha (`divisao`) só na compra à vista.
+- **Extratos separados:** a fatura (`GET .../faturas/{AAAA-MM}`) traz as compras, os créditos (estorno,
+  reembolso) e os pagamentos do período; `total_centavos` é compras menos créditos, e `pagamentos_centavos` é o
+  que entrou no período. O extrato de uma conta (`GET /lancamentos?conta_id=`) traz o pagamento como
+  transferência para o cartão; as compras no crédito ficam só na fatura.
+- **Importar a fatura em CSV:** `POST /importacoes` com o `conta_id` do cartão. As saídas viram compras na
+  fatura e as entradas, créditos.
+- **Transferência não sai do cartão:** `400` em `conta_id` ("Cartão de crédito não é origem de transferência.
+  Para quitar a fatura, use Pagar fatura."). O pagamento (`POST .../pagamentos`) exige uma conta que não seja
+  cartão.
+
+Painel do cartão (`GET /cartoes/{cartao_id}`), todos os valores em centavos:
+
+| Campo | O que é |
+|---|---|
+| `limite_centavos` | Limite total |
+| `usado_centavos` | Dívida de hoje, somando todas as faturas e as parcelas futuras |
+| `disponivel_centavos` | Limite menos o usado (negativo acima do limite) |
+| `fatura_atual`, `fatura_atual_centavos` | Período da fatura aberta (contém hoje: `inicio`, `fechamento`, `vencimento`) e o valor dela |
+| `a_pagar_centavos`, `ultima_fechada` | O que falta pagar das faturas já fechadas, e a última delas (vencimento) |
+| `parcelamentos_futuros_centavos` | Compras que caem depois da fatura atual (parcelas das próximas faturas) |
+
+| Situação | Campo | Mensagem |
+|---|---|---|
+| Cartão sem limite, fechamento ou vencimento | `limite_centavos` / `dia_fechamento` / `dia_vencimento` | Campo obrigatório. |
+| Vencimento no mesmo dia do fechamento | `dia_vencimento` | A fatura vence depois de fechar: use um dia diferente do fechamento. |
+| Conta comum com dados de cartão | `limite_centavos` (e os dias) | Só cartão de crédito tem limite, fechamento e vencimento. |
+| Conta virando cartão, ou cartão virando conta | `tipo` | Conta não vira cartão de crédito, nem cartão vira conta. Crie outro cadastro. |
+| Compra em cartão desativado | `cartao` | Cartão desativado: reative-o para lançar compras. |
+| Racha numa compra parcelada | `divisao` | A divisão entre pessoas vale só para compra à vista. |
+| Pagamento saindo de outro cartão | `conta_id` | O pagamento sai de uma conta, não de um cartão de crédito. |
+| Referência da fatura fora de `AAAA-MM` | `referencia` | (validação do formato) |
 
 ### Divisão entre pessoas (racha)
 
@@ -657,7 +728,8 @@ do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
   (partidas, estorno e coerência), `test_financeiro_api.py` (rotas, isolamento, saldos e estorno),
   `test_financeiro_importacao.py` (leitura do CSV, chave por linha e importação sem duplicar),
   `test_financeiro_layouts.py` (formatos de vários bancos, mapeamento das colunas e começo do arquivo) e
-  `test_financeiro_racha_e_exclusao.py` (divisão entre pessoas, exclusão e importação com colunas indicadas).
+  `test_financeiro_racha_e_exclusao.py` (divisão entre pessoas, exclusão e importação com colunas indicadas) e
+  `test_financeiro_cartoes.py` (ciclo da fatura, parcelas, painel do cartão, compra, pagamento e fatura em CSV).
   Os ID tokens de teste são assinados por uma chave RSA gerada na hora, no lugar das chaves do Google.
 - **Manual (Swagger):** com `FIREBASE_PROJECT_ID` no `api/.env`, obtenha um ID token de uma conta **de teste**
   da área do cliente pela API REST do Firebase Authentication (`<VITE_FIREBASE_API_KEY>` do `web/.env`):
@@ -669,7 +741,7 @@ do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
   Copie o `idToken` da resposta (vale 1 hora), clique em **Authorize** no Swagger, cole-o em
   **IdTokenFirebase** e chame `GET /espacos`.
 - **Pela área do cliente:** com `VITE_API_URL` no `web/.env` e `CORS_ORIGENS` no `api/.env`, as telas
-  Lançamentos, Contas e Categorias usam estas rotas com o login do Firebase. Roteiro em
+  Lançamentos, Contas & Cartões (com a tela de cada cartão) e Categorias usam estas rotas com o login do Firebase. Roteiro em
   [`README.md`, "Teste manual da área do cliente"](README.md#4-teste-manual-da-área-do-cliente).
 
 ---

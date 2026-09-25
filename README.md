@@ -86,11 +86,13 @@ pronta. O back-office administrativo autentica contra a própria API, que emite 
 controle de acesso por perfil. Separar as duas identidades evita que uma credencial de cliente
 alcance a área administrativa.
 
-**Livro-caixa do cliente (0.2).** Contas, categorias e lançamentos ficam na API, em `/espacos`. O cliente
+**Livro-caixa do cliente (0.2).** Contas, cartões de crédito, categorias e lançamentos ficam na API, em `/espacos`. O cliente
 não ganha outra senha: a API aceita o **ID token do Firebase** (validado com as chaves públicas do Google) e
 usa o `uid` como identidade. O token do back-office não abre o livro-caixa, e o do cliente não abre
 `/usuarios`. Os lançamentos seguem partidas dobradas, com valores em centavos inteiros, correção por estorno
-(o histórico fica) ou exclusão (erro de digitação e duplicata) e divisão do valor entre pessoas
+(o histórico fica) ou exclusão (erro de digitação e duplicata) e divisão do valor entre pessoas. O cartão de
+crédito é uma conta de dívida, com fatura própria: compras à vista ou parceladas, fatura importada em CSV e
+pagamento que sai de uma conta e libera o limite
 ([`DOCS_API.md`, Parte 6](DOCS_API.md#parte-6--livro-caixa-do-cliente-final)).
 
 **Perfis de acesso da API**
@@ -257,6 +259,19 @@ dependências da API no `api/.venv` (nunca no Python da máquina), roda o `npm c
 os healthchecks, sobe o Vite em segundo plano e imprime os links importantes. Rodar de novo com tudo no ar
 só confere o estado.
 
+**Acesso pela rede local.** O Vite sobe com `--host 0.0.0.0`, e o fim do `up` mostra os endereços no formato do
+próprio Vite:
+
+```text
+➜  Local:   http://localhost:5173/ADS-Project/
+➜  Network: http://<SEU_IP_LOCAL>:5173/ADS-Project/
+```
+
+Na mesma rede (Wi-Fi ou cabo), o endereço Network abre o app no celular ou em outro computador. A página
+aberta pela rede chama a API no IP de onde veio (e não no `localhost` do `VITE_API_URL`), e o script passa essa
+origem à API pelo `CORS_ORIGENS_REDE`, sem gravar nada no `api/.env`, porque o IP muda de rede em rede. Se não
+abrir, libere o Node.js no Firewall do Windows (rede privada); em rede de empresa, ele pode estar bloqueado.
+
 O `api/.venv` precisa de Python 3.11+ (o CI e o Docker usam o 3.13), mas o script roda com um Python mais
 antigo. Nesse caso ele procura outro Python instalado (no Windows, pelo lançador `py`), instala o 3.13 pelo
 `winget` só para o usuário, sem administrador, e, se nada disso der certo, explica como atualizar. Um
@@ -313,6 +328,7 @@ na imagem.
 | `JWT_SECRET` | api | Chave de assinatura do token (mínimo 32 bytes) |
 | `JWT_EXPIRATION` | api | Validade do token, em minutos (padrão 30) |
 | `CORS_ORIGENS` | api | Origens de navegador autorizadas, separadas por vírgula (sem a variável: nenhuma; o `.env.example` libera a área do cliente local, portas 5173 e 8080) |
+| `CORS_ORIGENS_REDE` | api | Origem da área do cliente aberta pela rede local (`http://<ip>:5173`), somada ao `CORS_ORIGENS`. Não vai no `.env`: o `subir-app.py up` passa pelo Docker Compose a cada subida |
 | `FIREBASE_PROJECT_ID` | api | Projeto Firebase cujos ID tokens abrem o livro-caixa (o mesmo `VITE_FIREBASE_PROJECT_ID`). Vazio: `/espacos` responde `503` |
 | `ADMIN_NOME`, `ADMIN_EMAIL`, `ADMIN_SENHA` | api | Administrador criado na primeira subida, com o banco vazio |
 | `VITE_FIREBASE_*` | web | Configuração pública do app Web do Firebase |
@@ -337,7 +353,7 @@ pip install -r requirements-dev.txt
 pytest -v
 ```
 
-Resultado esperado: `121 passed`.
+Resultado esperado: `259 passed`.
 
 **Front-end (Vitest, lint e build):** em `web/`.
 
@@ -348,7 +364,7 @@ npm run lint
 npm run build
 ```
 
-Resultado esperado: `Test Files 9 passed (9)` e `Tests 95 passed (95)`. Sem o `--run`, o Vitest fica em modo
+Resultado esperado: `Test Files 17 passed (17)` e `Tests 191 passed (191)`. Sem o `--run`, o Vitest fica em modo
 observador.
 
 | Suíte | Arquivo | O que cobre |
@@ -362,6 +378,7 @@ observador.
 | API | `api/tests/test_financeiro_racha_e_exclusao.py` | Divisão entre pessoas, exclusão (com o estorno junto) e importação com colunas indicadas |
 | API | `api/tests/test_financeiro_importacao.py` | Extrato em CSV: formatos de banco, linha ruim com o motivo, chave por linha e importação repetida sem duplicar |
 | API | `api/tests/test_financeiro_api.py` | Livro-caixa pelo HTTP: identidades separadas, espaço alheio em 404, saldos, valores em centavos e estorno único |
+| API | `api/tests/test_financeiro_cartoes.py` | Cartão de crédito: ciclo da fatura (fechamento, meses curtos, virada do ano), parcelas, painel (limite, fatura atual, a pagar, parcelas futuras), compra, pagamento e fatura em CSV |
 | Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro, datas, dinheiro em centavos, extrato e resumo do mês (com estorno e transferência) |
 | Front-end | `web/src/servicos/contas.test.js` | Cadastro no Firebase com o SDK simulado |
 | Front-end | `web/src/servicos/livroCaixa.test.js` | Chamadas à API com o ID token, erros em Problem Details e API fora do ar |
@@ -369,6 +386,8 @@ observador.
 | Front-end | `web/src/regras/importacao.test.js` | Importação do extrato: arquivo em UTF-8 ou Windows-1252, categorias sugeridas, colunas do arquivo e resumo do que entrou |
 | Front-end | `web/src/regras/divisao.test.js` e `busca.test.js` | Racha (divisão igual no centavo, partes que passam do total) e busca do extrato por descrição, valor ou pessoa |
 | Front-end | `web/src/regras/calendario.test.js` e `seletor.test.js` | Calendário (grade do mês, meses e anos, data digitada) e teclado das listas do seletor e do menu |
+| Front-end | `web/src/regras/cartoes.test.js` | Cartão na tela: uso e situação do limite, texto das parcelas, compra, pagamento sugerido e faturas a vencer |
+| Front-end | `web/src/servicos/enderecoDaApi.test.js` | Endereço da API com o app aberto pela rede local |
 
 Os mesmos testes rodam no GitHub Actions a cada commit de pull request e a cada push na `main`
 (ver [CI/CD](#cicd)).
@@ -439,7 +458,7 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
 **Livro-caixa (só local, com a API no ar).** Com `VITE_API_URL=http://localhost:8081` no `web/.env`,
 `FIREBASE_PROJECT_ID` e `CORS_ORIGENS` no `api/.env` e a API rodando:
 
-1. Em **Contas**, crie "Conta corrente" com saldo de hoje `1.000,00` e "Poupança" com `0`.
+1. Em **Contas & Cartões**, crie "Conta corrente" com saldo de hoje `1.000,00` e "Poupança" com `0`.
 2. Em **Lançamentos**, o extrato ocupa a tela e só a lista rola. Pelo botão **+ Novo lançamento**, lance uma
    receita (`Salário`, `3.000,00`), uma despesa (`Mercado`, `214,37`) e uma transferência de `500,00` da conta
    corrente para a poupança. O extrato mostra cada dia com o saldo de todas as contas; a transferência não muda o
@@ -468,6 +487,19 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
    12/09/2026;Padaria;-12,50
    12/09/2026;Padaria;-12,50
    ```
+
+8. Em **Contas & Cartões**, na aba **Cartão de crédito** do formulário, crie "Cartão Roxo" com limite `5.000,00`,
+   fechamento no dia 3 e vencimento no dia 10. Clique no nome dele: a tela do cartão mostra limite total, limite
+   disponível, fatura atual e parcelamentos futuros. Em **Nova compra**, lance `Geladeira` de `3.000,00` em 10x:
+   a primeira parcela entra na fatura atual, as outras nove em **Parcelamentos futuros**, e o limite disponível
+   cai `3.000,00` de uma vez. As setas do mês mostram as próximas faturas, uma parcela em cada.
+9. Em **Pagar fatura**, escolha a conta corrente: o valor vem preenchido com o que há a pagar. Depois de pagar, o
+   limite volta, e em **Lançamentos** o pagamento aparece como saída da conta; as compras no crédito não
+   aparecem lá, só na fatura. **Importar fatura**, na tela do cartão, traz a fatura do banco em CSV direto para o
+   cartão.
+10. Sem nenhuma conta cadastrada, **Importar CSV** (em Lançamentos) e **Pagar fatura** mostram o aviso com dois
+    botões: **Cadastrar conta**, que abre o formulário de conta em Contas & Cartões, e **Cancelar**, que fecha
+    sem sair da tela.
 
 ---
 
@@ -501,7 +533,9 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de seguran�
 | `PUT` | `/usuarios/{id}` | Atualizar usuário | Administrador, Operador | `200 OK` |
 | `DELETE` | `/usuarios/{id}` | Excluir usuário | Administrador | `204 No Content` |
 | `GET` | `/espacos` | Listar os espaços do cliente (cria o pessoal no primeiro acesso) | Cliente (ID token do Firebase) | `200 OK` |
-| `GET`, `POST`, `PUT` | `/espacos/{id}/contas` e `/espacos/{id}/categorias` | Contas (com saldo) e categorias | Membro do espaço | `200 OK` / `201 Created` |
+| `GET`, `POST`, `PUT` | `/espacos/{id}/contas` e `/espacos/{id}/categorias` | Contas (com saldo), cartões de crédito e categorias | Membro do espaço | `200 OK` / `201 Created` |
+| `GET` | `/espacos/{id}/cartoes`, `/cartoes/{id}` e `/cartoes/{id}/faturas/{AAAA-MM}` | Painel do cartão e extrato de uma fatura | Membro do espaço | `200 OK` |
+| `POST` | `/espacos/{id}/cartoes/{id}/compras` e `/pagamentos` | Compra no cartão (à vista ou parcelada) e pagamento da fatura | Membro do espaço | `201 Created` |
 | `GET`, `POST` | `/espacos/{id}/lancamentos` | Listar e lançar receita, despesa ou transferência | Membro do espaço | `200 OK` / `201 Created` |
 | `POST` | `/espacos/{id}/lancamentos/{id}/estorno` | Estornar lançamento | Membro do espaço | `201 Created` |
 | `DELETE` | `/espacos/{id}/lancamentos/{id}` | Excluir lançamento (e o estorno dele) | Membro do espaço | `204 No Content` |
