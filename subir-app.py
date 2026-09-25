@@ -9,9 +9,14 @@ Pessoal Finance (ADS-Project) — helper de inicialização local.
 
 "up" faz, nesta ordem:
     0. Configuração: cria o api/.env a partir do api/.env.example, com JWT_SECRET
-       e ADMIN_SENHA aleatórios, se ele ainda não existir. Avisa se falta o web/.env.
+       e ADMIN_SENHA aleatórios, se ele ainda não existir. Copia o projeto
+       Firebase do web/.env quando o FIREBASE_PROJECT_ID está vazio. Avisa se
+       falta o web/.env.
     1. Ambiente virtual: cria o api/.venv e instala o requirements-dev.txt nele,
        nunca no Python da máquina. Se nada mudou desde a última vez, não reinstala.
+       Precisa de Python 3.11+: procura um na máquina (lançador "py" no Windows),
+       instala o 3.13 pelo winget se faltar e, sem conseguir, explica como
+       atualizar. Um .venv que não roda ou de Python antigo é recriado.
     2. Dependências do front-end: "npm ci" em web/ quando o node_modules falta ou
        o package-lock.json mudou.
     3. Docker: abre o Docker Desktop se ele estiver fechado (Windows) e baixa uma a
@@ -22,7 +27,8 @@ Pessoal Finance (ADS-Project) — helper de inicialização local.
        reaproveita.
     6. Painel: imprime os links importantes e como entrar no painel administrativo.
 
-Só usa a biblioteca padrão: roda com o Python do sistema, antes do ".venv".
+Só usa a biblioteca padrão: roda com o Python do sistema, antes do ".venv",
+mesmo que ele seja antigo demais para a API (ex.: 3.10).
 Idempotente: rodar de novo com tudo no ar apenas confirma o estado e reimprime
 o painel.
 
@@ -60,8 +66,10 @@ PASTA_VENV = PASTA_API / ".venv"
 ARQUIVO_REQUISITOS = PASTA_API / "requirements-dev.txt"
 # Marca o que foi instalado no .venv: evita reinstalar a cada subida.
 MARCA_REQUISITOS = PASTA_VENV / ".requisitos.sha256"
-# A API usa StrEnum e datetime.UTC, que chegaram no Python 3.11.
+# A API usa StrEnum e datetime.UTC, que chegaram no Python 3.11. O CI e o
+# Docker usam o 3.13: é o preferido no .venv e o instalado quando falta um.
 PYTHON_MINIMO = (3, 11)
+PYTHON_RECOMENDADO = (3, 13)
 
 PACKAGE_LOCK = PASTA_WEB / "package-lock.json"
 NODE_MODULES = PASTA_WEB / "node_modules"
@@ -302,18 +310,23 @@ def endereco_do_repositorio() -> str:
 # =============================================================================
 # 0. Configuração (.env)
 # =============================================================================
+def definir_chave(texto: str, chave: str, valor: str) -> str:
+    """Troca o valor de CHAVE=... no texto de um .env; acrescenta a linha se ela falta."""
+    # Função no lugar do texto de troca: um valor com "\" não vira escape do re.
+    novo, trocas = re.subn(rf"(?m)^{chave}=.*$", lambda _: f"{chave}={valor}", texto)
+    if trocas:
+        return novo
+    return texto.rstrip("\n") + f"\n{chave}={valor}\n"
+
+
 def criar_env_da_api() -> bool:
     """Cria o api/.env a partir do modelo, com segredo e senha aleatórios."""
     if not MODELO_ENV_API.is_file():
         erro("api/.env.example não encontrado: não há de onde criar o api/.env.")
         return False
     texto = MODELO_ENV_API.read_text(encoding="utf-8")
-    texto = re.sub(r"(?m)^JWT_SECRET=.*$", f"JWT_SECRET={secrets.token_urlsafe(48)}", texto)
-    texto = re.sub(r"(?m)^ADMIN_SENHA=.*$", f"ADMIN_SENHA={secrets.token_urlsafe(12)}", texto)
-    # O livro-caixa aceita o ID token do mesmo projeto Firebase da área do cliente.
-    projeto = ler_env(ENV_WEB).get("VITE_FIREBASE_PROJECT_ID", "") if ENV_WEB.is_file() else ""
-    if projeto:
-        texto = re.sub(r"(?m)^FIREBASE_PROJECT_ID=.*$", f"FIREBASE_PROJECT_ID={projeto}", texto)
+    texto = definir_chave(texto, "JWT_SECRET", secrets.token_urlsafe(48))
+    texto = definir_chave(texto, "ADMIN_SENHA", secrets.token_urlsafe(12))
     ENV_API.write_text(texto, encoding="utf-8", newline="\n")
     ok("api/.env criado a partir do api/.env.example, com JWT_SECRET e ADMIN_SENHA aleatórios.")
     passo("A senha do administrador inicial está na chave ADMIN_SENHA do api/.env.")
@@ -338,10 +351,17 @@ def garantir_configuracao() -> bool:
     if env_api.get("ADMIN_SENHA") == "troque-esta-senha":
         aviso("ADMIN_SENHA no api/.env ainda é o texto do exemplo. Troque antes de gravar evidências.")
 
-    # Projeto diferente do web/.env faz a API recusar todo login do cliente (401).
+    # O livro-caixa só aceita o ID token do projeto Firebase da área do cliente.
+    # Vazio, a API responde 503 ("Login do cliente indisponível") a todo login;
+    # diferente do web/.env, responde 401. O api/.env criado antes do web/.env
+    # (máquina nova) fica vazio: por isso a cópia acontece a cada subida.
     projeto_api = env_api.get("FIREBASE_PROJECT_ID", "")
     projeto_web = ler_env(ENV_WEB).get("VITE_FIREBASE_PROJECT_ID", "") if ENV_WEB.is_file() else ""
-    if not projeto_api:
+    if not projeto_api and projeto_web:
+        texto = ENV_API.read_text(encoding="utf-8")
+        ENV_API.write_text(definir_chave(texto, "FIREBASE_PROJECT_ID", projeto_web), encoding="utf-8", newline="\n")
+        ok(f"FIREBASE_PROJECT_ID copiado do web/.env para o api/.env ({projeto_web}).")
+    elif not projeto_api:
         aviso("FIREBASE_PROJECT_ID vazio no api/.env: o livro-caixa (/espacos) responde 503.")
     elif projeto_web and projeto_api != projeto_web:
         aviso(f"FIREBASE_PROJECT_ID ({projeto_api}) difere do VITE_FIREBASE_PROJECT_ID ({projeto_web}) do web/.env.")
@@ -359,21 +379,123 @@ def garantir_configuracao() -> bool:
 # =============================================================================
 # 1. Ambiente virtual (api/.venv)
 # =============================================================================
+def versao_do_python(comando: list[str]) -> tuple[int, int] | None:
+    """(maior, menor) do Python chamado pelo comando, ou None se ele não roda."""
+    try:
+        # stdin fechado: um "py -3.x" de versão ausente pode oferecer instalação
+        # e ficaria esperando a resposta.
+        resultado = subprocess.run(
+            [*comando, "-c", "import sys; print(*sys.version_info[:2])"],
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30,
+        )
+        maior, menor = map(int, resultado.stdout.split())
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+    return (maior, menor) if resultado.returncode == 0 else None
+
+
+def texto_versao(versao: tuple[int, int]) -> str:
+    return f"{versao[0]}.{versao[1]}"
+
+
+def encontrar_python() -> tuple[list[str], tuple[int, int]] | None:
+    """
+    Procura um Python 3.11+ na máquina, não só o que roda este script.
+
+    O "python" do PATH pode ser antigo mesmo com um Python novo instalado: no
+    Windows o lançador "py" acha todos, e o winget instala em
+    %LOCALAPPDATA%\\Programs\\Python sem mexer no PATH do terminal já aberto.
+    Entre os achados, fica o mais próximo do 3.13 do CI e do Docker.
+    """
+    candidatos: list[list[str]] = [[sys.executable]]
+    menores = range(PYTHON_MINIMO[1], PYTHON_RECOMENDADO[1] + 3)
+    if platform.system() == "Windows":
+        if shutil.which("py"):
+            candidatos += [["py", f"-3.{menor}"] for menor in menores]
+        programas = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Python"
+        candidatos += [[str(programas / f"Python3{menor}" / "python.exe")] for menor in menores]
+    else:
+        candidatos += [[caminho] for menor in menores if (caminho := shutil.which(f"python3.{menor}"))]
+
+    achados = []
+    for comando in candidatos:
+        if (versao := versao_do_python(comando)) and versao >= PYTHON_MINIMO:
+            achados.append((comando, versao))
+    if not achados:
+        return None
+    return min(achados, key=lambda achado: (abs(achado[1][1] - PYTHON_RECOMENDADO[1]), achado[1]))
+
+
+def instalar_python() -> bool:
+    """Instala o Python recomendado pelo winget, só para este usuário (sem administrador)."""
+    if platform.system() != "Windows" or not shutil.which("winget"):
+        return False
+    pacote = f"Python.Python.{texto_versao(PYTHON_RECOMENDADO)}"
+    passo(f"Instalando o Python {texto_versao(PYTHON_RECOMENDADO)} pelo winget ({pacote})...")
+    # Sem aceitar termos em nome do usuário: se o winget pedir, ele responde aqui.
+    comando = ["winget", "install", "--id", pacote, "--exact", "--source", "winget", "--scope", "user", "--silent"]
+    return rodar(comando).returncode == 0
+
+
+def explicar_atualizacao_do_python() -> None:
+    """Passo a passo para quando o script não consegue um Python novo sozinho."""
+    recomendado = texto_versao(PYTHON_RECOMENDADO)
+    erro(f"O api/.venv precisa de Python {texto_versao(PYTHON_MINIMO)}+ "
+         f"(o CI e o Docker usam o {recomendado}); nenhum foi encontrado nem instalado.")
+    passo("Como atualizar o Python:")
+    if platform.system() == "Windows":
+        passo(f"  1. No PowerShell: winget install --id Python.Python.{recomendado} -e --scope user")
+        passo("     Sem winget (ou bloqueado): baixe em https://www.python.org/downloads/ e,")
+        passo("     no instalador, marque 'Add python.exe to PATH'. Não precisa de administrador.")
+    elif platform.system() == "Darwin":
+        passo(f"  1. brew install python@{recomendado}   (ou o instalador de https://www.python.org/downloads/)")
+    else:
+        passo(f"  1. sudo apt install python{recomendado} python{recomendado}-venv   "
+              "(ou o gerenciador de pacotes da sua distribuição)")
+    passo("  2. Feche e abra o terminal: o PATH novo só vale em terminal novo.")
+    passo("  3. Rode de novo: python subir-app.py up")
+
+
+def criar_venv() -> bool:
+    """Cria (ou recria) o api/.venv com um Python 3.11+, instalando um se faltar."""
+    python = encontrar_python()
+    if python is None:
+        aviso(f"Nenhum Python {texto_versao(PYTHON_MINIMO)}+ encontrado "
+              f"(o que roda este script é o {platform.python_version()}).")
+        if instalar_python():
+            python = encontrar_python()
+    if python is None:
+        explicar_atualizacao_do_python()
+        return False
+
+    comando, versao = python
+    passo(f"Criando o ambiente virtual com o Python {texto_versao(versao)}...")
+    # --clear: um .venv quebrado ou de Python antigo é esvaziado antes.
+    if rodar([*comando, "-m", "venv", "--clear", str(PASTA_VENV)]).returncode != 0:
+        erro(f"Não foi possível criar o api/.venv com o Python {texto_versao(versao)}.")
+        erro(f"Apague a pasta api/.venv e rode de novo. Persistindo: reinstale o Python {texto_versao(versao)}.")
+        return False
+    ok(f"Ambiente criado em api/.venv (Python {texto_versao(versao)}).")
+    return True
+
+
 def garantir_venv() -> bool:
     """Cria o api/.venv e instala as dependências quando necessário."""
     titulo("Ambiente virtual (api/.venv)")
-    if not python_do_venv().is_file():
-        if sys.version_info < PYTHON_MINIMO:
-            erro(f"O .venv precisa de Python {PYTHON_MINIMO[0]}.{PYTHON_MINIMO[1]}+; "
-                 f"este é o {platform.python_version()}.")
-            return False
-        passo("Criando o ambiente virtual...")
-        if rodar([sys.executable, "-m", "venv", str(PASTA_VENV)]).returncode != 0:
-            erro("Não foi possível criar o api/.venv.")
-            return False
-        ok("Ambiente criado em api/.venv.")
+    # Um .venv copiado de outra máquina, ou cujo Python base foi desinstalado ou
+    # atualizado, tem o python.exe mas não roda: é recriado, não reaproveitado.
+    versao_venv = versao_do_python([str(python_do_venv())]) if python_do_venv().is_file() else None
+    if versao_venv and versao_venv >= PYTHON_MINIMO:
+        ok(f"Ambiente já existe (Python {texto_versao(versao_venv)}).")
     else:
-        ok("Ambiente já existe.")
+        if PASTA_VENV.exists():
+            if versao_venv:
+                motivo = f"Python {texto_versao(versao_venv)}, abaixo do {texto_versao(PYTHON_MINIMO)}"
+            else:
+                motivo = "o Python dele não roda" if python_do_venv().is_file() else "está incompleto"
+            aviso(f"O api/.venv existe mas não serve ({motivo}): recriando.")
+        if not criar_venv():
+            return False
 
     impressao = hash_de_arquivos(ARQUIVO_REQUISITOS)
     if MARCA_REQUISITOS.is_file() and MARCA_REQUISITOS.read_text(encoding="utf-8").strip() == impressao:
@@ -760,9 +882,11 @@ def comando_up(reconstruir: bool, com_web: bool) -> int:
     print(_cor("Pessoal Finance — subindo o ambiente local", "1;36"))
     if not garantir_configuracao():
         return 1
-    # O .venv é para testes e editor: a API em si roda no Docker. Falha aqui só avisa.
-    if not garantir_venv():
-        aviso("Seguindo sem o .venv (a API roda no Docker; só 'testes' depende dele).")
+    # A API em si roda no Docker, então a subida segue sem o .venv. Mas os
+    # testes e o editor dependem dele: a falha volta no fim e o código de saída é 1.
+    venv_pronto = garantir_venv()
+    if not venv_pronto:
+        aviso("Seguindo sem o .venv (a API roda no Docker; 'testes' e o editor dependem dele).")
     if com_web and not garantir_node_modules():
         return 1
     if not garantir_docker() or not baixar_imagens():
@@ -776,7 +900,9 @@ def comando_up(reconstruir: bool, com_web: bool) -> int:
     if not tudo_no_ar:
         erro("Alguma parte não subiu. O painel abaixo vale para o que está no ar.")
     painel()
-    return 0 if tudo_no_ar else 1
+    if not venv_pronto:
+        erro("O api/.venv não ficou pronto: veja a etapa 'Ambiente virtual (api/.venv)' acima.")
+    return 0 if tudo_no_ar and venv_pronto else 1
 
 
 def comando_status() -> int:
