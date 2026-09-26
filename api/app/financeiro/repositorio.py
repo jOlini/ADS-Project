@@ -92,6 +92,12 @@ class RepositorioLivroCaixa(Protocol):
 
     def somar_partidas_por_conta(self, espaco_id: str) -> dict[str, int]: ...
 
+    def somar_categorias_por_mes(
+        self, espaco_id: str, de: date, ate: date, conta_id: str | None = None
+    ) -> dict[tuple[str, TipoLancamento, str], int]: ...
+
+    def somar_contas_por_mes(self, espaco_id: str, conta_ids: list[str], ate: date) -> dict[str, int]: ...
+
 
 def _object_id(id: str) -> ObjectId | None:
     # Id fora do formato do Mongo não existe: vira 404, não erro 500.
@@ -312,6 +318,57 @@ class LivroCaixaMongo:
                 {"$unwind": "$partidas"},
                 {"$match": {"partidas.conta_id": {"$type": "string"}}},
                 {"$group": {"_id": "$partidas.conta_id", "total": {"$sum": "$partidas.valor_centavos"}}},
+            ]
+        )
+        return {grupo["_id"]: grupo["total"] for grupo in grupos}
+
+    # --- Relatórios ---
+    # Somas feitas pelo banco ($group), sem trazer os lançamentos: o relatório
+    # de um ano não esbarra no teto da listagem nem enche a memória da API.
+    # O mês é o prefixo AAAA-MM do texto da data, sem conta de fuso.
+
+    def somar_categorias_por_mes(
+        self, espaco_id: str, de: date, ate: date, conta_id: str | None = None
+    ) -> dict[tuple[str, TipoLancamento, str], int]:
+        """{(mês, tipo do lançamento, categoria): soma das partidas de
+        categoria} no período. Transferência não tem partida de categoria e
+        fica de fora. Com conta_id, só os lançamentos daquela conta (a de
+        origem: numa receita ou despesa, a única)."""
+        filtro: dict = {"espaco_id": espaco_id, "data": {"$gte": de.isoformat(), "$lte": ate.isoformat()}}
+        if conta_id:
+            filtro["conta_id"] = conta_id
+        grupos = self._lancamentos.aggregate(
+            [
+                {"$match": filtro},
+                {"$unwind": "$partidas"},
+                {"$match": {"partidas.categoria_id": {"$type": "string"}}},
+                {
+                    "$group": {
+                        "_id": {
+                            "mes": {"$substrCP": ["$data", 0, 7]},
+                            "tipo": "$tipo",
+                            "categoria_id": "$partidas.categoria_id",
+                        },
+                        "total": {"$sum": "$partidas.valor_centavos"},
+                    }
+                },
+            ]
+        )
+        return {
+            (grupo["_id"]["mes"], TipoLancamento(grupo["_id"]["tipo"]), grupo["_id"]["categoria_id"]): grupo["total"]
+            for grupo in grupos
+        }
+
+    def somar_contas_por_mes(self, espaco_id: str, conta_ids: list[str], ate: date) -> dict[str, int]:
+        """{mês: soma das partidas das contas pedidas}, de todo o histórico
+        até a data. Transferência entre duas das contas pedidas se anula."""
+        filtro = {"espaco_id": espaco_id, "data": {"$lte": ate.isoformat()}, "partidas.conta_id": {"$in": conta_ids}}
+        grupos = self._lancamentos.aggregate(
+            [
+                {"$match": filtro},
+                {"$unwind": "$partidas"},
+                {"$match": {"partidas.conta_id": {"$in": conta_ids}}},
+                {"$group": {"_id": {"$substrCP": ["$data", 0, 7]}, "total": {"$sum": "$partidas.valor_centavos"}}},
             ]
         )
         return {grupo["_id"]: grupo["total"] for grupo in grupos}
