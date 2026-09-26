@@ -21,6 +21,7 @@ from app.financeiro.repositorio import LivroCaixaMongo, RepositorioLivroCaixa
 from app.financeiro.rotas import rotas_livro_caixa
 from app.financeiro.rotas_relatorios import rotas_relatorios
 from app.firebase import VerificadorFirebase
+from app.limites import LimiteDeTentativas, LimiteDoCorpo
 from app.repositorio import RepositorioMongo, RepositorioUsuarios, conectar_mongo
 from app.rotas import rotas_autenticacao, rotas_usuarios
 from app.seguranca import CabecalhosDeSeguranca
@@ -79,6 +80,14 @@ def criar_app(
     )
 
     registrar_tratadores(app)
+
+    # Contador de senhas erradas do POST /auth/login (um por app: os testes
+    # começam do zero).
+    app.state.limite_de_login = LimiteDeTentativas()
+
+    # Adicionado primeiro, fica por dentro dos outros middlewares: o 413 também
+    # sai com CORS e com os cabeçalhos de segurança.
+    app.add_middleware(LimiteDoCorpo)
 
     # CORS: só as origens de CORS_ORIGENS chamam a API pelo navegador. O
     # cabeçalho Authorization é o único de credencial aceito; cookie, nenhum.

@@ -65,6 +65,25 @@ class ErroIndisponivel(ErroDaApi):
     status = 503
 
 
+class ErroMuitasTentativas(ErroDaApi):
+    """Login bloqueado por excesso de senhas erradas (força bruta). O
+    Retry-After diz em quantos segundos a próxima tentativa volta a valer."""
+
+    status = 429
+
+    def __init__(self, espera_em_segundos: int):
+        minutos = max(1, -(-espera_em_segundos // 60))
+        unidade = "minuto" if minutos == 1 else "minutos"
+        super().__init__(
+            f"Muitas tentativas de login. Tente de novo em {minutos} {unidade}.",
+            {"Retry-After": str(espera_em_segundos)},
+        )
+
+
+MENSAGEM_CORPO_GRANDE = "Corpo da requisição grande demais."
+MENSAGEM_ERRO_INTERNO = "Erro interno do servidor. Tente de novo em instantes."
+
+
 def problema(status: int, detalhe: str, instancia: str, cabecalhos=None, **extras) -> JSONResponse:
     corpo = {
         "type": "about:blank",
@@ -131,9 +150,20 @@ def registrar_tratadores(app: FastAPI) -> None:
             campos.setdefault(nome, _mensagem_do_campo(item))
         return problema(400, MENSAGEM_CAMPOS_INVALIDOS, requisicao.url.path, campos=campos)
 
-    # Rota inexistente (404) e método não suportado (405).
+    # Rota inexistente (404), método não suportado (405) e corpo acima do
+    # limite (413, de limites.LimiteDoCorpo).
     @app.exception_handler(HTTPException)
     async def erro_http(requisicao: Request, erro: HTTPException):
-        detalhes = {404: "Rota não encontrada.", 405: "Método não permitido nesta rota."}
+        detalhes = {
+            404: "Rota não encontrada.",
+            405: "Método não permitido nesta rota.",
+            413: MENSAGEM_CORPO_GRANDE,
+        }
         detalhe = detalhes.get(erro.status_code, str(erro.detail))
         return problema(erro.status_code, detalhe, requisicao.url.path, erro.headers)
+
+    # Falha não prevista: a resposta sai no mesmo formato e sem stack trace.
+    # O Starlette relança a exceção depois, e o detalhe vai só para o log.
+    @app.exception_handler(Exception)
+    async def erro_inesperado(requisicao: Request, erro: Exception):
+        return problema(500, MENSAGEM_ERRO_INTERNO, requisicao.url.path)
