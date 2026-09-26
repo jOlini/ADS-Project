@@ -19,6 +19,7 @@ from app.config import Configuracoes
 from app.erros import registrar_tratadores
 from app.financeiro.repositorio import LivroCaixaMongo, RepositorioLivroCaixa
 from app.financeiro.rotas import rotas_livro_caixa
+from app.financeiro.rotas_relatorios import rotas_relatorios
 from app.firebase import VerificadorFirebase
 from app.repositorio import RepositorioMongo, RepositorioUsuarios, conectar_mongo
 from app.rotas import rotas_autenticacao, rotas_usuarios
@@ -93,6 +94,7 @@ def criar_app(
     app.include_router(rotas_autenticacao)
     app.include_router(rotas_usuarios)
     app.include_router(rotas_livro_caixa)
+    app.include_router(rotas_relatorios)
 
     app.mount("/painel", StaticFiles(directory=PASTA_DO_PAINEL, html=True), name="painel")
 

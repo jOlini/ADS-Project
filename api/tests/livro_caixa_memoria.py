@@ -159,3 +159,28 @@ class LivroCaixaMemoria:
                 if partida.conta_id:
                     somas[partida.conta_id] = somas.get(partida.conta_id, 0) + partida.valor_centavos
         return somas
+
+    def somar_categorias_por_mes(self, espaco_id, de, ate, conta_id=None):
+        somas = {}
+        for lancamento in self.lancamentos.values():
+            if lancamento.espaco_id != espaco_id or not de <= lancamento.data <= ate:
+                continue
+            if conta_id and lancamento.conta_id != conta_id:
+                continue
+            mes = lancamento.data.isoformat()[:7]
+            for partida in lancamento.partidas:
+                if partida.categoria_id:
+                    chave = (mes, lancamento.tipo, partida.categoria_id)
+                    somas[chave] = somas.get(chave, 0) + partida.valor_centavos
+        return somas
+
+    def somar_contas_por_mes(self, espaco_id, conta_ids, ate):
+        somas = {}
+        for lancamento in self.lancamentos.values():
+            if lancamento.espaco_id != espaco_id or lancamento.data > ate:
+                continue
+            mes = lancamento.data.isoformat()[:7]
+            for partida in lancamento.partidas:
+                if partida.conta_id in conta_ids:
+                    somas[mes] = somas.get(mes, 0) + partida.valor_centavos
+        return somas

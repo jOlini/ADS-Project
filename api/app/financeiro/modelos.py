@@ -630,3 +630,64 @@ class EstruturaResposta(BaseModel):
     delimitador: str
     linhas: list[LinhaDoArquivoResposta]
     mapeamento: MapeamentoDoExtrato | None
+
+
+# --- Relatórios (saída) ----------------------------------------------------------
+
+
+class MesDoRelatorioResposta(BaseModel):
+    # Ano e mês (AAAA-MM).
+    mes: str
+    # Receitas menos os estornos delas; transferência não entra.
+    receitas_centavos: int
+    # Despesas (com as compras no cartão, no mês da parcela) menos os estornos
+    # delas; o pagamento da fatura não entra, porque a compra já contou.
+    despesas_centavos: int
+    sobra_centavos: int
+    # Saldo das contas no último dia do mês, sem os cartões (dívida). Com
+    # conta_id, o saldo daquela conta.
+    saldo_final_centavos: int
+
+
+class RelatorioMensalResposta(BaseModel):
+    de: str
+    ate: str
+    conta_id: str | None
+    meses: list[MesDoRelatorioResposta]
+
+
+class GastoDaCategoriaResposta(BaseModel):
+    categoria_id: str
+    nome: str
+    cor: CorCategoria
+    valor_centavos: int
+    # Porcentagem do total do período, arredondada.
+    fatia: int
+
+
+class GastoPorCategoriaResposta(BaseModel):
+    de: str
+    ate: str
+    conta_id: str | None
+    total_centavos: int
+    # Da categoria com mais gasto para a com menos; só as que têm gasto.
+    categorias: list[GastoDaCategoriaResposta]
+
+
+class FaturaComprometidaResposta(PeriodoDaFaturaResposta):
+    situacao: SituacaoDaFatura
+    # Compras menos créditos do período (as parcelas já lançadas).
+    total_centavos: int
+
+
+class CompromissoDoCartaoResposta(BaseModel):
+    cartao_id: str
+    nome: str
+    ativa: bool
+    limite_centavos: int
+    # Dívida de hoje: faturas fechadas não pagas, a atual e as futuras.
+    usado_centavos: int
+    # O que falta pagar das faturas já fechadas.
+    a_pagar_centavos: int
+    # A fatura aberta e as seguintes, até a última parcela lançada.
+    faturas: list[FaturaComprometidaResposta]

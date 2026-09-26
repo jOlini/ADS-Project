@@ -9,7 +9,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from app.erros import ErroConflito, ErroNaoEncontrado, ErroValidacao
-from app.financeiro import cartoes, importacao, regras
+from app.financeiro import cartoes, importacao, regras, relatorios
 from app.financeiro.cartoes import PeriodoDaFatura, Referencia, ResumoDoCartao
 from app.financeiro.modelos import (
     AtualizacaoCategoria,
@@ -503,3 +503,61 @@ class ServicoLivroCaixa:
         for lancamento in lancamentos:
             lancamento.estornado_por = estornos.get(lancamento.id)
         return lancamentos
+
+    # --- Relatórios ---
+
+    def periodo_do_relatorio(
+        self, espaco: Espaco, de: str | None, ate: str | None, conta_id: str | None
+    ) -> tuple[relatorios.Mes, relatorios.Mes]:
+        """Meses inicial e final (padrão: os 12 que terminam no mês de hoje) e
+        a conta do filtro, que precisa ser do espaço."""
+        inicio, fim, erros = relatorios.periodo_pedido(de, ate, self.hoje(espaco))
+        if erros:
+            raise ErroValidacao(erros)
+        if conta_id:
+            self._conta(espaco, conta_id)
+        return inicio, fim
+
+    def relatorio_mensal(
+        self, espaco: Espaco, de: relatorios.Mes, ate: relatorios.Mes, conta_id: str | None = None
+    ) -> list[relatorios.ResultadoDoMes]:
+        """Receitas, despesas e saldo no fim de cada mês do período. O saldo é
+        o das contas (sem os cartões) ou, com conta_id, o daquela conta."""
+        fim = relatorios.ultimo_dia(ate)
+        somas = self.repositorio.somar_categorias_por_mes(espaco.id, relatorios.primeiro_dia(de), fim, conta_id)
+        todas = self.repositorio.listar_contas(espaco.id)
+        # Sem filtro, o saldo em contas: todas menos os cartões, inclusive as
+        # desativadas (o dinheiro delas continua existindo).
+        contas = [conta for conta in todas if conta.id == conta_id] if conta_id else [c for c in todas if not c.cartao]
+        somas_das_contas = self.repositorio.somar_contas_por_mes(espaco.id, [conta.id for conta in contas], fim)
+        saldo_inicial = sum(conta.saldo_inicial_centavos for conta in contas)
+        return relatorios.resultado_por_mes(relatorios.meses_do_periodo(de, ate), somas, saldo_inicial, somas_das_contas)
+
+    def gasto_por_categoria(
+        self, espaco: Espaco, de: relatorios.Mes, ate: relatorios.Mes, conta_id: str | None = None
+    ) -> list[tuple[relatorios.GastoDaCategoria, Categoria | None]]:
+        """Gasto de cada categoria no período, com o cadastro dela (None se a
+        categoria não existir mais)."""
+        somas = self.repositorio.somar_categorias_por_mes(
+            espaco.id, relatorios.primeiro_dia(de), relatorios.ultimo_dia(ate), conta_id
+        )
+        categorias = {categoria.id: categoria for categoria in self.repositorio.listar_categorias(espaco.id)}
+        return [(gasto, categorias.get(gasto.categoria_id)) for gasto in relatorios.gasto_por_categoria(somas)]
+
+    def compromisso_nos_cartoes(
+        self, espaco: Espaco
+    ) -> list[tuple[Conta, ResumoDoCartao, list[relatorios.FaturaComprometida]]]:
+        """Cada cartão com o painel e as faturas da atual em diante, com as
+        parcelas já lançadas."""
+        hoje = self.hoje(espaco)
+        somas = self.repositorio.somar_partidas_por_conta(espaco.id)
+        resultado = []
+        for cartao in self.repositorio.listar_contas(espaco.id):
+            if not cartao.cartao:
+                continue
+            atual = cartoes.referencia_da_data(cartao, hoje)
+            inicio = cartoes.periodo_da_fatura(cartao, atual).inicio
+            lancamentos = self.repositorio.listar_lancamentos(espaco.id, inicio, None, LIMITE_DO_CARTAO, cartao.id)
+            resumo = cartoes.resumir(cartao, regras.saldo_da_conta(cartao, somas), lancamentos, hoje)
+            resultado.append((cartao, resumo, relatorios.faturas_comprometidas(cartao, lancamentos, atual)))
+        return resultado
