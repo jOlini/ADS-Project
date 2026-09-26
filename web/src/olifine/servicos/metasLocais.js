@@ -2,6 +2,8 @@
 // API de metas da release 0.5. Não sincroniza entre aparelhos: a tela avisa.
 // Trocar por chamadas à API muda só este arquivo.
 
+import { prazoValido } from '../regras/metas';
+
 const prefixo = 'olifine:metas:';
 
 export const chaveDasMetas = (uid) => `${prefixo}${uid ?? 'sem-sessao'}`;
@@ -23,7 +25,9 @@ export function lerMetas(uid) {
   try {
     const texto = globalThis.localStorage?.getItem(chaveDasMetas(uid));
     const lista = texto ? JSON.parse(texto) : [];
-    return Array.isArray(lista) ? lista.filter(metaValida) : [];
+    // Prazo fora do formato (gravado antes da correção do campo Prazo, que
+    // guardava um objeto) vira "sem prazo": a meta e os aportes continuam.
+    return Array.isArray(lista) ? lista.filter(metaValida).map((meta) => ({ ...meta, prazo: prazoValido(meta.prazo) })) : [];
   } catch {
     return [];
   }

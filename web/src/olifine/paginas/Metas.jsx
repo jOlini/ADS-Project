@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
 import Campo from '../../componentes/Campo';
 import Confirmacao from '../../componentes/Confirmacao';
+import LimiteDeErro from '../../componentes/LimiteDeErro';
 import Menu from '../../componentes/Menu';
 import Modal from '../../componentes/Modal';
 import SeletorDeData from '../../componentes/SeletorDeData';
@@ -48,7 +49,9 @@ function FormularioDeMeta({ aoCriar, aoCancelar }) {
     }
   }
 
-  const mudar = (campo) => (evento) => setFormulario((atual) => ({ ...atual, [campo]: evento.target?.value ?? evento }));
+  // Todos os campos (inclusive o SeletorDeData) mandam um evento com
+  // target.value; guardar o evento inteiro punha "[object Object]" no Prazo.
+  const mudar = (campo) => (evento) => setFormulario((atual) => ({ ...atual, [campo]: evento.target.value }));
 
   return (
     <form className="of-formulario-da-meta" onSubmit={criar} noValidate>
@@ -57,7 +60,7 @@ function FormularioDeMeta({ aoCriar, aoCancelar }) {
       <Campo rotulo="Quanto você quer juntar" name="alvo" inputMode="decimal" value={formulario.alvo}
         onChange={mudar('alvo')} erro={erros.alvo} placeholder="R$ 0,00" />
       <Campo rotulo="Prazo (opcional)" elemento={SeletorDeData} name="prazo" value={formulario.prazo}
-        onChange={(valor) => setFormulario((atual) => ({ ...atual, prazo: valor }))} erro={erros.prazo} min={hoje}
+        onChange={mudar('prazo')} erro={erros.prazo} min={hoje}
         dica="Com prazo, a meta mostra quanto guardar por mês." />
       <div className="acoes-do-formulario">
         <button type="button" className="secundario" onClick={aoCancelar}>
@@ -258,6 +261,10 @@ export default function Metas() {
 
   function plantar(dados) {
     const nova = criar(dados);
+    if (!nova) {
+      toast.erro('Confira os campos e tente de novo.', { titulo: 'A meta não foi plantada' });
+      return;
+    }
     setCriando(false);
     setEscolhida(nova.id);
     toast.sucesso('Faça o primeiro aporte para a semente brotar.', { titulo: `Meta "${nova.nome}" plantada` });
@@ -312,7 +319,19 @@ export default function Metas() {
 
       {meta ? (
         <div className="of-metas-grade">
-          <Estufa key={meta.id} meta={meta} rega={regas[meta.id] ?? 0} aoRegar={regar} aoExcluir={() => setExcluindo(meta)} />
+          {/* Uma meta que não abre não leva junto a lista nem o "Nova meta". */}
+          <LimiteDeErro
+            chave={meta.id}
+            titulo="Esta meta não abriu"
+            descricao="Algo deu errado ao mostrar esta meta. As outras continuam no pomar ao lado."
+            acoes={
+              <button type="button" className="secundario" onClick={() => setExcluindo(meta)}>
+                Excluir esta meta
+              </button>
+            }
+          >
+            <Estufa key={meta.id} meta={meta} rega={regas[meta.id] ?? 0} aoRegar={regar} aoExcluir={() => setExcluindo(meta)} />
+          </LimiteDeErro>
 
           <section className="cartao of-painel of-metas-lista" aria-labelledby="titulo-lista-de-metas">
             <div className="of-painel-cabecalho">

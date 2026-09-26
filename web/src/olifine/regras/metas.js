@@ -5,6 +5,7 @@
 // com alvo e valores em centavos inteiros (como o resto do app) e datas em
 // texto ISO. Até a API de metas (release 0.5), elas ficam no navegador.
 
+import { dataExiste } from '../../regras/datas';
 import { LIMITE_EM_CENTAVOS } from '../../regras/dinheiro';
 
 // Fases da árvore, cada uma a partir de uma fração do alvo. O broto nasce no
@@ -138,7 +139,11 @@ export function validarMeta({ nome, alvo, prazo }, hoje) {
   } else if (alvo > LIMITE_EM_CENTAVOS) {
     erros.alvo = 'Valor acima do limite.';
   }
-  if (prazo && prazo < hoje) {
+  // O prazo só entra como data ISO que existe: qualquer outra coisa (texto
+  // incompleto, objeto) quebraria o plano mensal ao desenhar a meta.
+  if (prazo && (typeof prazo !== 'string' || !dataExiste(prazo))) {
+    erros.prazo = 'Data inválida.';
+  } else if (prazo && prazo < hoje) {
     erros.prazo = 'O prazo precisa ser hoje ou depois.';
   }
   return erros;
@@ -158,7 +163,12 @@ export function validarAporte(valor) {
 }
 
 export function novaMeta({ nome, alvo, prazo }, { id, hoje }) {
-  return { id, nome: nome.trim(), alvo, prazo: prazo || null, criadaEm: hoje, aportes: [] };
+  return { id, nome: nome.trim(), alvo, prazo: prazoValido(prazo), criadaEm: hoje, aportes: [] };
+}
+
+// Prazo como a meta guarda: data ISO que existe ou null.
+export function prazoValido(prazo) {
+  return typeof prazo === 'string' && dataExiste(prazo) ? prazo : null;
 }
 
 export function comAporte(meta, aporte) {
