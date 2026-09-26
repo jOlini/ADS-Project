@@ -138,7 +138,7 @@ web/                  área do cliente (React + Firebase)
   iniciar.bat/.sh     atalhos que instalam as dependências e sobem o app (npm start)
 .github/workflows/    ci-tests.yml, cd.yml e alertas.yml
 docker-compose.yml    MongoDB + API para rodar localmente
-subir-app.py          sobe tudo com um comando (venv, dependências, Docker, Vite e links)
+subir-app.py          sobe tudo com um comando (venv, dependências, Docker, Vite, links e túnel)
 DOCS_API.md           documentação técnica da API
 ```
 
@@ -281,7 +281,30 @@ antigo. Nesse caso ele procura outro Python instalado (no Windows, pelo lançado
 |---|---|
 | `python subir-app.py status` | Mostra o que está no ar e os links, sem subir nada |
 | `python subir-app.py testes` | Roda o pytest da API, o lint e o Vitest do front-end, como o CI |
-| `python subir-app.py down` | Para o Vite e os containers (`--apagar-dados` também apaga o banco) |
+| `python subir-app.py down` | Para o túnel, o Vite e os containers (`--apagar-dados` também apaga o banco) |
+| `python subir-app.py tunnel start` | Abre um endereço público temporário para a área do cliente (veja abaixo) |
+| `python subir-app.py tunnel stop` | Fecha esse endereço: o app volta a ser só local |
+
+**Acesso externo temporário (Cloudflare Tunnel).** Para mostrar uma funcionalidade nova a pessoas de fora da rede,
+sem publicar no GitHub Pages, com o ambiente no ar (`python subir-app.py up`):
+
+```bash
+python subir-app.py tunnel start   # ou, dentro de web/: npm run tunnel:start
+python subir-app.py tunnel stop    # ou, dentro de web/: npm run tunnel:stop
+```
+
+O `start` abre um Quick Tunnel da Cloudflare (sem conta) para o Vite e mostra o endereço, no formato
+`https://<palavras-aleatorias>.trycloudflare.com/ADS-Project/`. O endereço muda a cada início e deixa de existir no
+`stop` (o `down` também fecha o túnel). Usa o `cloudflared` instalado ou baixa o oficial
+(`github.com/cloudflare/cloudflared`) para a pasta `.subir-app/`, que fica fora do Git.
+
+- **O que fica público:** só a área do cliente. A API entra pelo proxy do Vite e só nas rotas do cliente (`/espacos`,
+  que exigem o login do Firebase); o painel administrativo, o login do back-office e o Swagger continuam só locais.
+- **Quem entra:** qualquer pessoa com o endereço chega ao login, e o cadastro está aberto. Mande o endereço só para quem
+  vai ver a demonstração e feche o túnel ao terminar.
+- **Nada da sua rede aparece:** a pessoa só vê o endereço `trycloudflare.com`. Não publique no repositório, em issue ou
+  em print o IP da máquina, o nome da rede ou o endereço de um túnel aberto.
+- **Rede de empresa:** o firewall pode bloquear o túnel, e a política de TI pode proibir. Use em rede própria.
 
 ### Opção C — API sem Docker
 

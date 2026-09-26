@@ -114,6 +114,8 @@ iniciar.bat, iniciar.sh atalhos de avaliação
 | `npm run preview` | Serve o build de `dist/` para conferência |
 | `npm test -- --run` | Roda os testes unitários uma vez |
 | `npm run lint` | Confere o código com o oxlint |
+| `npm run tunnel:start` | Abre um endereço público temporário (Cloudflare) para demonstração; o servidor de desenvolvimento precisa estar no ar |
+| `npm run tunnel:stop` | Fecha esse endereço (detalhes no README da raiz) |
 
 ## Build e deploy
 
