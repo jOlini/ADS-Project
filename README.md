@@ -54,7 +54,7 @@ importação do extrato do banco em CSV).
 |---|---|---|
 | Identidade e acesso | Cadastro, login, perfis de acesso e administração de usuários | Concluído |
 | Núcleo financeiro | Receitas, despesas e transferências, contas, categorias e importação de extrato (CSV) | Em construção (0.2): API e telas prontas |
-| Dashboard | Saldo, totais do mês e comparativo receita × despesa | Em construção (0.3): API de relatórios pronta |
+| Dashboard | Saldo, totais do mês e comparativo receita × despesa | Em construção (0.3): API de relatórios e tela Relatórios (receita × despesa e gasto por categoria) prontas |
 | Comprovantes | Anexo de arquivo ao lançamento | Planejado (0.4) |
 
 ---
@@ -67,6 +67,7 @@ importação do extrato do banco em CSV).
 │  Área do cliente:                │      │  Back-office: login, listagem,   │
 │  /cadastro · /login · /principal │      │  cadastro, edição e exclusão     │
 │  /lancamentos /contas /categorias│      │                                  │
+│  / · /metas · /relatorios        │      │                                  │
 └───────┬──────────────────┬───────┘      └────────────────┬─────────────────┘
         │ SDK Firebase     │ HTTPS + ID token              │ HTTPS + JWT
         │                  └─────────────────┐             │
@@ -113,9 +114,9 @@ pagamento que sai de uma conta e libera o limite
 | Segurança da API | PyJWT (HS256 e RS256) · cryptography · bcrypt | Token do back-office assinado com validade de 30 minutos; ID token do Firebase conferido com as chaves do Google; senhas guardadas só como hash |
 | Persistência da API | MongoDB 7 (pymongo) | Usuários (índice único no e-mail) e livro-caixa (lançamento e partidas num só documento, gravação atômica) |
 | Painel da API | HTML, CSS e JavaScript puros, servidos pela própria API | Interface de demonstração: login, CRUD e respostas da API na tela |
-| Área do cliente | React 19 · Vite · React Router | SPA com as rotas `/cadastro`, `/login` e `/principal` |
+| Área do cliente | React 19 · Vite · React Router | SPA com a página de apresentação (`/`), `/cadastro`, `/login`, `/principal` e as telas do livro-caixa |
 | Identidade do cliente | Firebase Authentication (e-mail/senha) · Cloud Firestore | Conta do cliente final e dados do perfil, protegidos por regras do Firestore |
-| Interface | CSS próprio com design tokens (`web/src/estilos/tokens.css`), fonte Figtree auto-hospedada (SIL OFL), temas claro e escuro automáticos | Visual "extrato vivo" nas duas interfaces; seletor, calendário, modal e menu próprios no lugar dos controles do navegador; toasts e transições que respeitam "reduzir movimento" |
+| Interface | CSS próprio com design tokens (`web/src/estilos/tokens.css`), fonte Geist auto-hospedada (SIL OFL), temas claro e escuro automáticos | Identidade OliFine na área do cliente: verdes esmeralda e sálvia de croma contido (menos cansaço visual), ícones desenhados no próprio projeto, seletor, calendário, modal e menu próprios, micro-interações e esqueletos de carga que respeitam "reduzir movimento". O painel da API mantém o visual anterior |
 | Testes | pytest · Vitest · oxlint | Testes unitários e de rota da API; regras e serviços do front-end; lint |
 | CI/CD | GitHub Actions · GitHub Pages · webhook do Discord | Testes a cada commit de PR, deploy automático e alertas |
 | Containers | Docker · Docker Compose | MongoDB + API com um comando; imagem nginx do front-end |
@@ -132,7 +133,8 @@ api/                  API REST (FastAPI)
   .env.example        modelo da configuração da API
 web/                  área do cliente (React + Firebase)
   src/routes.jsx      arquivo de rotas (React Router)
-  src/paginas/        Cadastro, Login e Principal
+  src/paginas/        Cadastro, Login e as telas do livro-caixa (Lançamentos, Contas, Categorias, Relatórios)
+  src/olifine/        identidade OliFine: casca, Visão geral (/principal), Metas e página de apresentação
   firestore.rules     regras de segurança do Firestore
   .env.example        modelo da configuração do Firebase
   iniciar.bat/.sh     atalhos que instalam as dependências e sobem o app (npm start)
@@ -333,6 +335,11 @@ O navegador abre em http://localhost:5173/ADS-Project/ com as rotas `/cadastro`,
 (`npm run dev` sobe o mesmo servidor sem abrir o navegador). Guia só da área do cliente:
 [`web/README.md`](web/README.md).
 
+**Identidade OliFine.** A raiz (`/`) mostra a página de apresentação; a área logada tem a Visão geral (números do
+mês, evolução do saldo, despesas por categoria, últimas transações, metas e os dados do cadastro), a aba Metas (cada
+meta é uma árvore que cresce com os aportes; as metas ficam salvas no navegador até a API de metas) e, com a API, a
+tela Relatórios (receitas e despesas por mês e gasto por categoria em 3, 6 ou 12 meses).
+
 ### Front-end em container (nginx)
 
 ```bash
@@ -387,7 +394,7 @@ npm run lint
 npm run build
 ```
 
-Resultado esperado: `Test Files 17 passed (17)` e `Tests 191 passed (191)`. Sem o `--run`, o Vitest fica em modo
+Resultado esperado: `Test Files 25 passed (25)` e `Tests 259 passed (259)`. Sem o `--run`, o Vitest fica em modo
 observador.
 
 | Suíte | Arquivo | O que cobre |
@@ -412,6 +419,9 @@ observador.
 | Front-end | `web/src/regras/calendario.test.js` e `seletor.test.js` | Calendário (grade do mês, meses e anos, data digitada) e teclado das listas do seletor e do menu |
 | Front-end | `web/src/regras/cartoes.test.js` | Cartão na tela: uso e situação do limite, texto das parcelas, compra, pagamento sugerido e faturas a vencer |
 | Front-end | `web/src/servicos/enderecoDaApi.test.js` | Endereço da API com o app aberto pela rede local |
+| Front-end | `web/src/olifine/regras/*.test.js` | OliFine: variação em relação ao mês anterior, séries e régua do gráfico de saldo, curva sem pico inventado, Visão geral, metas (fases, sequência de semanas, plano mensal, validação) e a árvore que cresce com os aportes |
+| Front-end | `web/src/regras/relatorios.test.js` | Relatórios: período terminando no mês de hoje (com a virada do ano), totais e média do período, régua das colunas a partir do zero, rótulos dos meses e barras das categorias |
+| Front-end | `web/src/componentes/icones.test.js` | Todo nome de ícone usado nas telas tem desenho na família própria da OliFine |
 
 Os mesmos testes rodam no GitHub Actions a cada commit de pull request e a cada push na `main`
 (ver [CI/CD](#cicd)).
@@ -475,7 +485,8 @@ O primeiro `curl` (sem token) responde `401`; com o token, a lista vem com `200`
 Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
 
 1. Em `/cadastro`, crie uma conta com e-mail, senha, nome, sobrenome e data de nascimento.
-2. Em `/login`, entre com ela: `/principal` mostra nome, sobrenome e data de nascimento lidos do Firestore.
+2. Em `/login`, entre com ela: `/principal` mostra nome, sobrenome e data de nascimento lidos do Firestore (em
+   "Seus dados", no fim da Visão geral).
 3. Um e-mail não cadastrado ou senha errada mostram "Usuário não cadastrado ou senha incorreta.".
 4. Depois de **Sair**, abrir `/principal` direto volta para o login: a página exige sessão.
 

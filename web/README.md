@@ -5,8 +5,9 @@ separado, contas no Firebase Authentication (provedor e-mail/senha) e dados pess
 Entrega da **Atividade Somativa 2 de Tecnologias para Desenvolvimento Web**.
 
 Com a API do projeto ligada (`VITE_API_URL` no `.env`), o app ganha também as telas do livro-caixa:
-**Lançamentos**, **Contas** e **Categorias**. Sem ela, como na versão publicada, essas telas ficam desligadas
-e a Principal mostra os dados de exemplo.
+**Lançamentos**, **Contas & Cartões**, **Categorias** e **Relatórios**. Sem ela, como na versão publicada, essas
+telas ficam desligadas e a Principal (Visão geral) oferece os dados de exemplo. A interface usa a identidade visual
+**OliFine** (casca, Visão geral, Metas e a página de apresentação em `src/olifine/`).
 
 | | |
 |---|---|
@@ -82,11 +83,14 @@ envolve o app com o `BrowserRouter`.
 |---|---|---|
 | `/cadastro` | Cadastro (5 campos e o botão Criar conta) | Público |
 | `/login` | Login (e-mail, senha e o botão Entrar) | Público |
-| `/principal` | Principal (nome, sobrenome e data de nascimento; saldo e extrato com a API) | Só com sessão; sem sessão volta ao login |
+| `/principal` | Principal, a Visão geral (nome, sobrenome e data de nascimento em "Seus dados"; números do mês, gráficos e últimas transações com a API) | Só com sessão; sem sessão volta ao login |
 | `/lancamentos` | Extrato do mês, novo lançamento e estorno | Só com sessão; precisa da API |
 | `/contas` | Contas com saldo, criar e editar | Só com sessão; precisa da API |
 | `/categorias` | Categorias de despesa e receita, criar e editar | Só com sessão; precisa da API |
-| `/` e qualquer outro | Redireciona para `/login` | — |
+| `/metas` | Metas de economia, cada uma uma árvore que cresce com os aportes (salvas no navegador) | Só com sessão |
+| `/relatorios` | Receitas e despesas por mês e gasto por categoria no período | Só com sessão; precisa da API |
+| `/` | Página de apresentação, com os atalhos para entrar e criar conta | Público |
+| qualquer outro | Redireciona para `/login` | — |
 
 ## Estrutura
 
@@ -95,11 +99,13 @@ src/
   routes.jsx            arquivo de rotas (React Router Dom)
   main.jsx              BrowserRouter e provedor de avisos
   firebase.js           inicialização do Firebase (Authentication e Firestore)
-  paginas/              Cadastro, Login, Principal, Lancamentos, Contas e Categorias
+  paginas/              Cadastro, Login, Lancamentos, Contas, Cartao, Categorias e Relatorios
+  olifine/              identidade OliFine: casca, Visão geral (/principal), Metas e página de apresentação
   servicos/contas.js    cadastro, login, sessão e leitura dos dados no Firebase
   servicos/livroCaixa.js chamadas à API do livro-caixa com o ID token do Firebase
   regras/               regras puras e testadas (validação, dinheiro em centavos, extrato, datas)
-  componentes/          layout, campos, ícones e avisos (toasts)
+  componentes/          layout, campos, ícones próprios, gráficos, esqueletos de carga e avisos (toasts)
+  estilos/              design tokens, movimento e o CSS de cada tela
 firestore.rules         regras de segurança do Firestore
 iniciar.bat, iniciar.sh atalhos de avaliação
 ```
