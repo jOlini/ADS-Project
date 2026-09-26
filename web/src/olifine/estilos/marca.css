@@ -42,3 +42,15 @@
   border-radius: var(--raio-pequeno);
   text-decoration: none;
 }
+
+/* App aberto numa moldura de outro site (main.jsx): só o aviso e o link. */
+.fora-da-moldura {
+  display: grid;
+  gap: var(--espaco-4);
+  place-content: center;
+  justify-items: center;
+  min-height: 100dvh;
+  padding: var(--espaco-6);
+  color: var(--texto);
+  text-align: center;
+}

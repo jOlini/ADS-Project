@@ -4,6 +4,8 @@ aqui fica só o contrato HTTP: método, caminho, corpo e código de resposta."""
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.config import Configuracoes
+from app.erros import ErroNaoAutenticado
+from app.limites import LimiteDeTentativas, endereco_de, obter_limite_de_login
 from app.modelos import AtualizacaoUsuario, LoginRequisicao, LoginResposta, NovoUsuario, Usuario, UsuarioResposta
 from app.repositorio import RepositorioUsuarios
 from app.seguranca import (
@@ -13,7 +15,7 @@ from app.seguranca import (
     obter_repositorio,
     somente_administrador,
 )
-from app.servicos import ServicoUsuarios, autenticar
+from app.servicos import ServicoUsuarios, autenticar, normalizar_email
 
 # Descrições dos erros para a documentação interativa (/docs).
 ERRO_401 = {401: {"description": "Token ausente, inválido ou expirado"}}
@@ -33,15 +35,30 @@ def obter_servico(repositorio: RepositorioUsuarios = Depends(obter_repositorio))
     "/login",
     response_model=LoginResposta,
     summary="Autenticar e obter o token JWT",
-    responses={401: {"description": "E-mail ou senha inválidos"}},
+    responses={
+        401: {"description": "E-mail ou senha inválidos"},
+        429: {"description": "Muitas senhas erradas seguidas; o cabeçalho Retry-After diz quando tentar de novo"},
+    },
 )
 def login(
     credenciais: LoginRequisicao,
+    requisicao: Request,
     repositorio: RepositorioUsuarios = Depends(obter_repositorio),
     config: Configuracoes = Depends(obter_config),
+    limite: LimiteDeTentativas = Depends(obter_limite_de_login),
 ):
-    """Único endpoint público da API."""
-    return autenticar(credenciais, repositorio, config)
+    """Único endpoint público da API. Depois de 5 senhas erradas para o mesmo
+    e-mail (ou 20 do mesmo endereço) em 15 minutos, responde 429."""
+    endereco = endereco_de(requisicao)
+    email = normalizar_email(credenciais.email)
+    limite.conferir(endereco, email)
+    try:
+        resposta = autenticar(credenciais, repositorio, config)
+    except ErroNaoAutenticado:
+        limite.registrar_falha(endereco, email)
+        raise
+    limite.registrar_sucesso(endereco, email)
+    return resposta
 
 
 @rotas_usuarios.get(

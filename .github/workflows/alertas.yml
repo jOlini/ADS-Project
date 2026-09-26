@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+# O job só chama o webhook do Discord: o token do GitHub não recebe permissão.
+permissions: {}
+
 jobs:
   discord:
     name: Avisar no Discord
@@ -17,13 +20,16 @@ jobs:
           AUTOR: ${{ github.actor }}
           MENSAGEM: ${{ github.event.head_commit.message }}
           COMMIT_URL: ${{ github.event.head_commit.url }}
+        # allowed_mentions vazio: um "@everyone" na mensagem do commit vira só
+        # texto, sem notificar o servidor inteiro.
         run: |
           jq -n \
             --arg repo "$REPO" \
             --arg autor "$AUTOR" \
             --arg mensagem "$MENSAGEM" \
             --arg url "$COMMIT_URL" \
-            '{content: "🚀 Novo merge na main de **\($repo)**\n**Autor:** \($autor)\n**Commit:** \($mensagem)\n\($url)"}' \
+            '{content: "🚀 Novo merge na main de **\($repo)**\n**Autor:** \($autor)\n**Commit:** \($mensagem)\n\($url)",
+              allowed_mentions: {parse: []}}' \
           | curl --silent --show-error --fail \
               --request POST "$WEBHOOK" \
               --header "Content-Type: application/json" \

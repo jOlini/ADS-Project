@@ -272,7 +272,6 @@ button[aria-pressed='true'] {
 
 .lancamento,
 .item,
-.of-linha,
 .lista-flutuante [role='option'],
 button.item-do-menu,
 .of-rosca-legenda li,
@@ -280,8 +279,7 @@ button.item-do-menu,
   transition: background-color var(--tempo) var(--curva), color var(--tempo) var(--curva);
 }
 
-.lancamento:hover,
-.of-linha:hover {
+.lancamento:hover {
   background-color: color-mix(in srgb, var(--lateral) 60%, transparent);
 }
 

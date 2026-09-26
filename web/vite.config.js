@@ -6,11 +6,40 @@ const BASE = '/ADS-Project/';
 const PREFIXO_DA_API = `${BASE}${CAMINHO_DO_PROXY}`;
 const ROTAS_DO_CLIENTE = `^${PREFIXO_DA_API}/espacos(?:[/?]|$)`;
 
+// Content-Security-Policy do build. O GitHub Pages não deixa mandar cabeçalho,
+// então ela vai numa <meta>, a primeira coisa do <head>. Script só do próprio
+// site: um <script> injetado por XSS, ou um script de outro domínio, não roda.
+// apis.google.com: o SDK do Firebase Auth carrega de lá o gapi no celular e no
+// Safari. A rede (Firebase, API local, túnel) fica livre de propósito: a API
+// muda de endereço conforme a página foi aberta (enderecoDaApi.js).
+// Só no build: o servidor de desenvolvimento injeta script inline (recarga ao
+// vivo do React), que esta política barraria.
+const POLITICA_DE_CONTEUDO = [
+  "script-src 'self' https://apis.google.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
+
+function politicaDeConteudo() {
+  return {
+    name: 'politica-de-conteudo',
+    apply: 'build',
+    transformIndexHtml: () => [
+      {
+        tag: 'meta',
+        attrs: { 'http-equiv': 'Content-Security-Policy', content: POLITICA_DE_CONTEUDO },
+        injectTo: 'head-prepend',
+      },
+    ],
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const { VITE_API_URL } = loadEnv(mode, process.cwd(), 'VITE_');
   return {
-    plugins: [react()],
+    plugins: [react(), politicaDeConteudo()],
     base: BASE,
     // Só vale no servidor de desenvolvimento (npm run dev e subir-app.py), não
     // no build do GitHub Pages.

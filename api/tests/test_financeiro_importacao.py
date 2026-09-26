@@ -97,6 +97,29 @@ def test_limpa_a_descricao_e_corta_no_tamanho_de_um_lancamento():
     assert len(lidas[1].descricao) == 120
 
 
+def test_tira_o_comeco_de_formula_da_descricao_e_da_categoria():
+    # CSV injection: o texto volta a uma planilha sem virar fórmula.
+    texto = (
+        "Data;Descrição;Valor;Categoria\n"
+        '01/09/2026;=HYPERLINK("http://exemplo.invalid","x");-10,00;@SUM(A1)\n'
+        "02/09/2026;=cmd|' /C calc'!A0;-5,00;Mercado\n"
+        "03/09/2026;\t+SUM(1+1);-1,00;= = Lazer\n"
+        "04/09/2026;-PIX enviado;-2,00;\n"
+        "05/09/2026;Troca de óleo = revisão;-3,00;\n"
+    )
+
+    lidas, _ = ler_extrato(texto)
+
+    assert [linha.descricao for linha in lidas] == [
+        'HYPERLINK("http://exemplo.invalid","x")',
+        "cmd|' /C calc'!A0",
+        "SUM(1+1)",
+        "PIX enviado",
+        "Troca de óleo = revisão",
+    ]
+    assert [linha.categoria for linha in lidas] == ["SUM(A1)", "Mercado", "Lazer", None, None]
+
+
 @pytest.mark.parametrize(
     ("texto", "mensagem"),
     [

@@ -55,6 +55,24 @@ describe('API do livro-caixa', () => {
     });
   });
 
+  it('troca a falha de rede ao renovar o token pela mensagem da API fora do ar', async () => {
+    usuario.getIdToken.mockRejectedValue(Object.assign(new Error('Firebase: Error (auth/network-request-failed).'), { code: 'auth/network-request-failed' }));
+
+    const erro = await espacoPessoal().catch((falha) => falha);
+
+    expect(erro).toBeInstanceOf(ErroDaApi);
+    expect(erro).toMatchObject({ status: 0, message: MENSAGEM_SEM_API });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('encerra a sessão quando o Firebase recusa renovar o token', async () => {
+    usuario.getIdToken.mockRejectedValue(Object.assign(new Error('Firebase: Error (auth/user-token-expired).'), { code: 'auth/user-token-expired' }));
+
+    const erro = await espacoPessoal().catch((falha) => falha);
+
+    expect(erro).toMatchObject({ status: 401, message: MENSAGEM_SESSAO_ENCERRADA });
+  });
+
   it('envia o corpo em JSON no POST', async () => {
     fetch.mockResolvedValue(resposta(201, { id: 'l1' }));
 

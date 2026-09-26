@@ -94,7 +94,15 @@ class CabecalhosDeSeguranca:
     - X-Frame-Options e frame-ancestors: a página não pode ser embutida em
       <iframe> de outro site (clickjacking).
     - Content-Security-Policy: o painel só carrega script e estilo da própria
-      origem. Um <script> injetado por XSS não executa.
+      origem. Um <script> injetado por XSS não executa; <object>, <embed> e
+      <base> (que redirecionaria os scripts relativos) ficam proibidos.
+    - Permissions-Policy: câmera, microfone, localização e pagamento
+      desligados; nenhuma tela usa, e um script injetado também não usa.
+    - Cross-Origin-Opener-Policy: uma janela aberta por outro site não
+      alcança a do painel (window.opener).
+    - Strict-Transport-Security, só quando a requisição chega por HTTPS: o
+      navegador passa a recusar HTTP puro para este endereço. Por HTTP o
+      cabeçalho seria ignorado de qualquer jeito (RFC 6797).
     - no-store nas respostas da API: dados de usuário e token não ficam em cache.
 
     A documentação interativa (/docs) carrega arquivos de CDN, por isso fica
@@ -103,6 +111,9 @@ class CabecalhosDeSeguranca:
 
     ROTAS_DA_DOCUMENTACAO = ("/docs", "/redoc", "/openapi.json")
     ROTAS_DE_DADOS = ("/auth", "/usuarios", "/espacos")
+    CSP = b"default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+    PERMISSOES = b"camera=(), microphone=(), geolocation=(), payment=()"
+    HSTS = b"max-age=31536000; includeSubDomains"
 
     def __init__(self, app):
         self.app = app
@@ -113,6 +124,7 @@ class CabecalhosDeSeguranca:
             return
 
         caminho = scope["path"]
+        por_https = scope.get("scheme") == "https"
 
         async def enviar_com_cabecalhos(mensagem):
             if mensagem["type"] == "http.response.start":
@@ -121,11 +133,13 @@ class CabecalhosDeSeguranca:
                     (b"x-content-type-options", b"nosniff"),
                     (b"x-frame-options", b"DENY"),
                     (b"referrer-policy", b"no-referrer"),
+                    (b"permissions-policy", self.PERMISSOES),
+                    (b"cross-origin-opener-policy", b"same-origin"),
                 ]
+                if por_https:
+                    cabecalhos.append((b"strict-transport-security", self.HSTS))
                 if not caminho.startswith(self.ROTAS_DA_DOCUMENTACAO):
-                    cabecalhos.append(
-                        (b"content-security-policy", b"default-src 'self'; frame-ancestors 'none'; form-action 'self'")
-                    )
+                    cabecalhos.append((b"content-security-policy", self.CSP))
                 if caminho.startswith(self.ROTAS_DE_DADOS):
                     cabecalhos.append((b"cache-control", b"no-store"))
                 mensagem["headers"] = cabecalhos

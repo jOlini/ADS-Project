@@ -191,10 +191,10 @@ def test_cors_soma_a_origem_da_rede_local_sem_repetir():
         _env_file=None,
         jwt_secret="s" * 40,
         cors_origens="http://localhost:5173, http://localhost:8080",
-        cors_origens_rede="http://10.0.0.5:5173,http://localhost:5173",
+        cors_origens_rede="http://192.0.2.5:5173,http://localhost:5173",
     )
 
-    assert config.lista_cors == ["http://localhost:5173", "http://localhost:8080", "http://10.0.0.5:5173"]
+    assert config.lista_cors == ["http://localhost:5173", "http://localhost:8080", "http://192.0.2.5:5173"]
 
 
 def test_respostas_levam_cabecalhos_de_seguranca(api, cabecalho_de):

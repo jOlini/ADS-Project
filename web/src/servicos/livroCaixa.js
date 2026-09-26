@@ -37,7 +37,16 @@ async function chamar(caminho, { metodo = 'GET', corpo } = {}) {
   if (!usuario) {
     throw new ErroDaApi(401, MENSAGEM_SESSAO_ENCERRADA);
   }
-  const token = await usuario.getIdToken();
+  let token;
+  try {
+    token = await usuario.getIdToken();
+  } catch (erro) {
+    // Renovar o token vencido exige falar com o Firebase. Sem rede, a mensagem é
+    // a mesma da API fora do ar; conta desativada ou sessão revogada encerram a
+    // sessão. O texto técnico do SDK não vai para a tela.
+    const semRede = erro?.code === 'auth/network-request-failed';
+    throw new ErroDaApi(semRede ? 0 : 401, semRede ? MENSAGEM_SEM_API : MENSAGEM_SESSAO_ENCERRADA);
+  }
 
   let resposta;
   try {

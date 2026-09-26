@@ -8,6 +8,7 @@ build, teste e entrega, num só repositório.
 | **Área do cliente publicada** | https://jolini.github.io/ADS-Project/ |
 | **Releases (código para baixar)** | https://github.com/jOlini/ADS-Project/releases |
 | **Documentação da API** | [`DOCS_API.md`](DOCS_API.md): endpoints, códigos de resposta, perfis, JWT, OAuth 2.0 e análise de segurança |
+| **Arquitetura** | [`ARCHITECTURE.md`](ARCHITECTURE.md): componentes, identidades, dados, segurança em camadas, ambientes e estrutura do repositório |
 | **Licença** | Proprietária, todos os direitos reservados ([`LICENSE`](LICENSE)) |
 
 **Avaliação rápida da API (só precisa do Docker):** baixe a última Release, copie `api/.env.example` para
@@ -21,16 +22,17 @@ build, teste e entrega, num só repositório.
 **Objetivo do produto.** Dar a uma pessoa física uma visão única e confiável do próprio dinheiro (quanto entra,
 quanto sai, para onde vai e quanto sobra) sem depender de planilha manual e sem exigir integração com o banco.
 
-**Objetivo desta versão (0.1 — Identidade e acesso).** Antes de qualquer lançamento financeiro, o sistema
-precisa saber quem é o usuário e o que ele pode fazer. A versão 0.1 entrega essa base:
+**O que o sistema entrega hoje.** A base de identidade e acesso (0.1) está concluída; o livro-caixa (0.2) e os
+relatórios (0.3) estão em construção:
 
 - uma **API REST segura para gestão de usuários**: cadastrar, consultar, atualizar e excluir, com login que
-  gera um **token JWT** e controle de acesso por perfil (**RBAC**) com três perfis: `ADMINISTRADOR`,
-  `OPERADOR` e `CLIENTE`;
+  gera um **token JWT**, controle de acesso por perfil (**RBAC**) com três perfis (`ADMINISTRADOR`,
+  `OPERADOR` e `CLIENTE`) e limite de tentativas contra força bruta;
 - um **painel web de demonstração** da API (login, listagem, cadastro, edição, exclusão e as respostas da API
   na tela), feito para que qualquer pessoa veja e teste as regras de autenticação e autorização;
-- uma **área do cliente** em React (cadastro, login e página principal) com Firebase Authentication e Cloud
-  Firestore, publicada no GitHub Pages; na 0.2, com a API local, ela ganha lançamentos, contas e categorias;
+- uma **área do cliente** em React, com a identidade visual **OliFine**: cadastro, login e Visão geral com
+  Firebase Authentication e Cloud Firestore, publicada no GitHub Pages; com a API local, ganha lançamentos,
+  contas e cartões de crédito, categorias, importação do extrato em CSV, metas e relatórios;
 - **testes automatizados** que rodam a cada commit de pull request, com **CI/CD** e alertas no Discord.
 
 **Objetivo acadêmico.** Projeto do curso de Análise e Desenvolvimento de Sistemas, compartilhado entre três
@@ -61,48 +63,15 @@ importação do extrato do banco em CSV).
 
 ## Arquitetura
 
-```
-┌──────────────────────────────────┐      ┌──────────────────────────────────┐
-│  web/  — SPA React               │      │  api/painel/ — HTML, CSS e JS    │
-│  Área do cliente:                │      │  Back-office: login, listagem,   │
-│  /cadastro · /login · /principal │      │  cadastro, edição e exclusão     │
-│  /lancamentos /contas /categorias│      │                                  │
-│  / · /metas · /relatorios        │      │                                  │
-└───────┬──────────────────┬───────┘      └────────────────┬─────────────────┘
-        │ SDK Firebase     │ HTTPS + ID token              │ HTTPS + JWT
-        │                  └─────────────────┐             │
-┌───────▼──────────────────────────┐      ┌──▼─────────────▼─────────────────┐
-│  Firebase                        │      │  api/  — REST FastAPI (Python)   │
-│  Authentication (e-mail/senha)   │      │  Usuários · JWT · RBAC           │
-│  Cloud Firestore                 │      │  Livro-caixa (/espacos)          │
-└──────────────────────────────────┘      └────────────────┬─────────────────┘
-                                          ┌────────────────▼─────────────────┐
-                                          │  MongoDB                         │
-                                          └──────────────────────────────────┘
-```
+Três partes: a **área do cliente** (React, em `web/`), o **painel do back-office** (HTML, CSS e JS, servido pela
+API) e a **API REST** (FastAPI + MongoDB, em `api/`). São **duas fontes de identidade**, por decisão de produto:
+o cliente final entra pelo Firebase Authentication e a API aceita o **ID token do Firebase** no livro-caixa
+(`/espacos`); o back-office entra pela própria API, que emite um **JWT** e aplica o RBAC em `/usuarios`. Um
+token nunca abre a área do outro.
 
-**Duas fontes de identidade, por decisão de produto.** O cadastro e o login do cliente final usam
-Firebase Authentication, fluxo self-service, sem custo de operação e com recuperação de senha
-pronta. O back-office administrativo autentica contra a própria API, que emite um JWT e aplica
-controle de acesso por perfil. Separar as duas identidades evita que uma credencial de cliente
-alcance a área administrativa.
-
-**Livro-caixa do cliente (0.2).** Contas, cartões de crédito, categorias e lançamentos ficam na API, em `/espacos`. O cliente
-não ganha outra senha: a API aceita o **ID token do Firebase** (validado com as chaves públicas do Google) e
-usa o `uid` como identidade. O token do back-office não abre o livro-caixa, e o do cliente não abre
-`/usuarios`. Os lançamentos seguem partidas dobradas, com valores em centavos inteiros, correção por estorno
-(o histórico fica) ou exclusão (erro de digitação e duplicata) e divisão do valor entre pessoas. O cartão de
-crédito é uma conta de dívida, com fatura própria: compras à vista ou parceladas, fatura importada em CSV e
-pagamento que sai de uma conta e libera o limite
-([`DOCS_API.md`, Parte 6](DOCS_API.md#parte-6--livro-caixa-do-cliente-final)).
-
-**Perfis de acesso da API**
-
-| Perfil | Pode |
-|---|---|
-| `ADMINISTRADOR` | Acesso total: criar, consultar, editar e excluir usuários |
-| `OPERADOR` | Consultar usuários e atualizar nome e e-mail (não cria, não exclui, não muda perfil) |
-| `CLIENTE` | Visualizar apenas os próprios dados |
+Diagrama, camadas da API e do front-end, modelo de dados, segurança em camadas, ambientes e estrutura do
+repositório: [`ARCHITECTURE.md`](ARCHITECTURE.md). Perfis de acesso e matriz de permissões:
+[`DOCS_API.md`, Parte 3](DOCS_API.md#parte-3--controle-de-acesso-rbac).
 
 ---
 
@@ -123,26 +92,28 @@ pagamento que sai de uma conta e libera o limite
 
 ---
 
-## Estrutura do repositório
+## Segurança e credenciais
 
-```
-api/                  API REST (FastAPI)
-  app/                código da API (rotas, segurança, regras, persistência)
-  painel/             front-end de demonstração da API (HTML, CSS e JS)
-  tests/              testes unitários e de rota (pytest)
-  .env.example        modelo da configuração da API
-web/                  área do cliente (React + Firebase)
-  src/routes.jsx      arquivo de rotas (React Router)
-  src/paginas/        Cadastro, Login e as telas do livro-caixa (Lançamentos, Contas, Categorias, Relatórios)
-  src/olifine/        identidade OliFine: casca, Visão geral (/principal), Metas e página de apresentação
-  firestore.rules     regras de segurança do Firestore
-  .env.example        modelo da configuração do Firebase
-  iniciar.bat/.sh     atalhos que instalam as dependências e sobem o app (npm start)
-.github/workflows/    ci-tests.yml, cd.yml e alertas.yml
-docker-compose.yml    MongoDB + API para rodar localmente
-subir-app.py          sobe tudo com um comando (venv, dependências, Docker, Vite, links e túnel)
-DOCS_API.md           documentação técnica da API
-```
+**Onde fica cada credencial.** Nenhum segredo é versionado: o repositório é público.
+
+| Credencial | Onde fica | Regra |
+|---|---|---|
+| `JWT_SECRET`, `ADMIN_SENHA`, `MONGODB_URI` | Só no `api/.env` (fora do Git) | Chave aleatória de 32 bytes ou mais (a API não sobe com menos); o `subir-app.py up` gera valores aleatórios. Vazou: troque a chave (todos os tokens caem) e a senha |
+| `VITE_FIREBASE_*` | `web/.env` local e secrets do GitHub (build do Pages) | Públicas por natureza (vão para o navegador); quem protege os dados são as regras do Firestore |
+| `DISCORD_WEBHOOK` | Só nos secrets do GitHub | Nunca em arquivo, log ou print |
+| Chave da conta de serviço do Firebase | Fora de qualquer repositório, na pasta do usuário | Vale como senha de administrador do projeto Firebase |
+| Sessões | `sessionStorage` do navegador | Área do cliente e painel: fechar a aba (ou o navegador) encerra a sessão |
+
+Antes de cada commit, confira o que vai entrar (`git diff --cached --name-only`) e adicione arquivo por arquivo,
+nunca `git add .`: o `.gitignore` barra os `.env`, `*.pem`, `*.key` e as chaves do Firebase, mas a conferência é a
+última barreira.
+
+**O que a aplicação faz sozinha:** senha só como hash BCrypt; login travado com `429` depois de 5 senhas erradas
+(por e-mail e endereço) em 15 minutos; corpo acima de 2 MB recusado com `413`; cabeçalhos de segurança (CSP,
+`X-Frame-Options`, `nosniff`, `Permissions-Policy`, HSTS em HTTPS); CSP em `<meta>` e recusa de moldura
+(clickjacking) no build do front-end; importação de CSV sem fórmula de planilha; erros sem stack trace. Análise
+completa, com os riscos residuais: [`DOCS_API.md`, Parte 5](DOCS_API.md#parte-5--análise-de-segurança) e
+[`ARCHITECTURE.md`, seção 4](ARCHITECTURE.md#4-segurança-em-camadas).
 
 ---
 
@@ -348,7 +319,9 @@ docker run --rm -p 8080:80 pessoal-finance-web
 ```
 
 Abre em http://localhost:8080. O `--secret` entrega a configuração do Firebase só durante o build, sem gravá-la
-na imagem.
+na imagem. O nginx do container ([`web/nginx.conf`](web/nginx.conf)) manda os cabeçalhos de segurança
+(`frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy` e `Permissions-Policy`) e esconde a
+versão dele.
 
 ### Variáveis de ambiente
 
@@ -383,7 +356,7 @@ pip install -r requirements-dev.txt
 pytest -v
 ```
 
-Resultado esperado: `293 passed`.
+Resultado esperado: `307 passed`.
 
 **Front-end (Vitest, lint e build):** em `web/`.
 
@@ -394,7 +367,7 @@ npm run lint
 npm run build
 ```
 
-Resultado esperado: `Test Files 25 passed (25)` e `Tests 259 passed (259)`. Sem o `--run`, o Vitest fica em modo
+Resultado esperado: `Test Files 27 passed (27)` e `Tests 270 passed (270)`. Sem o `--run`, o Vitest fica em modo
 observador.
 
 | Suíte | Arquivo | O que cobre |
@@ -402,6 +375,7 @@ observador.
 | API | `api/tests/test_tokens.py` | JWT: payload, expiração, assinatura adulterada, `alg: none`, emissor |
 | API | `api/tests/test_servicos.py` | Regras de negócio: login, e-mail único, senha em hash, escalação de privilégio |
 | API | `api/tests/test_api.py` | Respostas HTTP, matriz completa do RBAC, 401/403/404/409 e cabeçalhos de segurança |
+| API | `api/tests/test_limites.py` | Força bruta no login (`429` por e-mail e por endereço, sem revelar quem tem conta), corpo grande demais (`413`, com e sem `Content-Length`), `500` sem detalhe interno, CSP, `Permissions-Policy` e HSTS só em HTTPS |
 | API | `api/tests/test_firebase.py` | ID token do Firebase: assinatura, RS256, `aud`, `iss`, datas, `sub`, token do back-office recusado |
 | API | `api/tests/test_financeiro_regras.py` | Partidas dobradas (soma zero), estorno, saldo e coerência dos campos do lançamento |
 | API | `api/tests/test_financeiro_layouts.py` | Extratos de formatos diferentes (entrada e saída separadas, coluna D/C, fatura de cartão), colunas indicadas pela pessoa e começo do arquivo |
@@ -412,7 +386,7 @@ observador.
 | API | `api/tests/test_financeiro_relatorios.py` | Relatórios: período em meses, receita × despesa com o cartão por competência, estorno, saldo no fim do mês, gasto por categoria com a fatia e faturas comprometidas nos cartões |
 | Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro, datas, dinheiro em centavos, extrato e resumo do mês (com estorno e transferência) |
 | Front-end | `web/src/servicos/contas.test.js` | Cadastro no Firebase com o SDK simulado |
-| Front-end | `web/src/servicos/livroCaixa.test.js` | Chamadas à API com o ID token, erros em Problem Details e API fora do ar |
+| Front-end | `web/src/servicos/livroCaixa.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar e token que não renova |
 | Front-end | `web/src/componentes/toast/toasts.test.js` | Regras dos avisos na tela |
 | Front-end | `web/src/regras/importacao.test.js` | Importação do extrato: arquivo em UTF-8 ou Windows-1252, categorias sugeridas, colunas do arquivo e resumo do que entrou |
 | Front-end | `web/src/regras/divisao.test.js` e `busca.test.js` | Racha (divisão igual no centavo, partes que passam do total) e busca do extrato por descrição, valor ou pessoa |
@@ -450,6 +424,7 @@ Roteiro sugerido (os e-mails são fictícios; as senhas têm de 8 a 64 caractere
 | 12 | Operador | Editar o Cliente Demo mudando o perfil para Administrador | `403` ("Apenas administradores alteram o perfil de acesso.") |
 | 13 | Cliente | Entrar como cliente | O painel mostra só o próprio cadastro (`200` no `GET /usuarios/{id do cliente}`) |
 | 14 | Cliente | **Atualizar lista** ou consultar o ID de outro usuário | `403 Forbidden` nos dois casos |
+| 15 | — | **Sair** e errar a senha do administrador 5 vezes seguidas; na sexta, use a senha certa | `429 Too Many Requests`: "Muitas tentativas de login. Tente de novo em 15 minutos." (a trava vale para aquele e-mail naquele computador; reiniciar a API também zera a contagem) |
 
 ### 3. Teste pelo Swagger e pela linha de comando
 
@@ -478,7 +453,14 @@ Invoke-RestMethod http://localhost:8081/usuarios -Headers @{ Authorization = "Be
 
 O primeiro `curl` (sem token) responde `401`; com o token, a lista vem com `200`. As respostas de `/auth` e
 `/usuarios` trazem os cabeçalhos de segurança (`Content-Security-Policy`, `X-Content-Type-Options`,
-`X-Frame-Options`, `Referrer-Policy` e `Cache-Control: no-store`).
+`X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` e
+`Cache-Control: no-store`).
+
+Força bruta (Linux, macOS ou Git Bash): a sexta tentativa já responde `429`, com o cabeçalho `Retry-After`.
+
+```bash
+for i in 1 2 3 4 5 6; do curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8081/auth/login -H "Content-Type: application/json" -d '{"email":"ninguem@exemplo.com","senha":"errada"}'; done
+```
 
 ### 4. Teste manual da área do cliente
 

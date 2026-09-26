@@ -10,7 +10,7 @@ describe('enderecoDaApi', () => {
 
   it('aberta pela rede, troca localhost pelo IP de onde a página veio', () => {
     expect(enderecoDaApi('http://localhost:8081', '192.0.2.10')).toBe('http://192.0.2.10:8081');
-    expect(enderecoDaApi('http://127.0.0.1:8081/api', '192.168.0.12')).toBe('http://192.168.0.12:8081/api');
+    expect(enderecoDaApi('http://127.0.0.1:8081/api', '192.0.2.12')).toBe('http://192.0.2.12:8081/api');
   });
 
   it('aberta pelo túnel da Cloudflare, usa o proxy do Vite no mesmo endereço da página', () => {

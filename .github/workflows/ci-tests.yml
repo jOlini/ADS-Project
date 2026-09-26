@@ -122,7 +122,8 @@ jobs:
           fi
 
           # Os valores entram no JSON pelo jq (--arg), nunca colados na string:
-          # um título de PR com aspas não quebra nem injeta nada no payload.
+          # um título de PR com aspas não quebra nem injeta nada no payload. O
+          # allowed_mentions vazio faz um "@everyone" no título virar só texto.
           jq -n \
             --arg titulo "$TITULO" \
             --arg cor "$COR" \
@@ -147,7 +148,8 @@ jobs:
                 {name: "Autor", value: $autor, inline: true}
               ],
               footer: {text: $repositorio}
-            }]}' \
+            }],
+            allowed_mentions: {parse: []}}' \
           | curl --silent --show-error --fail \
               --request POST "$WEBHOOK" \
               --header "Content-Type: application/json" \
