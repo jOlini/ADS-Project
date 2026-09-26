@@ -645,3 +645,16 @@ button.item-do-menu.perigo > .icone {
     grid-column: 1 / -1;
   }
 }
+
+/* ------------------------------------------------ Limite de erro (aviso) */
+
+/* Aviso que ocupa o lugar de uma tela que falhou ao desenhar: mesmo formato
+   do estado vazio, com o símbolo na cor de erro. */
+.limite-de-erro .simbolo {
+  background: color-mix(in srgb, var(--erro) 10%, transparent);
+  color: var(--erro);
+}
+
+.limite-de-erro .acoes-do-formulario {
+  justify-content: flex-start;
+}

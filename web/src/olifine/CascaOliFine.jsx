@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCarga } from '../componentes/useCarga';
 import { formatarBRL } from '../regras/dinheiro';
 import { faturasAVencer } from '../regras/cartoes';
 import { apiConfigurada, listarCartoes } from '../servicos/livroCaixa';
 import Flutuante from './componentes/Flutuante';
 import Icone from '../componentes/Icone';
+import LimiteDeErro from '../componentes/LimiteDeErro';
 import Logo from './componentes/Logo';
 
 // Itens do menu. Sem a API (site publicado), as telas que dependem dela ficam
@@ -54,6 +55,7 @@ function ItemDoMenu({ item, aoEscolher }) {
 export default function CascaOliFine({ contexto }) {
   const { usuario, pessoa, espaco, sairDaConta } = contexto;
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [busca, setBusca] = useState('');
 
   const dados = pessoa.dados;
@@ -202,7 +204,11 @@ export default function CascaOliFine({ contexto }) {
         </header>
 
         <main className="area of-area">
-          <Outlet context={contexto} />
+          {/* Uma tela que falha ao desenhar troca só o conteúdo pelo aviso: o
+              menu continua e abrir outra rota desenha a tela nova. */}
+          <LimiteDeErro chave={pathname}>
+            <Outlet context={contexto} />
+          </LimiteDeErro>
         </main>
       </div>
 
