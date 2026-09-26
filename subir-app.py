@@ -103,8 +103,11 @@ URL_WEB = f"http://localhost:{PORTA_WEB}{CAMINHO_WEB}"
 # O Vite escuta em todas as interfaces: a área do cliente abre pelo IP desta
 # máquina em qualquer aparelho da mesma rede.
 HOST_DA_REDE = "0.0.0.0"
-# Texto do <title> das duas interfaces: confirma que a porta é mesmo deste projeto.
-MARCA_DO_APP = "Pessoal Finance"
+# Texto do <title> da área do cliente: confirma que a porta é mesmo deste projeto.
+# Lido do web/index.html, e não fixo aqui, para acompanhar a troca de marca: com o
+# título fixo, a mudança para "OliFine" fez o script derrubar um Vite saudável.
+_TITULO = re.search(r"<title>\s*(.*?)\s*</title>", (PASTA_WEB / "index.html").read_text(encoding="utf-8"), re.DOTALL)
+MARCA_DO_APP = _TITULO.group(1) if _TITULO else "OliFine"
 
 REPOSITORIO_PADRAO = "https://github.com/jOlini/ADS-Project"
 CAMINHO_DOCKER_DESKTOP = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Docker" / "Docker" / "Docker Desktop.exe"
