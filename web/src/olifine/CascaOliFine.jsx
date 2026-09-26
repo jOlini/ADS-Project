@@ -23,7 +23,7 @@ function itensDoMenu() {
     { para: '/principal', icone: 'resumo', rotulo: 'Visão geral' },
     ...DA_API.map(semApi),
     { para: '/metas', icone: 'broto', rotulo: 'Metas' },
-    { para: null, icone: 'relatorios', rotulo: 'Relatórios', versao: '0.3' },
+    semApi({ para: '/relatorios', icone: 'relatorios', rotulo: 'Relatórios', versao: '0.3' }),
   ];
 }
 

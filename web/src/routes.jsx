@@ -17,6 +17,7 @@ import Login from './paginas/Login';
 const Landing = lazy(() => import('./olifine/paginas/Landing'));
 const VisaoGeral = lazy(() => import('./olifine/paginas/VisaoGeral'));
 const Metas = lazy(() => import('./olifine/paginas/Metas'));
+const Relatorios = lazy(() => import('./paginas/Relatorios'));
 
 // Enquanto o pedaço da página chega, o esqueleto dela ocupa o lugar.
 const sobDemanda = (pagina, forma = 'pagina') => <Suspense fallback={<Esqueleto forma={forma} />}>{pagina}</Suspense>;
@@ -40,6 +41,7 @@ export default function AppRoutes() {
           <Route path="categorias" element={<Categorias />} />
           {/* Metas ficam no navegador até a API de metas (release 0.5). */}
           <Route path="metas" element={sobDemanda(<Metas />)} />
+          <Route path="relatorios" element={sobDemanda(<Relatorios />)} />
         </Route>
         {/* Qualquer outro endereço volta para o login. */}
         <Route path="*" element={<Navigate to="/login" replace />} />

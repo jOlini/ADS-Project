@@ -194,3 +194,8 @@ function consultaDoPeriodo({ de, ate } = {}) {
 export function relatorioMensal(espacoId, periodo) {
   return chamar(doEspaco(espacoId, `/relatorios/mensal${consultaDoPeriodo(periodo)}`));
 }
+
+// Gasto por categoria no período, do maior para o menor, com a fatia.
+export function relatorioCategorias(espacoId, periodo) {
+  return chamar(doEspaco(espacoId, `/relatorios/categorias${consultaDoPeriodo(periodo)}`));
+}
