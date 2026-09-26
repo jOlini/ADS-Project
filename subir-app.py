@@ -6,6 +6,8 @@ Pessoal Finance (ADS-Project) — helper de inicialização local.
     python subir-app.py status              mostra o que está no ar e os links importantes
     python subir-app.py testes              roda lint e testes da API e do front-end
     python subir-app.py down                derruba o ambiente (os dados do banco ficam)
+    python subir-app.py tunnel start        abre um endereço público temporário (Cloudflare)
+    python subir-app.py tunnel stop         fecha esse endereço (o app volta a ser só local)
 
 "up" faz, nesta ordem:
     0. Configuração: cria o api/.env a partir do api/.env.example, com JWT_SECRET
@@ -29,6 +31,12 @@ Pessoal Finance (ADS-Project) — helper de inicialização local.
     6. Painel: imprime os links importantes, os endereços Local e Network (rede
        local) e como entrar no painel administrativo.
 
+"tunnel start" abre um Quick Tunnel da Cloudflare (sem conta) para a área do
+cliente e mostra o endereço público temporário (*.trycloudflare.com), que muda a
+cada início. A API entra pelo proxy do Vite, só nas rotas do cliente
+(web/vite.config.js). Usa o cloudflared do PATH ou baixa o oficial para
+.subir-app/. "tunnel stop" encerra o cloudflared; o "down" também.
+
 Só usa a biblioteca padrão: roda com o Python do sistema, antes do ".venv",
 mesmo que ele seja antigo demais para a API (ex.: 3.10).
 Idempotente: rodar de novo com tudo no ar apenas confirma o estado e reimprime
@@ -50,6 +58,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tarfile
 import time
 import urllib.error
 import urllib.request
@@ -82,6 +91,9 @@ NODE_MINIMO = 20
 PASTA_ESTADO = RAIZ / ".subir-app"
 ESTADO_WEB = PASTA_ESTADO / "web.json"
 LOG_WEB = PASTA_ESTADO / "web.log"
+# Túnel da Cloudflare: PID, endereço, log e o cloudflared baixado, na mesma pasta.
+ESTADO_TUNEL = PASTA_ESTADO / "tunel.json"
+LOG_TUNEL = PASTA_ESTADO / "cloudflared.log"
 
 PORTA_API = 8081
 PORTA_WEB = 5173
@@ -104,6 +116,15 @@ TIMEOUT_SAUDE_S = 180
 INTERVALO_SAUDE_S = 3
 TIMEOUT_WEB_S = 60
 TIMEOUT_ENCERRAR_S = 10
+
+# Quick Tunnel: sem conta nem configuração na Cloudflare. O endereço é sorteado
+# a cada início e deixa de existir quando o cloudflared para.
+URL_DOWNLOAD_CLOUDFLARED = "https://github.com/cloudflare/cloudflared/releases/latest/download/{arquivo}"
+TIMEOUT_DOWNLOAD_S = 300
+TIMEOUT_URL_TUNEL_S = 60
+# O endereço do Quick Tunnel tem palavras separadas por hífen. Exigir o hífen
+# evita confundir com "https://api.trycloudflare.com", que aparece nas mensagens de falha.
+_REGEX_URL_TUNEL = re.compile(r"https://[a-z0-9]+(?:-[a-z0-9]+)+\.trycloudflare\.com")
 
 _REGEX_FROM = re.compile(r"^\s*FROM\s+(\S+)", re.IGNORECASE | re.MULTILINE)
 
@@ -868,6 +889,13 @@ def resumo_da_situacao() -> None:
     else:
         aviso(f"{'Front-end (Vite)'.ljust(22)} fora do ar")
 
+    # Túnel aberto aparece como aviso: o app está exposto na internet.
+    tunel = tunel_aberto()
+    if tunel:
+        aviso(f"{'Túnel (Cloudflare)'.ljust(22)} aberto em {tunel['url']}{CAMINHO_WEB}")
+    else:
+        ok(f"{'Túnel (Cloudflare)'.ljust(22)} fechado")
+
 
 def descricao_do_firebase() -> str:
     env_web = ler_env(ENV_WEB)
@@ -912,8 +940,146 @@ def painel() -> None:
     print("   Logs da API:   docker compose logs -f api")
     print(f"   Logs do Vite:  {LOG_WEB.relative_to(RAIZ)}")
     print("   Testes:        python subir-app.py testes")
+    print("   Demonstração:  python subir-app.py tunnel start   (fechar: tunnel stop)")
     print("   Parar:         python subir-app.py down")
     print()
+
+
+# =============================================================================
+# 7. Túnel da Cloudflare (acesso externo temporário)
+# =============================================================================
+def _arquivos_do_cloudflared() -> tuple[str, str]:
+    """(arquivo publicado pela Cloudflare, nome do binário local) para este sistema."""
+    maquina = platform.machine().lower()
+    arquitetura = {
+        "amd64": "amd64", "x86_64": "amd64", "arm64": "arm64", "aarch64": "arm64",
+        "armv7l": "arm", "armv6l": "arm", "i386": "386", "i686": "386", "x86": "386",
+    }.get(maquina, "amd64")
+    sistema = platform.system()
+    if sistema == "Windows":
+        # Windows em ARM roda a versão amd64 pela emulação do próprio sistema.
+        return f"cloudflared-windows-{'386' if arquitetura == '386' else 'amd64'}.exe", "cloudflared.exe"
+    if sistema == "Darwin":
+        return f"cloudflared-darwin-{'arm64' if arquitetura == 'arm64' else 'amd64'}.tgz", "cloudflared"
+    return f"cloudflared-linux-{arquitetura}", "cloudflared"
+
+
+def localizar_cloudflared() -> Path | None:
+    """O cloudflared instalado (PATH) ou o já baixado em .subir-app/."""
+    instalado = shutil.which("cloudflared")
+    if instalado:
+        return Path(instalado)
+    baixado = PASTA_ESTADO / _arquivos_do_cloudflared()[1]
+    return baixado if baixado.is_file() else None
+
+
+def baixar_cloudflared() -> Path | None:
+    """Baixa o cloudflared da página oficial de releases da Cloudflare no GitHub."""
+    arquivo, nome_local = _arquivos_do_cloudflared()
+    PASTA_ESTADO.mkdir(exist_ok=True)
+    destino = PASTA_ESTADO / nome_local
+    parcial = PASTA_ESTADO / f"{arquivo}.parcial"
+    url = URL_DOWNLOAD_CLOUDFLARED.format(arquivo=arquivo)
+    passo(f"Baixando o cloudflared ({arquivo}) de github.com/cloudflare/cloudflared...")
+    try:
+        # urlopen respeita o proxy do sistema (HTTPS_PROXY), comum em rede de empresa.
+        with urllib.request.urlopen(url, timeout=TIMEOUT_DOWNLOAD_S) as resposta, parcial.open("wb") as saida:
+            shutil.copyfileobj(resposta, saida)
+        if arquivo.endswith(".tgz"):
+            with tarfile.open(parcial) as pacote:
+                origem = pacote.extractfile("cloudflared")
+                if origem is None:
+                    raise OSError("pacote sem o binário cloudflared")
+                with origem, destino.open("wb") as saida:
+                    shutil.copyfileobj(origem, saida)
+            parcial.unlink()
+        else:
+            parcial.replace(destino)
+    except (urllib.error.URLError, OSError, tarfile.TarError, KeyError) as falha:
+        parcial.unlink(missing_ok=True)
+        erro(f"Não foi possível baixar o cloudflared: {falha}")
+        erro("Instale à mão (Windows: winget install --id Cloudflare.cloudflared; macOS: brew install cloudflared).")
+        return None
+    if platform.system() != "Windows":
+        destino.chmod(0o755)
+    ok(f"cloudflared salvo em {destino.relative_to(RAIZ)}.")
+    return destino
+
+
+def ler_estado_tunel() -> dict | None:
+    try:
+        return json.loads(ESTADO_TUNEL.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def gravar_estado_tunel(pid: int, url: str | None) -> None:
+    ESTADO_TUNEL.write_text(
+        json.dumps(
+            {"pid": pid, "url": url, "porta": PORTA_WEB, "inicio": datetime.now().isoformat(timespec="seconds")},
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def tunel_aberto() -> dict | None:
+    """Estado salvo, se o cloudflared iniciado por este script ainda roda."""
+    estado = ler_estado_tunel()
+    if estado and estado.get("url") and processo_ativo(estado.get("pid"), "cloudflared"):
+        return estado
+    return None
+
+
+def aguardar_url_do_tunel(processo: subprocess.Popen) -> str | None:
+    """Lê o log do cloudflared até aparecer o endereço *.trycloudflare.com."""
+    limite = time.monotonic() + TIMEOUT_URL_TUNEL_S
+    while time.monotonic() < limite:
+        try:
+            achado = _REGEX_URL_TUNEL.search(LOG_TUNEL.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            achado = None
+        if achado:
+            return achado.group(0)
+        if processo.poll() is not None:
+            return None
+        time.sleep(0.5)
+    return None
+
+
+def mostrar_tunel(url: str) -> None:
+    caixa(
+        "ACESSO EXTERNO ABERTO (TÚNEL DA CLOUDFLARE)",
+        [
+            [f"Área do cliente: {url}{CAMINHO_WEB}"],
+            [
+                "Qualquer pessoa com este endereço chega ao login, e o cadastro está aberto.",
+                "Mande só para quem vai ver a demonstração. O endereço muda a cada início.",
+                "Painel administrativo e Swagger não passam pelo túnel: continuam só locais.",
+                "Fechar: python subir-app.py tunnel stop   (ou npm run tunnel:stop em web/)",
+            ],
+        ],
+        cor="1;33",
+    )
+
+
+def parar_tunel() -> bool:
+    """Encerra o cloudflared do "tunnel start": o endereço público deixa de existir."""
+    estado = ler_estado_tunel()
+    if not estado:
+        ok("Nenhum túnel aberto: o app já é só local.")
+        return True
+    pid = estado.get("pid")
+    if processo_ativo(pid, "cloudflared"):
+        passo(f"Encerrando o cloudflared (PID {pid})...")
+        if not encerrar_processo(pid, "cloudflared"):
+            erro(f"Não foi possível encerrar o cloudflared (PID {pid}). Encerre 'cloudflared' no Gerenciador de Tarefas.")
+            return False
+    else:
+        aviso("O cloudflared já não estava rodando (máquina reiniciada ou processo encerrado).")
+    ESTADO_TUNEL.unlink(missing_ok=True)
+    ok(f"Túnel fechado: {estado.get('url') or 'o endereço público'} deixou de funcionar.")
+    return True
 
 
 # =============================================================================
@@ -976,8 +1142,13 @@ def comando_status() -> int:
 
 def comando_down(apagar_dados: bool) -> int:
     print(_cor("Pessoal Finance — derrubando o ambiente local", "1;36"))
+    tudo_certo = True
+    # Sem o Vite, o túnel não serve para nada; aberto, ele só expõe um erro.
+    if ler_estado_tunel():
+        titulo("Túnel da Cloudflare")
+        tudo_certo = parar_tunel()
     titulo("Front-end (Vite)")
-    tudo_certo = parar_front_end()
+    tudo_certo = parar_front_end() and tudo_certo
 
     titulo("Containers (MongoDB + API)")
     if not docker_responde():
@@ -996,6 +1167,75 @@ def comando_down(apagar_dados: bool) -> int:
     else:
         ok("Containers parados. Os dados do MongoDB continuam no volume.")
     return 0 if tudo_certo else 1
+
+
+def comando_tunnel_start() -> int:
+    print(_cor("Pessoal Finance — acesso externo (túnel da Cloudflare)", "1;36"))
+    titulo("Túnel da Cloudflare")
+    estado = tunel_aberto()
+    if estado:
+        ok(f"O túnel já está aberto (PID {estado['pid']}). Nada foi reiniciado.")
+        mostrar_tunel(estado["url"])
+        return 0
+
+    if not e_deste_projeto(URL_WEB):
+        erro(f"A área do cliente não respondeu em {URL_WEB}.")
+        erro("Suba o ambiente antes: python subir-app.py up")
+        return 1
+    if ler_pagina(f"{URL_API}/openapi.json") is None:
+        aviso("A API não respondeu: pelo túnel, as telas do livro-caixa vão avisar que o servidor está fora.")
+
+    binario = localizar_cloudflared() or baixar_cloudflared()
+    if not binario:
+        return 1
+    ok(f"cloudflared: {binario}")
+
+    PASTA_ESTADO.mkdir(exist_ok=True)
+    # O túnel publica só a porta do Vite. A API chega pelo proxy do Vite, e só
+    # nas rotas do cliente (web/vite.config.js).
+    destino = f"http://localhost:{PORTA_WEB}"
+    comando = [str(binario), "tunnel", "--no-autoupdate", "--url", destino]
+    # O cloudflared continua rodando depois que este terminal fecha.
+    opcoes: dict = {"stdin": subprocess.DEVNULL, "stderr": subprocess.STDOUT, "cwd": PASTA_ESTADO}
+    if platform.system() == "Windows":
+        opcoes["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+    else:
+        opcoes["start_new_session"] = True
+    passo(f"Abrindo o túnel para {destino}...")
+    with LOG_TUNEL.open("wb") as log:
+        processo = subprocess.Popen(comando, stdout=log, **opcoes)
+    # Gravado já, antes do endereço: se algo falhar daqui em diante, o
+    # "tunnel stop" ainda acha o processo e fecha o túnel.
+    gravar_estado_tunel(processo.pid, None)
+
+    try:
+        url = aguardar_url_do_tunel(processo)
+    except KeyboardInterrupt:
+        # Sem isso, o túnel ficaria aberto sem ninguém saber o endereço.
+        encerrar_processo(processo.pid, "cloudflared")
+        ESTADO_TUNEL.unlink(missing_ok=True)
+        raise
+    if not url:
+        if processo.poll() is None:
+            encerrar_processo(processo.pid, "cloudflared")
+            erro(f"A Cloudflare não devolveu o endereço público em {TIMEOUT_URL_TUNEL_S}s.")
+        else:
+            erro("O cloudflared parou sem devolver o endereço público.")
+        ESTADO_TUNEL.unlink(missing_ok=True)
+        erro(f"Veja o log: {LOG_TUNEL.relative_to(RAIZ)}")
+        aviso("Em rede de empresa, o firewall (ou a política de TI) pode bloquear o túnel.")
+        return 1
+
+    gravar_estado_tunel(processo.pid, url)
+    ok(f"Túnel aberto (PID {processo.pid}). Log: {LOG_TUNEL.relative_to(RAIZ)}")
+    mostrar_tunel(url)
+    return 0
+
+
+def comando_tunnel_stop() -> int:
+    print(_cor("Pessoal Finance — acesso externo (túnel da Cloudflare)", "1;36"))
+    titulo("Túnel da Cloudflare")
+    return 0 if parar_tunel() else 1
 
 
 def comando_testes() -> int:
@@ -1041,6 +1281,8 @@ def main(argv: list[str] | None = None) -> int:
     subcomandos.add_parser("testes", help="Roda lint e testes da API e do front-end, como o CI.")
     down = subcomandos.add_parser("down", help="Para o Vite e os containers (os dados do banco ficam).")
     down.add_argument("--apagar-dados", action="store_true", help="Também apaga o volume do MongoDB.")
+    tunel = subcomandos.add_parser("tunnel", help="Abre ou fecha um endereço público temporário (túnel da Cloudflare).")
+    tunel.add_argument("acao", choices=["start", "stop"], help="start abre o túnel; stop fecha.")
 
     argumentos = parser.parse_args(argv)
     if argumentos.comando == "up":
@@ -1051,6 +1293,8 @@ def main(argv: list[str] | None = None) -> int:
         return comando_testes()
     if argumentos.comando == "down":
         return comando_down(apagar_dados=argumentos.apagar_dados)
+    if argumentos.comando == "tunnel":
+        return comando_tunnel_start() if argumentos.acao == "start" else comando_tunnel_stop()
     parser.error(f"Comando desconhecido: {argumentos.comando}")
     return 2
 
