@@ -9,6 +9,7 @@ import { ORDEM_DO_CADASTRO, TAMANHO_MINIMO_SENHA, primeiroCampoComErro, validarC
 import { hojeIso } from '../regras/datas';
 import { mensagemDeErro } from '../regras/erros';
 import { cadastrar } from '../servicos/contas';
+import TopoDoAcesso from '../olifine/componentes/TopoDoAcesso';
 
 const FORMULARIO_VAZIO = { email: '', senha: '', nome: '', sobrenome: '', dataNascimento: '' };
 
@@ -62,10 +63,7 @@ export default function Cadastro() {
   return (
     <div className="acesso">
       <div className="acesso-coluna">
-        <Link to="/login" className="marca">
-          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width="28" height="28" />
-          <span>Pessoal Finance</span>
-        </Link>
+        <TopoDoAcesso />
 
         <section className="acesso-formulario" aria-labelledby="titulo-cadastro">
           <header className="acesso-cabecalho">

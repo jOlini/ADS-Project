@@ -7,21 +7,8 @@
 
 /* ------------------------------------------------ Tela cheia, rolagem própria */
 
-/* A moldura do app vira uma coluna da altura da janela quando esta página
-   está aberta; as outras páginas seguem rolando normalmente. */
-.app:has(.pagina-do-extrato) {
-  height: 100vh;
-  height: 100dvh;
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.app:has(.pagina-do-extrato) .area {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  padding-bottom: var(--espaco-12);
-}
+/* A casca vira uma coluna da altura da janela quando esta página está aberta
+   (olifine/estilos/olifine.css); as outras páginas seguem rolando. */
 
 .pagina-do-extrato {
   flex: 1;
@@ -109,19 +96,10 @@
 }
 
 /* No celular (a barra lateral vira uma linha no topo) e em janela baixa. */
-@media (max-width: 900px) {
-  .app:has(.pagina-do-extrato) {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-}
 
 /* Janela baixa demais (celular deitado): a lista ficaria espremida. A página
    volta a rolar inteira. */
 @media (max-height: 520px) {
-  .app:has(.pagina-do-extrato) {
-    height: auto;
-    grid-template-rows: none;
-  }
 
   .app:has(.pagina-do-extrato) .area,
   .pagina-do-extrato,

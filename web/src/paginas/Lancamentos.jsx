@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import AvisoComAtalho from '../componentes/AvisoComAtalho';
 import CampoDeBusca from '../componentes/CampoDeBusca';
-import Carregando from '../componentes/Carregando';
+import Esqueleto from '../componentes/Esqueleto';
 import Extrato from '../componentes/Extrato';
 import FormularioDeLancamento from '../componentes/FormularioDeLancamento';
 import Icone from '../componentes/Icone';
@@ -78,7 +78,15 @@ export default function Lancamentos() {
   const { espaco } = useOutletContext();
   const [mes, setMes] = useState(() => mesDe(new Date()));
   const [filtro, setFiltro] = useState('tudo');
-  const [busca, setBusca] = useState('');
+  // ?busca= vem da barra de busca do topo e preenche a busca.
+  const { search } = useLocation();
+  const buscaDaUrl = new URLSearchParams(search).get('busca') ?? '';
+  const [busca, setBusca] = useState(buscaDaUrl);
+  const [buscaVista, setBuscaVista] = useState(buscaDaUrl);
+  if (buscaDaUrl !== buscaVista) {
+    setBuscaVista(buscaDaUrl);
+    setBusca(buscaDaUrl);
+  }
   const [modal, setModal] = useState(null);
   const [modalOcupado, setModalOcupado] = useState(false);
 
@@ -127,7 +135,7 @@ export default function Lancamentos() {
     );
   }
   if (espaco.carregando || (espacoId && cadastros.carregando && !cadastros.dados)) {
-    return <Carregando />;
+    return <Esqueleto forma="lista" />;
   }
   const falha = espaco.erro || cadastros.erro?.message;
   if (falha) {
@@ -238,7 +246,7 @@ export default function Lancamentos() {
               {extrato.erro.message}
             </p>
           ) : !visao ? (
-            <Carregando rotulo="Carregando o extrato" />
+            <Esqueleto forma="lista" rotulo="Carregando o extrato" />
           ) : diasVisiveis.length > 0 ? (
             <Extrato
               dias={diasVisiveis}

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import Icone from './Icone';
-import { useCliqueFora, usePosicaoFlutuante } from './flutuante';
+import { useCliqueFora, usePosicaoFlutuante, usePresenca } from './flutuante';
 import { opcaoPorDigitacao, primeiraHabilitada, proximaHabilitada, ultimaHabilitada } from '../regras/seletor';
 
 // Menu de ações de uma linha (padrão "menu button" do WAI-ARIA). Cada item
@@ -19,6 +19,8 @@ export default function Menu({ rotulo, itens }) {
   const opcoes = itens.map((item) => ({ rotulo: item.rotulo, desabilitada: item.desabilitado }));
   const fechar = () => setAberto(false);
   const estilo = usePosicaoFlutuante(botao, menu, aberto, { alinhar: 'fim', aoRolarFora: fechar });
+  // Continua na tela durante a animação de saída.
+  const presente = usePresenca(aberto);
   useCliqueFora([botao, menu], fechar, aberto);
 
   // O foco segue o item ativo (no menu, o foco anda de verdade entre os itens).
@@ -96,7 +98,7 @@ export default function Menu({ rotulo, itens }) {
         <Icone nome="maisOpcoes" tamanho={18} />
       </button>
 
-      {aberto && (
+      {presente && (
         <div ref={menu} id={`${idBase}-menu`} role="menu" aria-labelledby={`${idBase}-botao`} className="lista-flutuante menu-flutuante"
           style={estilo} onKeyDown={teclarNoMenu}>
           {itens.map((item, indice) => (

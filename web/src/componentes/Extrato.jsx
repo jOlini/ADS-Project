@@ -1,4 +1,5 @@
 import Icone from './Icone';
+import { iconeDaLinha } from '../olifine/regras/icones';
 import { formatarBRL, formatarComSinal } from '../regras/dinheiro';
 import { COR_DA_CATEGORIA } from '../regras/exemplo';
 
@@ -11,19 +12,6 @@ const comoData = (iso) => new Date(`${iso}T12:00:00`);
 function corDoLancamento(lancamento) {
   const cor = lancamento.cor ?? COR_DA_CATEGORIA[lancamento.categoria] ?? 'neutro';
   return `var(--cat-${cor})`;
-}
-
-function iconeDoLancamento(lancamento) {
-  if (lancamento.estorno) {
-    return 'estornar';
-  }
-  if (lancamento.tipo === 'transferencia') {
-    return 'transferencia';
-  }
-  if (lancamento.tipo === 'pagamento') {
-    return 'cartao';
-  }
-  return lancamento.valor > 0 ? 'entrada' : 'saida';
 }
 
 // "Ana R$ 100,00 · Bruno R$ 150,00": quem entrou no racha e com quanto.
@@ -45,7 +33,7 @@ export default function Extrato({ dias, mostrarSaldo = true, acoes }) {
           key={lancamento.id ?? `${lancamento.data}-${lancamento.descricao}`}
         >
           <span className="marca-da-categoria" style={{ '--cor-da-categoria': corDoLancamento(lancamento) }} aria-hidden="true">
-            <Icone nome={iconeDoLancamento(lancamento)} tamanho={16} />
+            <Icone nome={iconeDaLinha(lancamento, lancamento.cor ?? COR_DA_CATEGORIA[lancamento.categoria])} tamanho={16} />
           </span>
           <span className="descricao">
             <b>{lancamento.descricao}</b>
@@ -63,7 +51,7 @@ export default function Extrato({ dias, mostrarSaldo = true, acoes }) {
               </small>
             )}
           </span>
-          <span className={`valor${lancamento.valor > 0 ? ' entrada' : ''}`}>
+          <span className={`valor${lancamento.valor > 0 ? ' entrada' : lancamento.tipo === 'transferencia' ? '' : ' saida'}`}>
             {lancamento.estornado && <span className="apenas-leitor">Estornado: </span>}
             {formatarComSinal(lancamento.valor)}
           </span>

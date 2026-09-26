@@ -175,3 +175,27 @@ export function estruturaDoExtrato(espacoId, pedido) {
 export function importarExtrato(espacoId, importacao) {
   return chamar(doEspaco(espacoId, '/importacoes'), { metodo: 'POST', corpo: importacao });
 }
+
+// Relatórios da release 0.3 (DOCS_API.md, parte 7). Período em meses
+// ({ de, ate } como 'AAAA-MM', opcionais): sem ele, a API usa os 12 meses que
+// terminam no mês de hoje.
+function consultaDoPeriodo({ de, ate } = {}) {
+  const periodo = new URLSearchParams();
+  if (de) {
+    periodo.set('de', de);
+  }
+  if (ate) {
+    periodo.set('ate', ate);
+  }
+  return periodo.size > 0 ? `?${periodo}` : '';
+}
+
+// Receita, despesa, sobra e saldo no fim de cada mês.
+export function relatorioMensal(espacoId, periodo) {
+  return chamar(doEspaco(espacoId, `/relatorios/mensal${consultaDoPeriodo(periodo)}`));
+}
+
+// Gasto por categoria no período, do maior para o menor, com a fatia.
+export function relatorioCategorias(espacoId, periodo) {
+  return chamar(doEspaco(espacoId, `/relatorios/categorias${consultaDoPeriodo(periodo)}`));
+}

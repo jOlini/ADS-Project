@@ -10,7 +10,7 @@ export default function AvisoApi() {
       </span>
       <h3>Livro-caixa fora desta versão</h3>
       <p>
-        Contas, categorias e lançamentos ficam na API do Pessoal Finance, que não está ligada a esta versão do site.
+        Contas, categorias e lançamentos ficam na API da OliFine, que não está ligada a esta versão do site.
         Para usar, rode o projeto na sua máquina com <code>VITE_API_URL</code> no <code>web/.env</code> (veja o README).
       </p>
     </section>

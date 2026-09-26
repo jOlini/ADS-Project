@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import Icone from './Icone';
-import { mostrarNoPainel, useCliqueFora, usePosicaoFlutuante } from './flutuante';
+import { mostrarNoPainel, useCliqueFora, usePosicaoFlutuante, usePresenca } from './flutuante';
 import { opcaoPorDigitacao, primeiraHabilitada, proximaHabilitada, ultimaHabilitada } from '../regras/seletor';
 
 // Tempo para juntar as letras digitadas numa busca só ("mer" acha Mercado).
@@ -42,6 +42,8 @@ export default function Seletor({
   const escolhida = opcoes[indiceEscolhido];
   const fechar = () => setAberto(false);
   const estilo = usePosicaoFlutuante(botao, lista, aberto, { larguraDaAncora: true, aoRolarFora: fechar });
+  // Continua na tela durante a animação de saída.
+  const presente = usePresenca(aberto);
   useCliqueFora([botao, lista], fechar, aberto);
 
   // A opção ativa fica sempre visível na lista, mesmo andando pelo teclado.
@@ -157,7 +159,7 @@ export default function Seletor({
         <Icone nome="seta" tamanho={16} />
       </button>
 
-      {aberto && (
+      {presente && (
         <ul ref={lista} id={idDaLista} role="listbox" aria-labelledby={idDoRotulo} className="lista-flutuante" style={estilo}>
           {opcoes.length === 0 && <li className="sem-opcoes">Nenhuma opção disponível.</li>}
           {opcoes.map((opcao, indice) => (

@@ -1,0 +1,44 @@
+/*
+ * Monograma e nome da OliFine. Carregado com o app inteiro: a barra lateral,
+ * o login, o cadastro e a landing usam o logo.
+ */
+
+.of-logo {
+  display: inline-flex;
+  gap: var(--espaco-5);
+  align-items: center;
+  color: var(--texto);
+}
+
+.of-monograma {
+  flex: none;
+}
+
+.of-logo-textos {
+  display: grid;
+}
+
+.of-logo-nome {
+  font-size: 1.3125rem;
+  font-weight: var(--peso-forte);
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.of-logo-slogan {
+  font-size: var(--fonte-caps);
+  font-weight: var(--peso-semi);
+  letter-spacing: 0.04em;
+  color: var(--of-verde);
+}
+
+/* Topo do login e do cadastro: só o logo, que leva à página de apresentação. */
+.topo-do-acesso {
+  display: flex;
+  align-items: center;
+}
+
+.topo-do-acesso .marca {
+  border-radius: var(--raio-pequeno);
+  text-decoration: none;
+}

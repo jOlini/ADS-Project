@@ -26,12 +26,6 @@ export const LANCAMENTOS_DE_EXEMPLO = [
   { data: '2026-09-05', descricao: 'Aluguel de setembro', categoria: 'Moradia', conta: 'Conta corrente', valor: -185000 },
 ];
 
-export const A_VENCER_DE_EXEMPLO = [
-  { data: '2026-09-22', descricao: 'Internet', valor: 11990 },
-  { data: '2026-09-26', descricao: 'Plano de saúde', valor: 28900 },
-  { data: '2026-09-30', descricao: 'Academia', valor: 9990 },
-];
-
 // Uma cor por categoria, para o ponto do extrato e a barra de gastos. A cor
 // é enfeite de leitura: o nome da categoria sempre aparece junto.
 export const COR_DA_CATEGORIA = {

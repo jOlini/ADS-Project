@@ -1,14 +1,19 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-// Fonte Figtree (eixo de peso) hospedada junto com o app, sem chamar o
-// Google Fonts. A mesma fonte está no painel (api/painel/fontes/).
-import '@fontsource-variable/figtree';
-// Ordem dos estilos: os tokens (todo valor visual), a base do app e os
-// componentes próprios, que sobrepõem o botão e o campo da base.
+// Fonte Geist (eixo de peso) hospedada junto com o app, sem chamar o Google
+// Fonts nem outro terceiro.
+import '@fontsource-variable/geist';
+// Ordem dos estilos: os tokens (todo valor visual), a base do app, os
+// componentes próprios (sobrepõem o botão e o campo da base), a identidade
+// OliFine (casca, Visão geral, Metas) e, por último, o movimento comum a
+// todos, que soma deslocamento e sombra às transições de cada um.
 import './estilos/tokens.css';
 import './index.css';
 import './estilos/componentes.css';
+import './olifine/estilos/marca.css';
+import './olifine/estilos/olifine.css';
+import './estilos/movimento.css';
 import ToastProvider from './componentes/toast/ToastProvider';
 import AppRoutes from './routes';
 
@@ -17,7 +22,7 @@ import AppRoutes from './routes';
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <ToastProvider posicao="topo-direita">
+      <ToastProvider posicao="base-direita">
         <AppRoutes />
       </ToastProvider>
     </BrowserRouter>

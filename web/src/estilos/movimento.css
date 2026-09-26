@@ -1,0 +1,488 @@
+/*
+ * Movimento da OliFine: o sistema responde a cada gesto, sem enfeite.
+ *
+ * Regras (DESIGN.md): um eixo só, amortecido e sem quique. O que é clicável
+ * sobe um passo curto ao passar o mouse e volta ao apertar; o que é escolhido
+ * troca de cor em 160 a 220ms; o que abre (diálogo, lista, menu, calendário)
+ * chega do ponto de onde nasceu e sai mais depressa do que chegou. Nada se
+ * move sozinho, a não ser o brilho do esqueleto enquanto os dados chegam.
+ *
+ * Carregado por último (main.jsx): as transições daqui somam cor, sombra e
+ * deslocamento às dos componentes. Tempos e curvas em estilos/tokens.css.
+ * Com "reduzir movimento" no sistema, o deslocamento some e ficam as trocas
+ * de cor e de opacidade, que confirmam a ação (fim do arquivo).
+ */
+
+/* ------------------------------------------------ Botões e links-botão */
+
+/* Ação cheia, secundária e perigosa: sobe um passo, ganha um brilho do
+   próprio verde e afunda ao apertar. Botões de aba (aria-pressed), de
+   opção e só de ícone ficam de fora: mudam de cor, não de altura. */
+:is(
+    button:not([class], [aria-pressed], [role]),
+    button:is(.largo, .secundario, .perigo, .of-chip, .compacto),
+    a.botao,
+    a.lp-botao
+  ) {
+  transition:
+    background-color var(--tempo) var(--curva),
+    color var(--tempo) var(--curva),
+    border-color var(--tempo) var(--curva),
+    box-shadow var(--tempo-medio) var(--curva),
+    transform var(--tempo-medio) var(--curva-chegada);
+}
+
+:is(button:not([class], [aria-pressed], [role]), button.largo, button.perigo, a.botao):hover:not(:disabled) {
+  transform: translateY(var(--elevacao-leve));
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--marca) 70%, transparent);
+}
+
+a.lp-botao:hover {
+  transform: translateY(var(--elevacao-leve));
+}
+
+:is(button.secundario, button.compacto, button.of-chip):hover:not(:disabled) {
+  transform: translateY(var(--elevacao-leve));
+  box-shadow: var(--sombra-elevada);
+}
+
+:is(
+    button:not([class], [aria-pressed], [role]),
+    button:is(.largo, .secundario, .perigo, .of-chip, .compacto),
+    a.botao,
+    a.lp-botao
+  ):active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+  box-shadow: none;
+  transition-duration: var(--tempo-curto);
+}
+
+/* Só ícone, texto discreto e itens de menu: aperto curto, sem subir. */
+:is(button.botao-icone, button.discreto-botao, button.of-sino, button.of-avatar-botao, button.toast-fechar) {
+  transition:
+    background-color var(--tempo) var(--curva),
+    color var(--tempo) var(--curva),
+    transform var(--tempo-curto) var(--curva);
+}
+
+:is(button.botao-icone, button.of-sino, button.of-avatar-botao, button.toast-fechar):active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+button.discreto-botao:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* ------------------------------------------------ Cartões que levam a algum
+   lugar: sobem e acendem a borda. Cartões que só mostram dados não se mexem
+   (subir prometeria um clique que não existe); só a borda acende de leve. */
+
+:is(a.of-kpi-link, .of-metas-resumo a, .of-metas-lista button, a.of-regar-convite-link, .of-atalho, a.nome-do-cartao) {
+  transition:
+    background-color var(--tempo) var(--curva),
+    border-color var(--tempo) var(--curva),
+    box-shadow var(--tempo-medio) var(--curva),
+    transform var(--tempo-medio) var(--curva-chegada);
+}
+
+a.of-kpi-link:hover {
+  transform: translateY(var(--elevacao));
+  border-color: color-mix(in srgb, var(--of-verde) 45%, var(--linha));
+  box-shadow: var(--sombra-elevada);
+}
+
+:is(.of-metas-resumo a, .of-metas-lista button):hover:not(:disabled) {
+  transform: translateY(var(--elevacao-leve));
+  box-shadow: var(--sombra);
+}
+
+:is(a.of-kpi-link, .of-metas-resumo a, .of-metas-lista button):active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+  transition-duration: var(--tempo-curto);
+}
+
+.cartao {
+  transition: border-color var(--tempo-medio) var(--curva);
+}
+
+.cartao:hover {
+  border-color: color-mix(in srgb, var(--linha-forte) 70%, var(--linha));
+}
+
+/* ------------------------------------------------ Navegação */
+
+/* Menu lateral: o fundo acende, o ícone dá meio passo à frente e o item
+   atual chega com a pílula menta. */
+a.of-menu-item {
+  transition:
+    background-color var(--tempo) var(--curva),
+    color var(--tempo) var(--curva),
+    box-shadow var(--tempo) var(--curva);
+}
+
+a.of-menu-item .icone {
+  transition: transform var(--tempo-medio) var(--curva-chegada), color var(--tempo) var(--curva);
+}
+
+a.of-menu-item:hover .icone {
+  transform: translateX(2px);
+}
+
+a.of-menu-item.active .icone {
+  color: var(--of-verde);
+}
+
+a.of-menu-item:active {
+  background: color-mix(in srgb, var(--of-menta) 70%, var(--lateral));
+}
+
+a.of-menu-item.active {
+  animation: of-pilula-chega var(--tempo-longo) var(--curva-chegada);
+}
+
+@keyframes of-pilula-chega {
+  from {
+    background-color: var(--lateral);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--of-verde) 30%, transparent);
+  }
+}
+
+/* Abas do celular: a pílula atrás do ícone cresce do centro. */
+a.of-aba .icone {
+  transition: background-color var(--tempo) var(--curva), transform var(--tempo-medio) var(--curva-chegada);
+}
+
+a.of-aba.active .icone {
+  animation: of-aba-chega var(--tempo-longo) var(--curva-chegada);
+}
+
+@keyframes of-aba-chega {
+  from {
+    transform: scaleX(0.55);
+    background-color: transparent;
+  }
+}
+
+a.of-aba:active .icone,
+button.of-aba:active .icone {
+  transform: scale(0.9);
+}
+
+/* ------------------------------------------------ Abas, filtros e faixas */
+
+/* Botões de escolha (Tudo, Entradas, Saídas; 7 dias, 30 dias...): a opção
+   escolhida acende com a sombra de repouso e o texto troca de cor. */
+button[aria-pressed] {
+  transition:
+    background-color var(--tempo-medio) var(--curva),
+    color var(--tempo) var(--curva),
+    border-color var(--tempo) var(--curva),
+    box-shadow var(--tempo-medio) var(--curva),
+    transform var(--tempo-curto) var(--curva);
+}
+
+button[aria-pressed]:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+button[aria-pressed='true'] {
+  animation: escolha-acende var(--tempo-longo) var(--curva-chegada);
+}
+
+@keyframes escolha-acende {
+  from {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--of-verde) 22%, transparent);
+  }
+}
+
+/* ------------------------------------------------ Campos e foco */
+
+/* O anel de foco cresce da borda em vez de aparecer de uma vez. */
+:is(
+    .campo > input,
+    .campo > textarea,
+    button.controle-do-seletor,
+    .seletor-de-data,
+    .campo-de-busca,
+    .of-busca,
+    .parte input
+  ) {
+  transition:
+    border-color var(--tempo) var(--curva),
+    box-shadow var(--tempo-medio) var(--curva-chegada),
+    background-color var(--tempo) var(--curva);
+}
+
+:is(a, button, input, textarea, [tabindex]):focus-visible {
+  transition:
+    outline-offset var(--tempo-medio) var(--curva-chegada),
+    box-shadow var(--tempo-medio) var(--curva-chegada);
+}
+
+/* Caixa de marcar própria: o fundo enche de verde e o visto cresce. */
+.caixa-de-marcar input[type='checkbox'] {
+  appearance: none;
+  display: grid;
+  place-content: center;
+  border: 1.5px solid var(--linha-forte);
+  border-radius: var(--raio-mini);
+  background: var(--superficie);
+  cursor: pointer;
+  transition:
+    background-color var(--tempo) var(--curva),
+    border-color var(--tempo) var(--curva),
+    box-shadow var(--tempo-medio) var(--curva-chegada);
+}
+
+.caixa-de-marcar input[type='checkbox']::before {
+  content: '';
+  width: 11px;
+  height: 11px;
+  background: var(--sobre-marca);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.2 6.4 4.8 9 9.8 3.2' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  transform: scale(0);
+  transition: transform var(--tempo-medio) var(--curva-chegada);
+}
+
+.caixa-de-marcar:hover input[type='checkbox']:not(:disabled) {
+  border-color: var(--of-verde);
+}
+
+.caixa-de-marcar input[type='checkbox']:checked {
+  background: var(--marca);
+  border-color: var(--marca);
+}
+
+.caixa-de-marcar input[type='checkbox']:checked::before {
+  transform: scale(1);
+}
+
+.caixa-de-marcar input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: var(--anel-de-foco);
+}
+
+.caixa-de-marcar input[type='checkbox']:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacidade-desligado);
+}
+
+/* ------------------------------------------------ Linhas de lista e tabela */
+
+.lancamento,
+.item,
+.of-linha,
+.lista-flutuante [role='option'],
+button.item-do-menu,
+.of-rosca-legenda li,
+.linhas-da-importacao tr {
+  transition: background-color var(--tempo) var(--curva), color var(--tempo) var(--curva);
+}
+
+.lancamento:hover,
+.of-linha:hover {
+  background-color: color-mix(in srgb, var(--lateral) 60%, transparent);
+}
+
+/* ------------------------------------------------ Diálogos */
+
+/* O <dialog> chega de baixo, crescendo de 98%, e o véu escurece junto. Na
+   saída, os dois somem mais depressa. "allow-discrete" mantém o diálogo na
+   camada do topo até o fim da saída (componentes/Modal.jsx deixa o conteúdo
+   montado nesse meio-tempo). */
+.modal {
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  transition:
+    opacity var(--tempo) var(--curva-saida),
+    transform var(--tempo) var(--curva-saida),
+    overlay var(--tempo) var(--curva-saida) allow-discrete,
+    display var(--tempo) var(--curva-saida) allow-discrete;
+}
+
+.modal[open] {
+  opacity: 1;
+  transform: none;
+  transition-duration: var(--tempo-longo);
+  transition-timing-function: var(--curva-chegada);
+}
+
+@starting-style {
+  .modal[open] {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+
+.modal::backdrop {
+  background-color: transparent;
+  transition:
+    background-color var(--tempo) var(--curva-saida),
+    overlay var(--tempo) var(--curva-saida) allow-discrete,
+    display var(--tempo) var(--curva-saida) allow-discrete;
+}
+
+.modal[open]::backdrop {
+  background-color: var(--veu);
+  transition-duration: var(--tempo-longo);
+}
+
+@starting-style {
+  .modal[open]::backdrop {
+    background-color: transparent;
+  }
+}
+
+/* ------------------------------------------------ O que flutua preso a um botão */
+
+/* Lista do seletor, menu de ações, calendário, avisos e conta: nascem do
+   botão (um passo acima, a 98%) e voltam para ele ao fechar. A posição e a
+   opacidade de partida e de saída vêm de componentes/flutuante.js. */
+.lista-flutuante,
+.painel-flutuante,
+.of-flutuante {
+  transform-origin: top center;
+  transition:
+    opacity var(--tempo-medio) var(--curva-chegada),
+    transform var(--tempo-medio) var(--curva-chegada);
+}
+
+/* ------------------------------------------------ Avisos (toasts) */
+
+/* No canto de baixo, o aviso sobe um passo ao chegar. */
+.toasts:is(.toasts-base-direita, .toasts-base-centro) .toast {
+  --toast-de: 10px;
+}
+
+/* ------------------------------------------------ Esqueleto de carga */
+
+/* Brilho que passa da esquerda para a direita, igual em todos os blocos
+   (fundo fixo na janela), com um leve atraso por linha. */
+.esqueleto {
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in srgb, var(--superficie) 70%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  background-position: 120% 0;
+  animation: esqueleto-brilho 1.4s var(--curva) infinite;
+  animation-delay: var(--atraso, 0ms);
+}
+
+.carregando {
+  animation: surgir var(--tempo-longo) var(--curva) backwards;
+  animation-delay: 120ms;
+}
+
+@keyframes esqueleto-brilho {
+  to {
+    background-position: -120% 0;
+  }
+}
+
+/* ------------------------------------------------ Chegada de página */
+
+/* A página nova aparece por opacidade (transformar a página inteira
+   deslocaria as listas e os menus presos à janela). Os cartões dos números e
+   os painéis sobem um passo, um depois do outro, com o atraso limitado. */
+.of-area > * {
+  animation: surgir var(--tempo-longo) var(--curva) backwards;
+}
+
+:is(.of-kpis, .of-grade, .rel-numeros, .rel-grade) > * {
+  animation: subir var(--tempo-longo) var(--curva-chegada) backwards;
+}
+
+:is(.of-kpis, .rel-numeros) > :nth-child(2),
+:is(.of-grade, .rel-grade) > :nth-child(2) {
+  animation-delay: 40ms;
+}
+
+:is(.of-kpis, .rel-numeros) > :nth-child(3),
+:is(.of-grade, .rel-grade) > :nth-child(3) {
+  animation-delay: 80ms;
+}
+
+:is(.of-kpis, .rel-numeros) > :nth-child(n + 4),
+:is(.of-grade, .rel-grade) > :nth-child(n + 4) {
+  animation-delay: 120ms;
+}
+
+@keyframes surgir {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes subir {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ------------------------------------------------ Menos movimento */
+
+/* Sem deslocamento: nada sobe, desliza ou cresce. Ficam as trocas de cor e
+   de opacidade, curtas, que confirmam a ação; o brilho do esqueleto para.
+   A animação de entrada fica para trás (backwards): depois dela, o hover e o
+   aperto voltam a valer. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --elevacao: 0px;
+    --elevacao-leve: 0px;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+
+  :is(.of-kpis, .of-grade, .rel-numeros, .rel-grade) > *,
+  .of-area > *,
+  .carregando {
+    animation-name: surgir;
+  }
+
+  a.of-menu-item.active,
+  a.of-aba.active .icone,
+  button[aria-pressed='true'] {
+    animation: none;
+  }
+
+  .esqueleto {
+    animation: none;
+    background-image: none;
+  }
+
+  :is(button, a, .of-metas-lista button):active:not(:disabled),
+  a.of-menu-item:hover .icone,
+  .caixa-de-marcar input[type='checkbox']::before {
+    transform: none;
+  }
+
+  .modal,
+  .modal[open] {
+    transform: none;
+  }
+
+  @starting-style {
+    .modal[open] {
+      transform: none;
+    }
+  }
+
+  .lista-flutuante,
+  .painel-flutuante,
+  .of-flutuante {
+    transition-property: opacity;
+  }
+
+  .toast {
+    --toast-de: 0px;
+  }
+}

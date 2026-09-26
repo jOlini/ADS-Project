@@ -1,0 +1,469 @@
+/*
+ * Tela Relatórios (release 0.3): linha de filtros, números do período, o
+ * gráfico de receitas e despesas por mês e o gasto por categoria. Cartões,
+ * números e painéis reaproveitam as classes da Visão geral (.of-kpi,
+ * .of-painel); aqui ficam o gráfico e as barras.
+ *
+ * Marcas finas (coluna de até 24px, linha de 2px, ponto de 8px com anel da
+ * superfície), régua e eixo em linhas de 1px contínuas, e texto sempre na
+ * tinta do texto: a cor fica só nas marcas.
+ */
+
+/* Receita × despesa: par conferido para quem não distingue vermelho de
+   verde (a diferença é de luminosidade, não só de cor), um tom próprio para
+   o fundo claro e outro para o escuro. O coral fica abaixo de 3:1 no branco,
+   então todo valor também está escrito (tabela, balão e lista). A sobra usa a
+   tinta do texto. */
+.rel {
+  --rel-receita: #2a8660;
+  --rel-despesa: #e8927a;
+  --rel-sobra: var(--texto);
+}
+
+@media (prefers-color-scheme: dark) {
+  .rel {
+    --rel-receita: #12724b;
+    --rel-despesa: #d67553;
+  }
+}
+
+/* ------------------------------------------------------------ Filtros */
+
+.rel-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-6) var(--espaco-10);
+  align-items: center;
+}
+
+.rel-filtros .abas {
+  background: var(--superficie);
+  border: var(--borda);
+}
+
+.rel-filtros .abas button[aria-pressed='true'] {
+  color: var(--of-sobre-menta);
+  background: var(--of-menta);
+  box-shadow: none;
+}
+
+.rel-trecho {
+  display: inline-flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+}
+
+.rel-trecho span::first-letter {
+  text-transform: uppercase;
+}
+
+/* Troca de período: o que já estava na tela fica, esmaecido, até os números
+   novos chegarem. */
+.rel-conteudo {
+  display: grid;
+  gap: var(--espaco-10);
+  transition: opacity var(--tempo-medio) var(--curva);
+}
+
+.rel-conteudo.atualizando {
+  opacity: 0.55;
+}
+
+.rel-numeros {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Três números numa linha estreita (barra lateral aberta, tela média): o
+   valor encolhe um pouco em vez de vazar do cartão. */
+.rel-numeros .of-kpi-valor {
+  font-size: clamp(1.25rem, 0.85rem + 1.1vw, 1.625rem);
+}
+
+.of-kpi.negativo .of-kpi-valor {
+  color: var(--of-saida);
+}
+
+.of-kpi-icone.crescimento {
+  color: var(--of-sobre-menta);
+  background: var(--of-menta);
+}
+
+/* ------------------------------------------------------------ Painéis */
+
+.rel-grade {
+  align-items: start;
+}
+
+.rel-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2) var(--espaco-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.rel-legenda li {
+  display: inline-flex;
+  gap: var(--espaco-3);
+  align-items: center;
+}
+
+/* Chave da legenda e do balão: retângulo para as colunas, traço para a
+   linha, como a própria marca. */
+.chave {
+  flex: none;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.chave.receita {
+  background: var(--rel-receita);
+}
+
+.chave.despesa {
+  background: var(--rel-despesa);
+}
+
+.chave.sobra {
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--rel-sobra);
+}
+
+/* ------------------------------------------------------------ Gráfico */
+
+.rel-grafico {
+  position: relative;
+  height: 280px;
+  border-radius: var(--raio);
+  touch-action: pan-y;
+}
+
+.rel-grafico:focus-visible {
+  outline: none;
+  box-shadow: var(--anel-de-foco);
+}
+
+.rel-grafico svg {
+  display: block;
+  overflow: visible;
+}
+
+.rel-regua line {
+  stroke: var(--linha);
+  stroke-width: 1;
+}
+
+.rel-regua line.zero {
+  stroke: var(--linha-forte);
+}
+
+.rel-regua text,
+.rel-eixo text {
+  fill: var(--suave);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rel-eixo text.lido {
+  fill: var(--texto);
+  font-weight: var(--peso-semi);
+}
+
+.rel-faixa-lida {
+  fill: var(--lateral);
+  opacity: 0.7;
+}
+
+.rel-colunas g {
+  transition: opacity var(--tempo) var(--curva);
+}
+
+.rel-colunas g.apagada {
+  opacity: 0.45;
+}
+
+.rel-colunas .receita {
+  fill: var(--rel-receita);
+}
+
+.rel-colunas .despesa {
+  fill: var(--rel-despesa);
+}
+
+/* Colunas crescem da base ao chegar (e ao trocar de período, o desenho
+   novo cresce de novo). */
+.rel-colunas path {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: rel-crescer 520ms var(--curva-chegada) backwards;
+}
+
+@keyframes rel-crescer {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.rel-sobra path {
+  fill: none;
+  stroke: var(--rel-sobra);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+.rel-sobra circle {
+  fill: var(--rel-sobra);
+  stroke: var(--superficie);
+  stroke-width: 2;
+  transition: r var(--tempo) var(--curva);
+}
+
+/* Balão: o valor em destaque, o nome depois, com a chave de cada série. */
+.rel-balao {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 200px;
+  padding: var(--espaco-5) var(--espaco-6);
+  translate: 12px 0;
+  border: var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  box-shadow: var(--sombra-flutuante);
+  pointer-events: none;
+  animation: surgir var(--tempo) var(--curva);
+}
+
+.rel-balao.a-esquerda {
+  translate: calc(-100% - 12px) 0;
+}
+
+.rel-balao small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.rel-balao small::first-letter {
+  text-transform: uppercase;
+}
+
+.rel-balao p {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: var(--espaco-4);
+  align-items: center;
+  margin: 0;
+  font-size: var(--fonte-apoio);
+}
+
+.rel-balao b {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rel-balao span {
+  color: var(--suave);
+  text-align: right;
+}
+
+/* ------------------------------------------------------------ Tabela */
+
+.rel-tabela summary {
+  display: inline-flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  padding: var(--espaco-3) var(--espaco-5);
+  border-radius: var(--raio-pequeno);
+  color: var(--marca);
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+  cursor: pointer;
+  list-style: none;
+  transition: background-color var(--tempo) var(--curva);
+}
+
+.rel-tabela summary::-webkit-details-marker {
+  display: none;
+}
+
+.rel-tabela summary:hover {
+  background: var(--lateral);
+}
+
+.rel-tabela[open] summary {
+  margin-bottom: var(--espaco-4);
+}
+
+.rel-tabela[open] .rel-tabela-rolagem {
+  animation: surgir var(--tempo-medio) var(--curva);
+}
+
+.rel-tabela-rolagem {
+  overflow-x: auto;
+}
+
+.rel-tabela table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fonte-apoio);
+  font-variant-numeric: tabular-nums;
+}
+
+.rel-tabela th,
+.rel-tabela td {
+  padding: var(--espaco-4) var(--espaco-5);
+  border-bottom: var(--borda);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rel-tabela th:first-child {
+  text-align: left;
+}
+
+.rel-tabela thead th {
+  color: var(--suave);
+  font-weight: var(--peso-medio);
+}
+
+.rel-tabela tbody tr {
+  transition: background-color var(--tempo) var(--curva);
+}
+
+.rel-tabela tbody tr:hover {
+  background: color-mix(in srgb, var(--lateral) 60%, transparent);
+}
+
+.rel-tabela td.negativo {
+  color: var(--of-saida);
+}
+
+/* ------------------------------------------------------------ Categorias */
+
+/* Nome, valor e fatia na primeira linha; a barra embaixo, na largura toda
+   do painel (o comprimento é a leitura, então ele ganha o espaço). */
+.rel-categorias {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rel-categorias li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 4ch;
+  gap: var(--espaco-3) var(--espaco-6);
+  align-items: center;
+  padding: var(--espaco-4) var(--espaco-4) var(--espaco-5);
+  border-radius: var(--raio-pequeno);
+  font-size: var(--fonte-rotulo);
+  transition: background-color var(--tempo) var(--curva);
+}
+
+.rel-categorias li:hover {
+  background: color-mix(in srgb, var(--lateral) 70%, transparent);
+}
+
+.rel-categoria-nome {
+  display: inline-flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rel-categoria-nome .ponto-de-cor {
+  border-radius: 50%;
+}
+
+.rel-barra {
+  display: block;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  height: 8px;
+}
+
+.rel-barra i {
+  display: block;
+  width: var(--largura);
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--rel-despesa);
+  transform-origin: left;
+  animation: rel-estender 560ms var(--curva-chegada) backwards;
+}
+
+.rel-categorias li:nth-child(2) .rel-barra i {
+  animation-delay: 40ms;
+}
+
+.rel-categorias li:nth-child(n + 3) .rel-barra i {
+  animation-delay: 80ms;
+}
+
+@keyframes rel-estender {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.rel-categoria-valor {
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.rel-categoria-fatia {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.rel-vazio-curto {
+  color: var(--suave);
+}
+
+.rel-vazio .botao {
+  justify-self: start;
+}
+
+/* ------------------------------------------------------------ Telas menores */
+
+@media (max-width: 1180px) {
+  .rel-grade {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .rel-numeros {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rel-grafico {
+    height: 240px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rel-colunas path,
+  .rel-barra i {
+    animation: none;
+  }
+}
