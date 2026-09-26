@@ -402,7 +402,15 @@ def _valor_da_linha(celula, mapeamento: Mapeamento) -> tuple[int | None, str | N
 
 
 def _limpar(texto: str) -> str:
-    return " ".join(_CONTROLE.sub(" ", texto).split())
+    """Texto de uma célula (descrição ou categoria) sem controle, espaço
+    repetido nem começo de fórmula.
+
+    Injeção de fórmula (CSV injection): uma célula que começa com =, +, - ou
+    @ vira fórmula quando o texto volta a uma planilha, e =HYPERLINK(...) ou
+    =cmd|... agem no computador de quem abre. O arquivo vem de fora (banco ou
+    qualquer pessoa), então esses caracteres do começo saem antes de gravar.
+    O valor não passa por aqui: o sinal dele é lido em ler_valor."""
+    return " ".join(_CONTROLE.sub(" ", texto).split()).lstrip("=+-@ ")
 
 
 def sinal_do_tipo(texto: str) -> int | None:
