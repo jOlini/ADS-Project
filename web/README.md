@@ -70,7 +70,8 @@ repositório), as telas do livro-caixa passam a funcionar com o login do Firebas
    nascimento lidos do Firestore.
 4. Clique em **Sair** e abra `/principal` direto na barra de endereço: sem sessão, o app volta para o login.
 
-Testes automatizados (Vitest): `npm test -- --run` (resultado esperado: `Tests 95 passed (95)`).
+Testes automatizados (Vitest): `npm test -- --run` (resultado esperado: todos os arquivos e testes passam, sem
+falha; a contagem de cada versão está no `README.md` da raiz do repositório).
 
 ---
 
@@ -128,6 +129,10 @@ iniciar.bat, iniciar.sh atalhos de avaliação
 A cada push na branch `main`, o workflow
 [`cd.yml`](https://github.com/jOlini/ADS-Project/blob/main/.github/workflows/cd.yml) do GitHub Actions roda o
 `npm ci` e o `npm run build` e publica o `dist/` no GitHub Pages, em https://jolini.github.io/ADS-Project/.
+
+O build leva a Content-Security-Policy numa `<meta>` (o Pages não deixa mandar cabeçalho): script só do próprio
+site e do `apis.google.com` (usado pelo login do Firebase no celular). Aberto dentro de uma moldura (`<iframe>`) de
+outro site, o app só mostra o link para abrir em aba própria (proteção contra clickjacking).
 
 ## Licença
 

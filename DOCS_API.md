@@ -21,7 +21,7 @@ acessado com o ID token do Firebase. Parte 7: relatórios do livro-caixa (Dashbo
 
 | Método | Endpoint | Finalidade | Quem pode | Resposta de sucesso | Erros possíveis |
 |---|---|---|---|---|---|
-| `POST` | `/auth/login` | Autenticar e-mail e senha e obter o token JWT | Público | `200 OK` | `400`, `401` |
+| `POST` | `/auth/login` | Autenticar e-mail e senha e obter o token JWT | Público | `200 OK` | `400`, `401`, `413`, `429` |
 | `GET` | `/usuarios` | Listar todos os usuários | Administrador, Operador | `200 OK` | `401`, `403` |
 | `GET` | `/usuarios/{id}` | Consultar um usuário pelo ID | Administrador, Operador; Cliente só o próprio | `200 OK` | `401`, `403`, `404` |
 | `POST` | `/usuarios` | Criar usuário (nome, e-mail, senha, perfil) | Administrador | `201 Created` + cabeçalho `Location` | `400`, `401`, `403`, `409` |
@@ -40,6 +40,9 @@ acessado com o ID token do Firebase. Parte 7: relatórios do livro-caixa (Dashbo
 | `403 Forbidden` | Token válido, mas o perfil não tem permissão para a operação |
 | `404 Not Found` | Usuário ou rota inexistente |
 | `409 Conflict` | E-mail já cadastrado, ou operação sobre a própria conta (excluir a si mesmo, mudar o próprio perfil) |
+| `413 Content Too Large` | Corpo da requisição acima de 2 MB, em qualquer rota (recusado antes de ser lido inteiro) |
+| `429 Too Many Requests` | Login travado depois de 5 senhas erradas para o mesmo e-mail (ou 20 do mesmo endereço) em 15 minutos; o cabeçalho `Retry-After` diz em quantos segundos tentar de novo |
+| `500 Internal Server Error` | Falha não prevista; o corpo traz só "Erro interno do servidor", e o detalhe fica no log do servidor |
 
 ### Exemplos
 
@@ -121,8 +124,15 @@ Erro (todos os erros seguem este formato):
 4. E-mail inexistente e senha errada recebem **a mesma resposta** (`401`, "E-mail ou senha inválidos.") e
    **gastam o mesmo tempo**: quando o e-mail não existe, a API compara a senha com um hash fictício. Sem isso, o
    tempo de resposta revelaria quais e-mails têm conta (enumeração de usuários).
+5. **Limite de tentativas (força bruta):** 5 senhas erradas para o mesmo e-mail, vindas do mesmo endereço, em 15
+   minutos, travam esse par com `429 Too Many Requests` e o cabeçalho `Retry-After`; 20 erros do mesmo endereço,
+   com qualquer e-mail, travam o endereço. Enquanto dura a trava, nem a senha certa passa (o palpite certo não
+   se distingue dos errados). A contagem vale para e-mail existente e inexistente, então o `429` também não
+   revela quem tem conta. O e-mail sozinho não trava: senão qualquer pessoa trancaria o administrador de
+   propósito. Um login certo zera a contagem do par, não a do endereço.
 
-Código: `autenticar()` em [`api/app/servicos.py`](api/app/servicos.py).
+Código: `autenticar()` em [`api/app/servicos.py`](api/app/servicos.py) e `LimiteDeTentativas` em
+[`api/app/limites.py`](api/app/limites.py).
 
 ### Geração do token
 
@@ -228,9 +238,11 @@ Cada requisição passa por camadas antes de chegar à regra de negócio:
 ```text
 requisição
   │
+  ├─ CabecalhosDeSeguranca ..... acrescenta CSP, nosniff, X-Frame-Options, Permissions-Policy, no-store
   ├─ CORSMiddleware ............ navegador de origem fora de CORS_ORIGENS é barrado
-  ├─ CabecalhosDeSeguranca ..... middleware que acrescenta CSP, nosniff, X-Frame-Options, no-store
+  ├─ LimiteDoCorpo ............. corpo acima de 2 MB                              → 413
   │
+  ├─ LimiteDeTentativas ........ só no POST /auth/login: senhas erradas seguidas → 429
   ├─ usuario_autenticado ....... valida o JWT e carrega o usuário do banco      → falhou: 401
   ├─ exigir_perfis(...) ........ compara o perfil com a tabela de RBAC          → sem permissão: 403
   │  ou equipe_ou_proprio_cadastro (GET /usuarios/{id})
@@ -345,18 +357,26 @@ sequenceDiagram
 | **Enumeração de usuários** | Mensagem ou tempo de resposta do login revela quais e-mails têm conta | Mesma mensagem para e-mail inexistente e senha errada; BCrypt roda contra hash fictício quando o e-mail não existe | `servicos.py`, `main.py` |
 | **Mass assignment** | Enviar `"senha_hash"` ou `"id"` no JSON para gravar valor escolhido | DTOs de entrada separados da entidade, com `extra="forbid"` (campo desconhecido = `400`) | `modelos.py` |
 | **Injeção NoSQL** | Enviar `{"$ne": null}` no lugar de um e-mail para burlar a consulta | Pydantic exige texto nos campos; consultas pymongo montadas com valores tipados; ID validado como ObjectId | `modelos.py`, `repositorio.py` |
-| **XSS no painel** | Nome de usuário com `<script>` executa no navegador do administrador e rouba o token | Dados inseridos com `textContent`, nunca `innerHTML`; CSP `default-src 'self'` bloqueia script embutido | `painel.js`, `seguranca.py` |
+| **Força bruta no login** | Script testa milhares de senhas no `POST /auth/login`, o único endpoint público | Trava de 15 minutos por e-mail + endereço (5 erros) e por endereço (20 erros), com `429` e `Retry-After`; o `429` sai igual para e-mail existente e inexistente | `limites.py`, `rotas.py` |
+| **Negação de serviço por corpo gigante** | Enviar centenas de MB no login (público) para esgotar a memória | Corpo acima de 2 MB recusado com `413`: pelo `Content-Length` antes de ler, ou contando os bytes no envio em partes | `limites.py` |
+| **XSS no painel** | Nome de usuário com `<script>` executa no navegador do administrador e rouba o token | Dados inseridos com `textContent`, nunca `innerHTML`; CSP `default-src 'self'; object-src 'none'; base-uri 'none'` bloqueia script embutido | `painel.js`, `seguranca.py` |
+| **Clickjacking e recursos do navegador** | Site embute o painel num `<iframe>` invisível e induz cliques; script injetado usa câmera ou localização | `X-Frame-Options: DENY` e `frame-ancestors 'none'`; `Permissions-Policy` desligando câmera, microfone, localização e pagamento; `Cross-Origin-Opener-Policy: same-origin`; `Strict-Transport-Security` quando a requisição chega por HTTPS | `seguranca.py` |
+| **Injeção de fórmula no CSV importado** | Extrato com `=HYPERLINK(...)` ou `=cmd\|...` na descrição vira fórmula ao voltar para uma planilha | Descrição e categoria do arquivo perdem `=`, `+`, `-` e `@` do começo antes de gravar | `financeiro/importacao.py` |
 | **CORS aberto e CSRF** | Site malicioso chama a API usando o navegador da vítima | CORS com lista explícita de origens (vazia por padrão); token no cabeçalho `Authorization`, sem cookie, então não há credencial enviada automaticamente | `main.py`, `config.py` |
-| **Vazamento de detalhes em erros** | Stack trace ou mensagem interna revela estrutura do sistema | Erros padronizados em Problem Details, com mensagens próprias em português | `erros.py` |
+| **Vazamento de detalhes em erros** | Stack trace ou mensagem interna revela estrutura do sistema | Erros padronizados em Problem Details, com mensagens próprias em português; falha não prevista vira `500` genérico, com o detalhe só no log | `erros.py` |
 | **Segredos no repositório** | Chave JWT ou senha publicada no GitHub | `.env` no `.gitignore`; `.env.example` só com valores fictícios; segredos do CI em GitHub Secrets | `.gitignore`, `api/.env.example` |
 
 **Riscos residuais (próximos passos):**
 
-- **Força bruta no login:** ainda sem limite de tentativas. Mitigação prevista: bloqueio temporário por
-  e-mail e IP após tentativas seguidas (retornando `429 Too Many Requests`).
-- **HTTPS:** em execução local a API usa HTTP. Em produção, fica atrás de um proxy reverso com TLS e HSTS.
+- **Limite de tentativas em memória:** vale para uma instância da API (o Docker Compose sobe uma). Com várias
+  réplicas, o contador precisa de um armazenamento comum (ex.: coleção do MongoDB com índice TTL). Atrás de um
+  proxy, todos os clientes chegam com o IP do proxy: a trava por endereço passa a valer para todos juntos.
+- **HTTPS:** em execução local a API usa HTTP. Em produção, fica atrás de um proxy reverso com TLS; o HSTS já sai
+  quando a requisição chega por HTTPS (com o Uvicorn em `--proxy-headers`).
 - **Revogação imediata de token de usuário ativo:** exigiria lista de tokens revogados (`jti`) ou refresh token
-  com rotação.
+  com rotação. Hoje, sair do painel apaga o token do navegador, mas uma cópia roubada vale até expirar (30 min).
+- **Documentação interativa (`/docs`):** carrega o Swagger de CDN e fica sem a CSP restritiva. Em produção, pode
+  ser desligada ou servida com os arquivos locais.
 
 ---
 
@@ -618,6 +638,10 @@ mesmo caminho de um lançamento digitado (partidas dobradas, centavos, limites d
   resposta traz o `categoria_id` de cada linha.
 - **Linha ruim não barra o arquivo:** volta como `INVALIDA`, com o motivo, e as outras entram. Linhas de saldo
   (`SALDO ANTERIOR`, `SALDO DO DIA`) são recusadas: não são lançamentos.
+- **Injeção de fórmula (CSV injection):** o arquivo vem de fora, então a descrição e a categoria perdem os
+  caracteres `=`, `+`, `-` e `@` do começo antes de gravar (`=HYPERLINK("http://...")` vira
+  `HYPERLINK("http://...")`). Assim o texto nunca vira fórmula se voltar a uma planilha. O sinal do valor é lido
+  na coluna do valor e não passa por essa limpeza.
 - **Idempotência por linha:** cada linha ganha uma chave SHA-256 da conta, da data, do valor, da descrição
   (sem acento, caixa ou espaços extras) e da ocorrência dela no arquivo (duas compras iguais no mesmo dia são
   duas linhas). A chave é calculada pela API, nunca enviada pelo cliente (campo extra = `400`). Importar o mesmo
@@ -905,5 +929,6 @@ GET /espacos/<espaco_id>/relatorios/cartoes
   ```
 
 - **Testes automatizados:** `cd api` e `pytest -v`, com as dependências do `requirements-dev.txt` instaladas
-  (a suíte usa repositórios em memória e não precisa de MongoDB nem de rede). Resultado esperado:
-  `121 passed`. Rodam também no GitHub Actions a cada commit de pull request.
+  (a suíte usa repositórios em memória e não precisa de MongoDB nem de rede). A contagem esperada e o que cada
+  arquivo cobre estão em [Como testar, no README](README.md#1-testes-automatizados). Rodam também no GitHub
+  Actions a cada commit de pull request.
