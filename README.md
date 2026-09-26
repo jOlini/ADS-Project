@@ -54,7 +54,7 @@ importação do extrato do banco em CSV).
 |---|---|---|
 | Identidade e acesso | Cadastro, login, perfis de acesso e administração de usuários | Concluído |
 | Núcleo financeiro | Receitas, despesas e transferências, contas, categorias e importação de extrato (CSV) | Em construção (0.2): API e telas prontas |
-| Dashboard | Saldo, totais do mês e comparativo receita × despesa | Planejado (0.3) |
+| Dashboard | Saldo, totais do mês e comparativo receita × despesa | Em construção (0.3): API de relatórios pronta |
 | Comprovantes | Anexo de arquivo ao lançamento | Planejado (0.4) |
 
 ---
@@ -376,7 +376,7 @@ pip install -r requirements-dev.txt
 pytest -v
 ```
 
-Resultado esperado: `259 passed`.
+Resultado esperado: `293 passed`.
 
 **Front-end (Vitest, lint e build):** em `web/`.
 
@@ -402,6 +402,7 @@ observador.
 | API | `api/tests/test_financeiro_importacao.py` | Extrato em CSV: formatos de banco, linha ruim com o motivo, chave por linha e importação repetida sem duplicar |
 | API | `api/tests/test_financeiro_api.py` | Livro-caixa pelo HTTP: identidades separadas, espaço alheio em 404, saldos, valores em centavos e estorno único |
 | API | `api/tests/test_financeiro_cartoes.py` | Cartão de crédito: ciclo da fatura (fechamento, meses curtos, virada do ano), parcelas, painel (limite, fatura atual, a pagar, parcelas futuras), compra, pagamento e fatura em CSV |
+| API | `api/tests/test_financeiro_relatorios.py` | Relatórios: período em meses, receita × despesa com o cartão por competência, estorno, saldo no fim do mês, gasto por categoria com a fatia e faturas comprometidas nos cartões |
 | Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro, datas, dinheiro em centavos, extrato e resumo do mês (com estorno e transferência) |
 | Front-end | `web/src/servicos/contas.test.js` | Cadastro no Firebase com o SDK simulado |
 | Front-end | `web/src/servicos/livroCaixa.test.js` | Chamadas à API com o ID token, erros em Problem Details e API fora do ar |
@@ -544,7 +545,7 @@ Secrets do repositório: `DISCORD_WEBHOOK` (alertas) e `VITE_FIREBASE_API_KEY`, 
 
 ## API
 
-A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de segurança e livro-caixa) está em
+A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de segurança, livro-caixa e relatórios) está em
 [`DOCS_API.md`](DOCS_API.md). Resumo:
 
 | Método | Endpoint | Finalidade | Quem pode | Resposta |
@@ -564,6 +565,7 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de seguran�
 | `DELETE` | `/espacos/{id}/lancamentos/{id}` | Excluir lançamento (e o estorno dele) | Membro do espaço | `204 No Content` |
 | `GET` | `/espacos/{id}/pessoas` | Nomes já usados em divisões | Membro do espaço | `200 OK` |
 | `POST` | `/espacos/{id}/importacoes` e `/importacoes/estrutura` | Importar extrato em CSV; mostrar o começo do arquivo e as colunas | Membro do espaço | `200 OK` |
+| `GET` | `/espacos/{id}/relatorios/mensal`, `/relatorios/categorias` e `/relatorios/cartoes` | Relatórios: receita × despesa e saldo por mês, gasto por categoria e compromisso nos cartões | Membro do espaço | `200 OK` |
 
 ---
 

@@ -2,7 +2,7 @@
 
 API REST do Pessoal Finance. Partes 1 a 5: gestão de usuários do back-office, com autenticação por JWT e
 controle de acesso por perfil (RBAC). Parte 6: livro-caixa do cliente final (contas, categorias e lançamentos),
-acessado com o ID token do Firebase.
+acessado com o ID token do Firebase. Parte 7: relatórios do livro-caixa (Dashboard).
 
 | Item | Valor |
 |---|---|
@@ -743,6 +743,147 @@ do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
 - **Pela área do cliente:** com `VITE_API_URL` no `web/.env` e `CORS_ORIGENS` no `api/.env`, as telas
   Lançamentos, Contas & Cartões (com a tela de cada cartão) e Categorias usam estas rotas com o login do Firebase. Roteiro em
   [`README.md`, "Teste manual da área do cliente"](README.md#4-teste-manual-da-área-do-cliente).
+
+---
+
+## Parte 7 – Relatórios do livro-caixa (release 0.3)
+
+Leitura do livro-caixa para o Dashboard: para onde o dinheiro foi, como os meses se comparam e o que já está
+comprometido nos cartões. Só consulta (`GET`), com o mesmo ID token do Firebase e a mesma barreira da Parte 6: espaço
+de outra pessoa responde `404`.
+
+Código: [`api/app/financeiro/relatorios.py`](api/app/financeiro/relatorios.py) (regras, em funções puras) e
+[`api/app/financeiro/rotas_relatorios.py`](api/app/financeiro/rotas_relatorios.py) (endpoints, tag **Relatórios** no
+Swagger).
+
+### Endpoints
+
+| Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
+|---|---|---|---|---|
+| `GET` | `/espacos/{espaco_id}/relatorios/mensal?de=&ate=&conta_id=` | Receitas, despesas, sobra e saldo no fim de cada mês do período | `200 OK` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/relatorios/categorias?de=&ate=&conta_id=` | Gasto por categoria no período, do maior para o menor, com a fatia de cada uma | `200 OK` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/relatorios/cartoes` | Por cartão: dívida de hoje, o que falta pagar das faturas fechadas e a fatura atual e as seguintes, com as parcelas já lançadas | `200 OK` | `401`, `404` |
+
+- **Período em meses** (`de` e `ate`, formato `AAAA-MM`, os dois inclusive). Sem `ate`, vale o mês de hoje no fuso do
+  espaço; sem `de`, os 12 meses que terminam em `ate`. No máximo 120 meses por consulta. Os meses sem lançamento
+  aparecem zerados, para o gráfico não pular mês.
+- **Filtro por conta** (`conta_id`, opcional): só os lançamentos daquela conta ou cartão. Conta de outro espaço (ou
+  inexistente) responde `404` com "Conta não encontrada.".
+
+### Regras dos números
+
+As mesmas do resumo do mês da tela Principal, para os dois lugares mostrarem o mesmo valor:
+
+| Situação | Como conta |
+|---|---|
+| Compra no cartão de crédito | Despesa no mês de cada parcela (competência), não no mês em que a fatura é paga |
+| Pagamento da fatura | Não é despesa (a compra já contou); diminui o saldo em contas |
+| Transferência entre contas | Nem receita nem despesa; não muda o saldo em contas |
+| Estorno | Reduz o lado do lançamento original, no mês do estorno: o estorno de uma despesa diminui as despesas, não vira receita. O estorno de algo de um mês anterior pode deixar o mês com despesas negativas |
+| Saldo inicial da conta | Conta desde o primeiro mês: é o dinheiro que já estava na conta antes do primeiro lançamento |
+| Saldo no fim do mês (`saldo_final_centavos`) | Soma das contas no último dia do mês, sem os cartões (dívida) e com as desativadas (o dinheiro delas continua existindo). Com `conta_id`, o saldo daquela conta; no cartão, negativo é o que se deve |
+| Gasto por categoria | Só despesas. O estorno devolve o valor à categoria, e a categoria que ficou sem gasto sai da lista |
+| Fatia | Porcentagem inteira do total do período, com meio ponto arredondado para cima; a soma das fatias pode dar 99 ou 101 |
+| Fatura no compromisso | Compras menos créditos do período da fatura, como em `GET /cartoes/{cartao_id}/faturas/{AAAA-MM}`; o pagamento quita, não muda o valor. Fatura vazia entre duas com parcela aparece zerada |
+
+### Exemplos
+
+Banco com saldo inicial de R$ 1.000,00. Em janeiro, salário de R$ 5.000,00 e mercado de R$ 200,00 no banco e uma
+compra de R$ 900,00 em 3x no cartão (15/01). Em fevereiro, R$ 500,00 do banco para a poupança e o pagamento de
+R$ 300,00 da fatura:
+
+```http
+GET /espacos/<espaco_id>/relatorios/mensal?de=2026-01&ate=2026-02
+```
+
+```json
+{
+  "de": "2026-01",
+  "ate": "2026-02",
+  "conta_id": null,
+  "meses": [
+    { "mes": "2026-01", "receitas_centavos": 500000, "despesas_centavos": 50000,
+      "sobra_centavos": 450000, "saldo_final_centavos": 580000 },
+    { "mes": "2026-02", "receitas_centavos": 0, "despesas_centavos": 30000,
+      "sobra_centavos": -30000, "saldo_final_centavos": 550000 }
+  ]
+}
+```
+
+Em cada mês, a parcela do cartão (R$ 300,00) entra nas despesas. O pagamento da fatura só tira R$ 300,00 do saldo, e
+a ida para a poupança não muda o total.
+
+```http
+GET /espacos/<espaco_id>/relatorios/categorias?de=2026-01&ate=2026-03
+```
+
+```json
+{
+  "de": "2026-01",
+  "ate": "2026-03",
+  "conta_id": null,
+  "total_centavos": 110000,
+  "categorias": [
+    { "categoria_id": "<id>", "nome": "Lazer", "cor": "lazer", "valor_centavos": 90000, "fatia": 82 },
+    { "categoria_id": "<id>", "nome": "Mercado", "cor": "mercado", "valor_centavos": 20000, "fatia": 18 }
+  ]
+}
+```
+
+Uma compra de R$ 900,00 em 3x feita hoje, no cartão que fecha no dia 3 e vence no dia 10:
+
+```http
+GET /espacos/<espaco_id>/relatorios/cartoes
+```
+
+```json
+[
+  {
+    "cartao_id": "<id>",
+    "nome": "Cartão Roxo",
+    "ativa": true,
+    "limite_centavos": 500000,
+    "usado_centavos": 90000,
+    "a_pagar_centavos": 0,
+    "faturas": [
+      { "referencia": "2026-10", "inicio": "2026-09-03", "fechamento": "2026-10-03", "vencimento": "2026-10-10",
+        "situacao": "ABERTA", "total_centavos": 30000 },
+      { "referencia": "2026-11", "inicio": "2026-10-03", "fechamento": "2026-11-03", "vencimento": "2026-11-10",
+        "situacao": "FUTURA", "total_centavos": 30000 },
+      { "referencia": "2026-12", "inicio": "2026-11-03", "fechamento": "2026-12-03", "vencimento": "2026-12-10",
+        "situacao": "FUTURA", "total_centavos": 30000 }
+    ]
+  }
+]
+```
+
+### Como é calculado
+
+- **No banco, não na tela:** as somas saem de uma agregação do MongoDB (`$unwind` das partidas e `$group` por mês,
+  tipo do lançamento e categoria), em inteiros de 64 bits, sem trazer os lançamentos para a API. Assim o relatório de
+  um ano não esbarra no teto de 1000 lançamentos da listagem, e a regra dos números fica fora do código publicado da
+  área do cliente. O filtro usa o índice `espaco_id + data`.
+- **Mês pelo texto da data:** a data do lançamento fica gravada como `AAAA-MM-DD`; o mês é o prefixo `AAAA-MM`, sem
+  conta de fuso.
+- **Saldo no fim do mês:** a soma das partidas das contas de todo o histórico até o último mês pedido, agrupada por
+  mês e acumulada a partir do saldo inicial.
+- **Compromisso nos cartões:** os lançamentos do cartão da fatura aberta em diante (a mesma leitura do painel do
+  cartão), agrupados pela fatura de cada data, com o ciclo de fechamento da Parte 6.
+
+| Situação | Campo | Mensagem |
+|---|---|---|
+| Mês fora do formato `AAAA-MM` | `de` / `ate` | Mês inválido. Use o formato AAAA-MM. |
+| Texto com mais de 7 caracteres | `de` / `ate` | Use no máximo 7 caracteres. |
+| Mês final antes do inicial | `ate` | O mês final vem antes do inicial. |
+| Mais de 120 meses | `de` | Peça no máximo 120 meses de uma vez. |
+
+### Como testar os relatórios
+
+- **Testes automatizados:** `api/tests/test_financeiro_relatorios.py` (período padrão e inválido, receita × despesa
+  com o cartão por competência, pagamento e transferência fora das somas, estorno, saldo no fim do mês com e sem
+  filtro de conta, gasto por categoria com a fatia, faturas comprometidas, espaço e conta alheios em `404`).
+- **Manual (Swagger):** com o ID token de uma conta de teste (Parte 6, "Como testar o livro-caixa"), abra a tag
+  **Relatórios** e chame `GET /espacos/{espaco_id}/relatorios/mensal` sem parâmetros (os últimos 12 meses).
 
 ---
 
