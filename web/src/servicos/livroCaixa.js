@@ -8,8 +8,13 @@
 import { auth } from '../firebase';
 import { enderecoDaApi } from './enderecoDaApi';
 
-// Aberta pela rede local, a página chama a API no IP de onde veio.
-const URL_DA_API = enderecoDaApi(import.meta.env.VITE_API_URL, globalThis.location?.hostname);
+// Aberta pela rede local, a página chama a API no IP de onde veio; pelo túnel,
+// no proxy do Vite.
+const URL_DA_API = enderecoDaApi(
+  import.meta.env.VITE_API_URL,
+  globalThis.location?.hostname,
+  import.meta.env.BASE_URL,
+);
 
 export const apiConfigurada = Boolean(URL_DA_API);
 

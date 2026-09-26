@@ -9,7 +9,9 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "tunnel:start": "python ../subir-app.py tunnel start",
+    "tunnel:stop": "python ../subir-app.py tunnel stop"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "^5.3.0",
