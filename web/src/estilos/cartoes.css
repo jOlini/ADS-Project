@@ -94,12 +94,14 @@ a.nome-do-cartao:hover {
   overflow: hidden;
 }
 
+/* O preenchimento anda por recorte (clip-path), não por largura: mudar a
+   largura refaz o layout a cada quadro da transição. */
 .medidor-do-limite .trilho i {
   display: block;
   height: 100%;
-  border-radius: var(--raio-pilula);
   background: var(--cor-do-medidor);
-  transition: width var(--transicao);
+  clip-path: inset(0 calc(100% - var(--uso, 0%)) 0 0 round var(--raio-pilula));
+  transition: clip-path var(--tempo-longo) var(--curva-chegada);
 }
 
 .medidor-do-limite p {
@@ -329,6 +331,3 @@ a.voltar:hover {
 }
 
 /* "A vencer" da Principal: o nome da fatura leva à tela do cartão. */
-.a-vencer dt a {
-  color: inherit;
-}

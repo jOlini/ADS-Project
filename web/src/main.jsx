@@ -5,13 +5,15 @@ import { BrowserRouter } from 'react-router-dom';
 // Fonts nem outro terceiro.
 import '@fontsource-variable/geist';
 // Ordem dos estilos: os tokens (todo valor visual), a base do app, os
-// componentes próprios (sobrepõem o botão e o campo da base) e a identidade
-// OliFine (casca, Visão geral, Metas).
+// componentes próprios (sobrepõem o botão e o campo da base), a identidade
+// OliFine (casca, Visão geral, Metas) e, por último, o movimento comum a
+// todos, que soma deslocamento e sombra às transições de cada um.
 import './estilos/tokens.css';
 import './index.css';
 import './estilos/componentes.css';
 import './olifine/estilos/marca.css';
 import './olifine/estilos/olifine.css';
+import './estilos/movimento.css';
 import ToastProvider from './componentes/toast/ToastProvider';
 import AppRoutes from './routes';
 

@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react';
-import { useCliqueFora, usePosicaoFlutuante } from '../../componentes/flutuante';
+import { useCliqueFora, usePosicaoFlutuante, usePresenca } from '../../componentes/flutuante';
 
 // Botão que abre um painel preso a ele (avisos, conta, "Mais" do celular).
 // Mesma mecânica da lista do Seletor e do menu de ações do app: posição fixa,
@@ -12,6 +12,8 @@ export default function Flutuante({ rotulo, className = '', classeDoPainel = '',
   const [aberto, setAberto] = useState(false);
   const fechar = () => setAberto(false);
   const estilo = usePosicaoFlutuante(ancora, painel, aberto, { alinhar, aoRolarFora: fechar });
+  // Continua na tela durante a animação de saída.
+  const presente = usePresenca(aberto);
   useCliqueFora([ancora, painel], fechar, aberto);
 
   function teclar(evento) {
@@ -35,7 +37,7 @@ export default function Flutuante({ rotulo, className = '', classeDoPainel = '',
       >
         {botao}
       </button>
-      {aberto && (
+      {presente && (
         <div ref={painel} id={id} className={`of-flutuante ${classeDoPainel}`.trim()} style={estilo} onKeyDown={teclar}>
           {children(fechar)}
         </div>

@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from 'react';
 import Calendario from './Calendario';
 import Icone from './Icone';
-import { useCliqueFora, usePosicaoFlutuante } from './flutuante';
+import { useCliqueFora, usePosicaoFlutuante, usePresenca } from './flutuante';
 import { lerDataDigitada, mascararData } from '../regras/calendario';
 import { dataExiste, formatarData } from '../regras/datas';
 
@@ -48,6 +48,8 @@ export default function SeletorDeData({
 
   const fechar = () => setAberto(false);
   const estilo = usePosicaoFlutuante(moldura, painel, aberto, { aoRolarFora: fechar });
+  // Continua na tela durante a animação de saída.
+  const presente = usePresenca(aberto);
   useCliqueFora([moldura, painel], fechar, aberto);
 
   function emitir(novoTexto) {
@@ -115,7 +117,7 @@ export default function SeletorDeData({
         <Icone nome="calendario" tamanho={18} />
       </button>
 
-      {aberto && (
+      {presente && (
         <div
           ref={painel}
           role="dialog"

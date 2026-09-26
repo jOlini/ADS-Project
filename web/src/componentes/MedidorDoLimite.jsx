@@ -14,7 +14,7 @@ export default function MedidorDoLimite({ cartao, compacto = false }) {
     <div className={`medidor-do-limite ${situacao.nivel}${compacto ? ' compacto' : ''}`}>
       <div className="trilho" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uso}
         aria-label={`Limite usado: ${uso}%`}>
-        <i style={{ width: `${uso}%` }} />
+        <i style={{ '--uso': `${uso}%` }} />
       </div>
       <p>
         {situacao.rotulo && (

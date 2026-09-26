@@ -11,8 +11,38 @@ const ALTURA_MINIMA = 120;
 
 // Enquanto a posição não foi medida, o painel existe (para ter tamanho) mas
 // não aparece. Opacidade, e não visibility: um elemento invisível não recebe
-// foco, e o calendário e o menu põem o foco dentro deles ao abrir.
-export const ESCONDIDO = { top: 0, left: 0, opacity: 0, pointerEvents: 'none' };
+// foco, e o calendário e o menu põem o foco dentro deles ao abrir. O passo
+// acima e os 98% são o ponto de partida da animação de chegada
+// (estilos/movimento.css): medido, o painel desce até o lugar dele.
+export const ESCONDIDO = { top: 0, left: 0, opacity: 0, pointerEvents: 'none', transform: 'translateY(-4px) scale(0.98)' };
+
+// Saída: o painel fica onde estava e some voltando para o botão, mais
+// depressa do que chegou. Em ms, o mesmo --tempo dos tokens.
+export const TEMPO_DE_SAIDA = 160;
+const SAINDO = {
+  opacity: 0,
+  pointerEvents: 'none',
+  transform: 'translateY(-4px) scale(0.98)',
+  transitionDuration: `${TEMPO_DE_SAIDA}ms`,
+  transitionTimingFunction: 'cubic-bezier(0.4, 0, 1, 1)',
+};
+
+// Mantém o painel na tela durante a animação de saída: presente liga com a
+// abertura e só desliga TEMPO_DE_SAIDA depois de fechar.
+export function usePresenca(aberto) {
+  const [presente, setPresente] = useState(aberto);
+  if (aberto && !presente) {
+    setPresente(true);
+  }
+  useEffect(() => {
+    if (aberto || !presente) {
+      return undefined;
+    }
+    const espera = setTimeout(() => setPresente(false), TEMPO_DE_SAIDA);
+    return () => clearTimeout(espera);
+  }, [aberto, presente]);
+  return presente;
+}
 
 // Rola só o painel para mostrar o item, sem mexer na página: rolar a página
 // fecharia o próprio painel (aoRolarFora).
@@ -88,7 +118,8 @@ export function usePosicaoFlutuante(ancora, painel, aberto, { alinhar = 'inicio'
     return () => {
       window.removeEventListener('scroll', rolou, true);
       window.removeEventListener('resize', medir);
-      setEstilo(null);
+      // Fechou: fica na última posição, a caminho de sumir.
+      setEstilo((atual) => (atual ? { ...atual, ...SAINDO } : null));
     };
   }, [aberto, ancora, painel, alinhar, larguraDaAncora, rolarFora]);
 
