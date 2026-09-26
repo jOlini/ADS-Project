@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import Campo from '../componentes/Campo';
-import Carregando from '../componentes/Carregando';
+import Esqueleto from '../componentes/Esqueleto';
 import Icone from '../componentes/Icone';
 import Seletor from '../componentes/Seletor';
 import { useToast } from '../componentes/toast/useToast';
@@ -57,7 +57,7 @@ export default function Categorias() {
     );
   }
   if (espaco.carregando || (espacoId && categorias.carregando && !categorias.dados)) {
-    return <Carregando />;
+    return <Esqueleto forma="lista" />;
   }
   const falha = espaco.erro || categorias.erro?.message;
   if (falha) {

@@ -23,6 +23,7 @@ const {
   lancar,
   listarLancamentos,
   listarPessoas,
+  relatorioMensal,
 } = await import('./livroCaixa');
 
 function resposta(status, corpo) {
@@ -126,5 +127,15 @@ describe('API do livro-caixa', () => {
 
     await expect(espacoPessoal()).rejects.toMatchObject({ status: 401 });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('pede o relatório mensal com o período só quando ele vem', async () => {
+    fetch.mockResolvedValue(resposta(200, { meses: [] }));
+
+    await relatorioMensal('e1');
+    await relatorioMensal('e1', { de: '2026-04', ate: '2026-09' });
+
+    expect(fetch.mock.calls[0][0]).toBe('http://api.teste/espacos/e1/relatorios/mensal');
+    expect(fetch.mock.calls[1][0]).toBe('http://api.teste/espacos/e1/relatorios/mensal?de=2026-04&ate=2026-09');
   });
 });

@@ -6,6 +6,7 @@ import { useToast } from '../componentes/toast/useToast';
 import { firebaseConfigurado } from '../firebase';
 import { mensagemDeErro } from '../regras/erros';
 import { entrar } from '../servicos/contas';
+import TopoDoAcesso from '../olifine/componentes/TopoDoAcesso';
 
 // Página 2: valida e-mail e senha no Firebase Authentication. Certo: vai para
 // a Principal. Errado: mostra na tela que o usuário não está cadastrado.
@@ -63,10 +64,7 @@ export default function Login() {
   return (
     <div className="acesso">
       <div className="acesso-coluna">
-        <Link to="/login" className="marca">
-          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width="28" height="28" />
-          <span>Pessoal Finance</span>
-        </Link>
+        <TopoDoAcesso />
 
         <section className="acesso-formulario" aria-labelledby="titulo-login">
           <header className="acesso-cabecalho">
@@ -95,7 +93,7 @@ export default function Login() {
         </p>
       </div>
 
-      <aside className="vitrine" aria-label="Sobre o Pessoal Finance">
+      <aside className="vitrine" aria-label="Sobre a OliFine">
         <p className="frase">
           <span>Quanto entra,</span>
           <span>quanto sai,</span>

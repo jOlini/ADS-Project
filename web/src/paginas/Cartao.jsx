@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import AvisoComAtalho from '../componentes/AvisoComAtalho';
-import Carregando from '../componentes/Carregando';
+import Esqueleto from '../componentes/Esqueleto';
 import Extrato from '../componentes/Extrato';
 import FormularioDeCompra from '../componentes/FormularioDeCompra';
 import FormularioDePagamento from '../componentes/FormularioDePagamento';
@@ -94,7 +94,7 @@ export default function Cartao() {
     );
   }
   if (espaco.carregando || (espacoId && cartao.carregando && !cartao.dados)) {
-    return <Carregando />;
+    return <Esqueleto />;
   }
   if (cartao.erro?.status === 404) {
     return (
@@ -233,7 +233,7 @@ export default function Cartao() {
               {fatura.erro.message}
             </p>
           ) : !dias ? (
-            <Carregando rotulo="Carregando a fatura" />
+            <Esqueleto forma="lista" rotulo="Carregando a fatura" />
           ) : dias.length > 0 ? (
             <Extrato
               dias={dias}

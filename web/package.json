@@ -14,7 +14,7 @@
     "tunnel:stop": "python ../subir-app.py tunnel stop"
   },
   "dependencies": {
-    "@fontsource-variable/figtree": "^5.3.0",
+    "@fontsource-variable/geist": "^5.3.0",
     "firebase": "^12.19.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

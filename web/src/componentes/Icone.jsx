@@ -1,118 +1,19 @@
-// Ícones de traço do Pessoal Finance, desenhados aqui (sem biblioteca e sem
-// emoji): mesma grade de 24, mesma espessura e as mesmas pontas arredondadas
-// do painel administrativo (api/painel/icones.js).
+// Ícones da OliFine, desenhados aqui (sem biblioteca e sem emoji), para o app
+// ter a mesma letra em todo lugar e não a cara de um pacote genérico.
+//
+// Gramática da família:
+// - grade de 24, traço de 1,75 com pontas e juntas arredondadas;
+// - cantos em folha: todo recipiente (carteira, cartão, página, calendário)
+//   tem dois cantos largos em diagonal e dois justos, como a folha do
+//   monograma;
+// - setas e vistos em curva, não em ângulo reto;
+// - "seiva": uma área preenchida de leve (classe .seiva, 18% da cor) marca a
+//   parte que importa (a moeda que entra, a faixa do cartão, o dia marcado);
+// - dinheiro é sempre uma moeda (círculo), nunca um cifrão.
 
-const TRACOS = {
-  resumo: (
-    <>
-      <rect x="3" y="3" width="7" height="9" rx="1.5" />
-      <rect x="14" y="3" width="7" height="5" rx="1.5" />
-      <rect x="14" y="12" width="7" height="9" rx="1.5" />
-      <rect x="3" y="16" width="7" height="5" rx="1.5" />
-    </>
-  ),
-  lancamentos: (
-    <>
-      <path d="M8 6h13M8 12h13M8 18h13" />
-      <circle cx="3.5" cy="6" r="1" />
-      <circle cx="3.5" cy="12" r="1" />
-      <circle cx="3.5" cy="18" r="1" />
-    </>
-  ),
-  contas: (
-    <>
-      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5.5A2.5 2.5 0 0 1 3 16.5z" />
-      <path d="M3 9h18M16 13h2" />
-    </>
-  ),
-  categorias: (
-    <>
-      <path d="M12.6 3.4 20.6 11.4a2 2 0 0 1 0 2.8l-6.4 6.4a2 2 0 0 1-2.8 0L3.4 12.6A2 2 0 0 1 3 11.4V5a2 2 0 0 1 2-2h6.4a2 2 0 0 1 1.2.4z" />
-      <circle cx="7.5" cy="7.5" r="1.2" />
-    </>
-  ),
-  relatorios: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
-  entrada: <path d="M17 7 7 17M7 8v9h9" />,
-  saida: <path d="M7 17 17 7M8 7h9v9" />,
-  transferencia: <path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7" />,
-  calendario: (
-    <>
-      <rect x="3" y="4.5" width="18" height="17" rx="2" />
-      <path d="M16 2.5v4M8 2.5v4M3 10h18" />
-    </>
-  ),
-  olho: (
-    <>
-      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
-      <circle cx="12" cy="12" r="3" />
-    </>
-  ),
-  olhoFechado: <path d="M3 3l18 18M10.6 6.2A9.6 9.6 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.3 4M6.3 8.3A17 17 0 0 0 2 12s3.6 7 10 7c1.5 0 2.8-.3 4-.8M9.9 9.9a3 3 0 0 0 4.2 4.2" />,
-  sair: <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3M16 16l4-4-4-4M20 12H10" />,
-  seta: <path d="m6 9 6 6 6-6" />,
-  anterior: <path d="m15 18-6-6 6-6" />,
-  proximo: <path d="m9 18 6-6-6-6" />,
-  mais: <path d="M12 5v14M5 12h14" />,
-  editar: (
-    <>
-      <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z" />
-      <path d="m13.5 6.5 4 4" />
-    </>
-  ),
-  estornar: (
-    <>
-      <path d="M9 14 4 9l5-5" />
-      <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
-    </>
-  ),
-  alerta: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7.5v5M12 16v.5" />
-    </>
-  ),
-  busca: (
-    <>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-4-4" />
-    </>
-  ),
-  fechar: <path d="M6 6l12 12M18 6 6 18" />,
-  certo: <path d="m5 12.5 4.5 4.5L19 7.5" />,
-  excluir: (
-    <>
-      <path d="M4 7h16M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7" />
-      <path d="m6 7 1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M10 11v6M14 11v6" />
-    </>
-  ),
-  pessoas: (
-    <>
-      <circle cx="9" cy="8" r="3.5" />
-      <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8" />
-    </>
-  ),
-  maisOpcoes: (
-    <>
-      <circle cx="5" cy="12" r="1.2" />
-      <circle cx="12" cy="12" r="1.2" />
-      <circle cx="19" cy="12" r="1.2" />
-    </>
-  ),
-  cartao: (
-    <>
-      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
-      <path d="M2.5 10h19M6.5 15h4" />
-    </>
-  ),
-  importar: <path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />,
-  colunas: (
-    <>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M9 4v16M15 4v16" />
-    </>
-  ),
-};
+import { TRACOS } from './tracosDosIcones';
 
+// Nome que não existe desenha nada (e não quebra a tela).
 export default function Icone({ nome, tamanho = 18 }) {
   return (
     <svg
@@ -127,7 +28,7 @@ export default function Icone({ nome, tamanho = 18 }) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {TRACOS[nome]}
+      {TRACOS[nome] ?? null}
     </svg>
   );
 }

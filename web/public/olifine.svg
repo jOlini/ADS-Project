@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Monograma da OliFine (favicon): o anel do O aberto no alto e o F com dois
+       braços em folha. Mesmo desenho e cores de src/olifine/componentes/Logo.jsx. -->
+  <defs>
+    <linearGradient id="anel" x1="6" y1="42" x2="34" y2="12" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1F5746"/>
+      <stop offset="1" stop-color="#459B72"/>
+    </linearGradient>
+    <linearGradient id="folha" x1="30" y1="24" x2="46" y2="4" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#459B72"/>
+      <stop offset="0.55" stop-color="#64BF8D"/>
+      <stop offset="1" stop-color="#ADD17F"/>
+    </linearGradient>
+  </defs>
+  <path d="M31.5 27A12.5 12.5 0 1 1 25.25 16.17" fill="none" stroke="url(#anel)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M31.5 39.5V21.5" stroke="url(#anel)" stroke-width="6.5" stroke-linecap="round"/>
+  <path d="M29.6 23.2C30.6 12.6 37.4 6.6 46 5c-.4 8.8-6 16.2-16.4 18.2Z" fill="url(#folha)"/>
+  <path d="M31.2 32.2c1.8-5.2 5.8-7.6 11.8-7.8-1 4.8-5 7.9-11.8 7.8Z" fill="url(#folha)"/>
+  <path d="M31.6 21.6Q38 13.8 44.6 6.6M32.4 31.2q4.4-3.8 9.8-6.2" stroke="#fff" stroke-opacity="0.4" stroke-width="0.9" fill="none" stroke-linecap="round"/>
+</svg>

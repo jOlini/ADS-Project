@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useOutletContext, useSearchParams } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import Campo from '../componentes/Campo';
-import Carregando from '../componentes/Carregando';
+import Esqueleto from '../componentes/Esqueleto';
 import Icone from '../componentes/Icone';
 import MedidorDoLimite from '../componentes/MedidorDoLimite';
 import Seletor from '../componentes/Seletor';
@@ -100,7 +100,7 @@ export default function Contas() {
     );
   }
   if (espaco.carregando || (espacoId && cadastros.carregando && !cadastros.dados)) {
-    return <Carregando />;
+    return <Esqueleto />;
   }
   const falha = espaco.erro || cadastros.erro?.message;
   if (falha) {
