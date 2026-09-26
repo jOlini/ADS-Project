@@ -8,6 +8,7 @@ import {
   novaMeta,
   planoMensal,
   porcentagem,
+  prazoValido,
   proximaFase,
   resumoDasMetas,
   semAporte,
@@ -124,6 +125,16 @@ describe('validação', () => {
     expect(validarMeta({ nome: 'Carro', alvo: 100, prazo: HOJE }, HOJE)).toEqual({});
   });
 
+  // Regressão: o campo Prazo guardava o evento inteiro ({ target }) e a meta
+  // salva derrubava a tela no plano mensal (prazo.split is not a function).
+  it('recusa prazo que não é uma data ISO que existe', () => {
+    const evento = { target: { name: 'prazo', value: '2026-12-20' } };
+    for (const prazo of [evento, '20/12', '2026-02-30', 20261220]) {
+      expect(validarMeta({ nome: 'Carro', alvo: 100, prazo }, HOJE).prazo).toBe('Data inválida.');
+    }
+    expect(validarMeta({ nome: 'Carro', alvo: 100, prazo: '' }, HOJE)).toEqual({});
+  });
+
   it('confere o aporte', () => {
     expect(validarAporte(null)).not.toBe('');
     expect(validarAporte(-5)).not.toBe('');
@@ -139,6 +150,16 @@ describe('criar, aportar e desfazer', () => {
     expect(criada.aportes).toHaveLength(0);
     expect(guardado(regada)).toBe(10000);
     expect(guardado(semAporte(regada, 'a1'))).toBe(0);
+  });
+
+  it('guarda só prazo ISO válido; o resto vira sem prazo', () => {
+    expect(prazoValido('2026-12-20')).toBe('2026-12-20');
+    expect(prazoValido({ target: { value: '2026-12-20' } })).toBeNull();
+    expect(prazoValido('2026-13-01')).toBeNull();
+    expect(prazoValido(null)).toBeNull();
+    const criada = novaMeta({ nome: 'Carro', alvo: 100, prazo: { target: {} } }, { id: 'n2', hoje: HOJE });
+    expect(criada.prazo).toBeNull();
+    expect(planoMensal({ ...criada, prazo: prazoValido({}) }, HOJE)).toBeNull();
   });
 });
 

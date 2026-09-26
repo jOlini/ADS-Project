@@ -123,6 +123,13 @@ export function mascararData(texto) {
     const digitos = limpo.slice(0, 8);
     return [digitos.slice(0, 2), digitos.slice(2, 4), digitos.slice(4)].filter(Boolean).join('/');
   }
+  // Digitando tecla por tecla, a barra do mês entra sozinha ("20/03") e os
+  // dígitos seguintes chegam grudados no mês ("20/032"): o excesso vira o
+  // começo do ano, em vez de sumir e travar o campo em "dd/mm".
+  if (partes.length === 2 && partes[1].length > 2) {
+    partes.push(partes[1].slice(2));
+    partes[1] = partes[1].slice(0, 2);
+  }
   const [dia, mes = '', ano = ''] = partes;
   return [dia.slice(0, 2), mes.slice(0, 2), ...(partes.length > 2 ? [ano.slice(0, 4)] : [])].join('/');
 }

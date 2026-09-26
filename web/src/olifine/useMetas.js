@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { hojeIso } from '../regras/datas';
 import { METAS_DE_EXEMPLO } from './dados/exemplo';
-import { comAporte, novaMeta, semAporte } from './regras/metas';
+import { comAporte, novaMeta, semAporte, validarMeta } from './regras/metas';
 import { chaveDasMetas, gravarMetas, lerMetas, novoId } from './servicos/metasLocais';
 
 // Metas da conta, com as ações. No modo de exemplo, as metas fictícias
@@ -54,9 +54,15 @@ export function useMetas(uid, { exemplo = false } = {}) {
     [uid, exemplo],
   );
 
+  // Devolve a meta criada, ou null se os dados não passam na validação: o
+  // formulário já confere, mas nada fora do formato chega à lista gravada.
   const criar = useCallback(
     (dados) => {
-      const meta = novaMeta(dados, { id: novoId(), hoje: hojeIso() });
+      const hoje = hojeIso();
+      if (Object.keys(validarMeta(dados, hoje)).length > 0) {
+        return null;
+      }
+      const meta = novaMeta(dados, { id: novoId(), hoje });
       mudar((atuais) => [...atuais, meta]);
       return meta;
     },

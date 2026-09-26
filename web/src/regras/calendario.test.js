@@ -91,6 +91,17 @@ describe('campo de data', () => {
     expect(mascararData('123/456/78901')).toBe('12/45/7890');
   });
 
+  // Regressão: tecla por tecla, "20/03" + "2" chegava como "20/032" e o
+  // dígito sumia; o campo ficava preso em "dd/mm" sem digitar a barra.
+  it('leva o que passa do mês para o ano, digitando tecla por tecla', () => {
+    let texto = '';
+    for (const tecla of '20032027') {
+      texto = mascararData(texto + tecla);
+    }
+    expect(texto).toBe('20/03/2027');
+    expect(mascararData('5/123')).toBe('5/12/3');
+  });
+
   it('lê a data completa e recusa a incompleta ou inexistente', () => {
     expect(lerDataDigitada('05/09/2026')).toBe('2026-09-05');
     expect(lerDataDigitada(' 5/9/2026 ')).toBe('2026-09-05');
