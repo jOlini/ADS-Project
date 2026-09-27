@@ -151,6 +151,16 @@
   margin-left: auto;
 }
 
+/* Botão de tema sobre o campo esmeralda: a tinta clara dos links do topo. */
+.lp-nav button.alternador-de-tema {
+  color: var(--lp-apoio-esmeralda);
+}
+
+.lp-nav button.alternador-de-tema:hover:not(:disabled) {
+  color: #ffffff;
+  background: color-mix(in srgb, #ffffff 12%, transparent);
+}
+
 .lp-hero {
   position: relative;
   z-index: 2;

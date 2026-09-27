@@ -5,6 +5,7 @@ import { formatarBRL } from '../regras/dinheiro';
 import { faturasAVencer } from '../regras/cartoes';
 import { apiConfigurada, listarCartoes } from '../servicos/livroCaixa';
 import Flutuante from './componentes/Flutuante';
+import AlternadorDeTema from '../componentes/AlternadorDeTema';
 import Icone from '../componentes/Icone';
 import LimiteDeErro from '../componentes/LimiteDeErro';
 import Logo from './componentes/Logo';
@@ -156,6 +157,7 @@ export default function CascaOliFine({ contexto }) {
           )}
 
           <div className="of-topo-acoes">
+            <AlternadorDeTema />
             <Flutuante
               rotulo={avisos.length > 0 ? `Avisos: ${avisos.length} fatura(s) a pagar` : 'Avisos'}
               className="botao-icone of-sino"

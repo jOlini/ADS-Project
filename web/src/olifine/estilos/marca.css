@@ -32,10 +32,13 @@
   color: var(--of-verde);
 }
 
-/* Topo do login e do cadastro: só o logo, que leva à página de apresentação. */
+/* Topo do login e do cadastro: o logo, que leva à página de apresentação, e
+   o botão de tema na outra ponta. */
 .topo-do-acesso {
   display: flex;
+  gap: var(--espaco-6);
   align-items: center;
+  justify-content: space-between;
 }
 
 .topo-do-acesso .marca {

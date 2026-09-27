@@ -216,7 +216,9 @@ button.of-lateral-sair {
   margin-left: auto;
 }
 
-button.of-sino {
+/* O sino e o botão de tema: redondos, com a borda da superfície. */
+button.of-sino,
+.of-topo-acoes button.alternador-de-tema {
   position: relative;
   width: 42px;
   height: 42px;
@@ -227,7 +229,8 @@ button.of-sino {
   border-color: var(--linha);
 }
 
-button.of-sino:hover:not(:disabled) {
+button.of-sino:hover:not(:disabled),
+.of-topo-acoes button.alternador-de-tema:hover:not(:disabled) {
   background: var(--lateral);
 }
 

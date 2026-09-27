@@ -428,6 +428,24 @@ button.item-do-menu,
    de opacidade, curtas, que confirmam a ação; o brilho do esqueleto para.
    A animação de entrada fica para trás (backwards): depois dela, o hover e o
    aperto voltam a valer. */
+/* -------------------------------------------------------- Troca de tema */
+
+/* Entre claro e escuro, as cores passam de um tema ao outro em vez de saltar:
+   servicos/tema.js põe a classe no <html> só durante a troca (400ms). O
+   !important vence as transições de cada componente só nesse intervalo. Com
+   "reduzir movimento" no sistema, a classe nem entra. */
+.trocando-tema,
+.trocando-tema *,
+.trocando-tema *::before,
+.trocando-tema *::after {
+  transition:
+    background-color var(--tempo-longo) var(--curva),
+    border-color var(--tempo-longo) var(--curva),
+    color var(--tempo-longo) var(--curva),
+    fill var(--tempo-longo) var(--curva),
+    stroke var(--tempo-longo) var(--curva) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --elevacao: 0px;

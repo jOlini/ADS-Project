@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
+import AlternadorDeTema from '../../componentes/AlternadorDeTema';
 import Arvore from '../componentes/Arvore';
 import Icone from '../../componentes/Icone';
 import Logo, { MarcaOliFine, SLOGAN } from '../componentes/Logo';
@@ -343,6 +344,7 @@ export default function Landing() {
             <a href="#planos">Planos</a>
           </div>
           <div className="lp-nav-acoes">
+            <AlternadorDeTema />
             {logado ? (
               <Link to="/principal" className="lp-botao">
                 Ir para o app
