@@ -111,6 +111,9 @@ export default function Login() {
               value={email} onChange={(evento) => setEmail(evento.target.value)} erro={faltando.email} />
             <Campo rotulo="Senha" type="password" name="senha" autoComplete="current-password"
               value={senha} onChange={(evento) => setSenha(evento.target.value)} erro={faltando.senha} />
+            <Link className="esqueci-a-senha" to="/auth/esqueci-a-senha">
+              Esqueci minha senha
+            </Link>
 
             <p className="mensagem erro" role="alert">
               {erro}

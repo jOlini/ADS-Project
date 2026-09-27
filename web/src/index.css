@@ -180,6 +180,41 @@ code {
   gap: var(--espaco-6);
 }
 
+/* "Esqueci minha senha", logo abaixo do campo de senha, à direita. */
+.esqueci-a-senha {
+  justify-self: end;
+  margin-top: calc(-1 * var(--espaco-4));
+  color: var(--marca);
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+  text-underline-offset: 0.2em;
+}
+
+.esqueci-a-senha:hover {
+  color: var(--marca-forte);
+}
+
+/* Selo das páginas dos links do e-mail (/auth/...): visto no menta quando
+   deu certo, alerta no rosado quando o link não vale. */
+.selo-da-acao {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.selo-da-acao.falhou {
+  background: color-mix(in srgb, var(--erro) 12%, transparent);
+  color: var(--erro);
+}
+
+a.botao.largo {
+  width: 100%;
+}
+
 /* Ação secundária com cara de link, dentro de uma frase ("Sair e usar outra
    conta"): é botão porque não navega, faz uma ação. */
 button.link {

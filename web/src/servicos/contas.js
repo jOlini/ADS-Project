@@ -1,18 +1,23 @@
 // Operações de conta do cliente final no Firebase: cadastro, login, sessão,
-// confirmação do e-mail e leitura dos dados pessoais. As páginas só chamam
-// estas funções.
+// confirmação do e-mail, senha nova e leitura dos dados pessoais. As páginas
+// só chamam estas funções.
 import {
+  applyActionCode,
+  confirmPasswordReset,
   createUserWithEmailAndPassword,
   deleteUser,
   onAuthStateChanged,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
+  verifyPasswordResetCode,
 } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { PREFIXO_DO_APP } from '../regras/dadosLocais';
 import { gravarJson, lerJson, limparDadosLocais } from './dadosLocais';
+import { linkDeConfirmacaoPelaApi, linkDeNovaSenhaPelaApi } from './emailsDaConta';
 
 // Um documento por usuário, com o id igual ao uid do Authentication.
 // As regras do Firestore usam essa igualdade para liberar só o dono.
@@ -22,8 +27,13 @@ const COLECAO = 'usuarios';
 // (regras/confirmacao.js). O logout apaga junto com o resto do app.
 const chaveDoEnvio = (uid) => `${PREFIXO_DO_APP}confirmacao:${uid}`;
 
+// Com a API no ar e o provedor configurado, o e-mail sai da API, com a marca
+// OliFine e o link para /auth/verificar-email. Sem isso (GitHub Pages, API
+// desligada), sai do próprio Firebase, como antes.
 async function enviarLink(usuario) {
-  await sendEmailVerification(usuario);
+  if (!(await linkDeConfirmacaoPelaApi(usuario))) {
+    await sendEmailVerification(usuario);
+  }
   gravarJson(chaveDoEnvio(usuario.uid), Date.now());
 }
 
@@ -104,6 +114,40 @@ export async function conferirConfirmacao() {
   }
   await usuario.getIdToken(true);
   return true;
+}
+
+// Link de confirmação aberto (página /auth/verificar-email): o código vale
+// uma vez só. A sessão aberta nesta aba, se houver, é atualizada pela página
+// (conferirConfirmacao, pelo Layout), para a área logada saber na hora.
+export function aplicarConfirmacao(codigo) {
+  return applyActionCode(auth, codigo);
+}
+
+// "Esqueci minha senha". Nenhum dos dois caminhos diz se o e-mail tem conta:
+// a API responde igual, e o Firebase, com a proteção contra enumeração
+// ligada, também. O auth/user-not-found de um projeto sem essa proteção é
+// engolido pelo mesmo motivo.
+export async function pedirNovaSenha(email) {
+  const endereco = email.trim();
+  if (await linkDeNovaSenhaPelaApi(endereco)) {
+    return;
+  }
+  try {
+    await sendPasswordResetEmail(auth, endereco);
+  } catch (erro) {
+    if (erro.code !== 'auth/user-not-found') {
+      throw erro;
+    }
+  }
+}
+
+// Link de senha nova aberto: confere o código e devolve o e-mail da conta.
+export function emailDoCodigoDeSenha(codigo) {
+  return verifyPasswordResetCode(auth, codigo);
+}
+
+export function salvarSenhaNova(codigo, senha) {
+  return confirmPasswordReset(auth, codigo, senha);
 }
 
 // Devolve { uid, nome, sobrenome, dataNascimento, criadoEm } ou null.
