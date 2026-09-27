@@ -16,6 +16,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import Configuracoes
+from app.documentacao import rotas_documentacao
 from app.erros import registrar_tratadores
 from app.financeiro.repositorio import LivroCaixaMongo, RepositorioLivroCaixa
 from app.financeiro.rotas import rotas_livro_caixa
@@ -23,6 +24,7 @@ from app.financeiro.rotas_relatorios import rotas_relatorios
 from app.firebase import VerificadorFirebase
 from app.limites import LimiteDeTentativas, LimiteDoCorpo
 from app.repositorio import RepositorioMongo, RepositorioUsuarios, conectar_mongo
+from app.revogacao import ListaDeRevogacao, RevogacaoEmMemoria, RevogacaoMongo
 from app.rotas import rotas_autenticacao, rotas_usuarios
 from app.seguranca import CabecalhosDeSeguranca
 from app.senhas import hash_ficticio
@@ -43,6 +45,7 @@ def criar_app(
     repositorio: RepositorioUsuarios | None = None,
     livro_caixa: RepositorioLivroCaixa | None = None,
     verificador: VerificadorFirebase | None = None,
+    revogacao: ListaDeRevogacao | None = None,
 ) -> FastAPI:
     config = config or Configuracoes()
 
@@ -53,6 +56,9 @@ def criar_app(
         app.state.repositorio = repositorio or RepositorioMongo(banco)
         app.state.livro_caixa = livro_caixa or LivroCaixaMongo(banco)
         app.state.verificador = verificador or VerificadorFirebase(config.firebase_project_id)
+        # Tokens encerrados no logout: no MongoDB em execução (vale para todas
+        # as instâncias e sobrevive ao reinício); em memória nos testes.
+        app.state.revogacao = revogacao or (RevogacaoMongo(banco) if banco is not None else RevogacaoEmMemoria())
         if not app.state.verificador.projeto:
             log.warning("FIREBASE_PROJECT_ID ausente: as rotas /espacos (livro-caixa do cliente) respondem 503.")
 
@@ -77,6 +83,10 @@ def criar_app(
             "acessado com o ID token do Firebase."
         ),
         lifespan=ciclo_de_vida,
+        # O /docs padrão usa script inline e a CDN sem versão fixa; o nosso
+        # (documentacao.py) tem CSP própria. O ReDoc não é usado.
+        docs_url=None,
+        redoc_url=None,
     )
 
     registrar_tratadores(app)
@@ -104,6 +114,7 @@ def criar_app(
     app.include_router(rotas_usuarios)
     app.include_router(rotas_livro_caixa)
     app.include_router(rotas_relatorios)
+    app.include_router(rotas_documentacao)
 
     app.mount("/painel", StaticFiles(directory=PASTA_DO_PAINEL, html=True), name="painel")
 

@@ -164,7 +164,8 @@
               <section aria-labelledby="titulo-rbac">
                 <h2 id="titulo-rbac">Como o RBAC decide</h2>
                 <p>
-                  O painel autentica em <code>POST /auth/login</code> e recebe um token JWT válido por 30 minutos. Os
+                  O painel autentica em <code>POST /auth/login</code> e recebe um token JWT válido por 15 minutos;
+                  <strong>Sair</strong> chama <code>POST /auth/logout</code>, que revoga o token na hora. Os
                   botões aparecem para todos os perfis de propósito: quem decide é a API. Tente uma ação que o seu
                   perfil não tem e veja o <strong>403</strong> no aviso e nas respostas da API.
                 </p>

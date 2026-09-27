@@ -9,6 +9,7 @@ import threading
 import time
 from collections import deque
 from math import ceil
+from typing import Protocol
 
 from fastapi import Request
 from starlette.exceptions import HTTPException
@@ -32,15 +33,84 @@ CHAVES_ANTES_DA_LIMPEZA = 10_000
 TAMANHO_MAXIMO_DO_CORPO = 2 * 1024 * 1024
 
 
-class LimiteDeTentativas:
-    """Janela deslizante de falhas de login, em memória.
+class ArmazenamentoDeFalhas(Protocol):
+    """Onde ficam os instantes das senhas erradas de cada chave.
 
-    Vale para uma instância da API (o docker compose sobe uma só). Com várias
-    réplicas, cada uma contaria à parte: aí o contador precisa de um
-    armazenamento comum (ex.: coleção no MongoDB com índice TTL).
+    O LimiteDeTentativas só decide (janela, máximos, espera); guardar é
+    trabalho deste contrato. Hoje há uma implementação, em memória, que vale
+    para uma instância da API (o docker compose sobe uma só). Com várias
+    réplicas atrás de um balanceador, cada uma contaria à parte e o atacante
+    ganharia 5 palpites por réplica: aí entra uma implementação com
+    armazenamento comum, sem mudar mais nada no código. Duas opções:
 
-    As rotas síncronas do FastAPI rodam em threads, daí a trava.
+    - Redis: um sorted set por chave, com o instante como score.
+      registrar = ZADD chave agora agora + EXPIRE chave janela;
+      recentes = ZREMRANGEBYSCORE chave -inf desde + ZRANGE chave 0 -1
+      WITHSCORES; zerar = DEL chave. As duas primeiras numa transação
+      (MULTI/EXEC) ou num script Lua, para as réplicas não se atropelarem.
+    - MongoDB (já está no projeto): um documento por falha {chave, instante,
+      expira_em} com índice TTL em expira_em e índice em (chave, instante).
+
+    Com armazenamento comum, o relógio do LimiteDeTentativas passa a ser
+    time.time (o time.monotonic de cada máquina começa num ponto diferente).
     """
+
+    def registrar(self, chave: str, agora: float, janela: int) -> None: ...
+
+    def recentes(self, chave: str, desde: float) -> list[float]:
+        """Instantes posteriores a "desde", do mais antigo ao mais novo."""
+        ...
+
+    def zerar(self, chave: str) -> None: ...
+
+
+class FalhasEmMemoria:
+    """Implementação em memória, da instância que roda. As rotas síncronas do
+    FastAPI rodam em threads, daí a trava."""
+
+    def __init__(self):
+        self._falhas: dict[str, deque[float]] = {}
+        self._trava = threading.Lock()
+
+    def registrar(self, chave: str, agora: float, janela: int) -> None:
+        with self._trava:
+            if len(self._falhas) > CHAVES_ANTES_DA_LIMPEZA:
+                vencidas = [nome for nome, falhas in self._falhas.items() if falhas[-1] <= agora - janela]
+                for nome in vencidas:
+                    del self._falhas[nome]
+            self._falhas.setdefault(chave, deque()).append(agora)
+
+    def recentes(self, chave: str, desde: float) -> list[float]:
+        with self._trava:
+            falhas = self._falhas.get(chave)
+            if falhas is None:
+                return []
+            while falhas and falhas[0] <= desde:
+                falhas.popleft()
+            if not falhas:
+                del self._falhas[chave]
+                return []
+            return list(falhas)
+
+    def zerar(self, chave: str) -> None:
+        with self._trava:
+            self._falhas.pop(chave, None)
+
+
+# O endereço vem do socket e nunca tem "|": a barra separa as partes sem
+# ambiguidade, mesmo com um e-mail que tenha "|" (é válido na parte local).
+def _chave_do_par(endereco: str, email: str) -> str:
+    return f"email|{endereco}|{email}"
+
+
+def _chave_do_endereco(endereco: str) -> str:
+    return f"endereco|{endereco}"
+
+
+class LimiteDeTentativas:
+    """Janela deslizante de falhas de login: 5 por e-mail + endereço e 20 por
+    endereço em 15 minutos. Quem guarda as falhas é o ArmazenamentoDeFalhas
+    (em memória, por padrão)."""
 
     def __init__(
         self,
@@ -48,60 +118,54 @@ class LimiteDeTentativas:
         maximo_por_endereco: int = MAXIMO_POR_ENDERECO,
         janela_em_segundos: int = JANELA_EM_SEGUNDOS,
         relogio=time.monotonic,
+        armazenamento: ArmazenamentoDeFalhas | None = None,
     ):
         self.maximo_por_email = maximo_por_email
         self.maximo_por_endereco = maximo_por_endereco
         self.janela = janela_em_segundos
         self._relogio = relogio
-        self._falhas: dict[tuple, deque[float]] = {}
-        self._trava = threading.Lock()
+        self._armazenamento = armazenamento or FalhasEmMemoria()
 
     def conferir(self, endereco: str, email: str) -> None:
         """Lança ErroMuitasTentativas quando o par ou o endereço está travado.
 
         Roda antes de conferir a senha, com o e-mail existindo ou não: o 429
         não revela quais e-mails têm conta."""
-        with self._trava:
-            agora = self._relogio()
-            espera = max(
-                self._espera(("email", endereco, email), self.maximo_por_email, agora),
-                self._espera(("endereco", endereco), self.maximo_por_endereco, agora),
-            )
+        agora = self._relogio()
+        espera = max(
+            self._espera(_chave_do_par(endereco, email), self.maximo_por_email, agora),
+            self._espera(_chave_do_endereco(endereco), self.maximo_por_endereco, agora),
+        )
         if espera > 0:
             raise ErroMuitasTentativas(espera)
 
     def registrar_falha(self, endereco: str, email: str) -> None:
-        with self._trava:
-            agora = self._relogio()
-            if len(self._falhas) > CHAVES_ANTES_DA_LIMPEZA:
-                self._varrer(agora)
-            for chave in (("email", endereco, email), ("endereco", endereco)):
-                self._falhas.setdefault(chave, deque()).append(agora)
+        agora = self._relogio()
+        for chave in (_chave_do_par(endereco, email), _chave_do_endereco(endereco)):
+            self._armazenamento.registrar(chave, agora, self.janela)
 
     def registrar_sucesso(self, endereco: str, email: str) -> None:
         # Só o par é zerado. Zerar o endereço deixaria quem tem uma conta
         # válida intercalar um login certo e seguir testando outros e-mails.
-        with self._trava:
-            self._falhas.pop(("email", endereco, email), None)
+        self._armazenamento.zerar(_chave_do_par(endereco, email))
 
-    def _espera(self, chave: tuple, maximo: int, agora: float) -> int:
+    def restantes(self, endereco: str, email: str) -> int:
+        """Senhas erradas que ainda cabem antes do 429. Vai no 401 do login
+        para a tela avisar. Não revela nada sobre a conta: a contagem é igual
+        para e-mail com e sem cadastro."""
+        desde = self._relogio() - self.janela
+        por_email = self.maximo_por_email - len(self._armazenamento.recentes(_chave_do_par(endereco, email), desde))
+        por_endereco = self.maximo_por_endereco - len(self._armazenamento.recentes(_chave_do_endereco(endereco), desde))
+        return max(0, min(por_email, por_endereco))
+
+    def _espera(self, chave: str, maximo: int, agora: float) -> int:
         """Segundos até a chave aceitar nova tentativa (0 = liberada)."""
-        falhas = self._falhas.get(chave)
-        if falhas is None:
-            return 0
-        while falhas and falhas[0] <= agora - self.janela:
-            falhas.popleft()
-        if not falhas:
-            del self._falhas[chave]
-            return 0
+        falhas = self._armazenamento.recentes(chave, agora - self.janela)
         if len(falhas) < maximo:
             return 0
-        return max(1, ceil(falhas[0] + self.janela - agora))
-
-    def _varrer(self, agora: float) -> None:
-        vencidas = [chave for chave, falhas in self._falhas.items() if falhas[-1] <= agora - self.janela]
-        for chave in vencidas:
-            del self._falhas[chave]
+        # Libera quando sobrarem menos que o máximo na janela, isto é, quando
+        # a falha de número "máximo", contando da mais nova, sair dela.
+        return max(1, ceil(falhas[-maximo] + self.janela - agora))
 
 
 def obter_limite_de_login(requisicao: Request) -> LimiteDeTentativas:

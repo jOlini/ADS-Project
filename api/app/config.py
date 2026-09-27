@@ -17,8 +17,9 @@ class Configuracoes(BaseSettings):
     # Obrigatório. Sem ele a API não sobe.
     jwt_secret: str
 
-    # Validade do token, em minutos.
-    jwt_expiration: int = Field(default=30, gt=0)
+    # Validade do token, em minutos. 15 é o tempo máximo que uma cópia vazada
+    # de um token não encerrado no logout continua valendo (revogacao.py).
+    jwt_expiration: int = Field(default=15, gt=0)
 
     # Origens de navegador autorizadas a chamar a API (separadas por vírgula).
     # Vazio = nenhuma origem externa. O painel é servido pela própria API

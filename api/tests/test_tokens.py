@@ -41,6 +41,27 @@ def test_token_expira_trinta_minutos_depois_da_emissao(usuario):
     assert payload["exp"] - payload["iat"] == 30 * 60
 
 
+def test_cada_token_tem_um_jti_proprio(usuario):
+    # O jti é o que o logout revoga: dois logins da mesma pessoa não podem
+    # dividir o mesmo, senão sair numa aba derrubaria a outra.
+    primeiro, _ = gerar_token(usuario, SEGREDO, 30)
+    segundo, _ = gerar_token(usuario, SEGREDO, 30)
+
+    jti_do_primeiro = validar_token(primeiro, SEGREDO)["jti"]
+
+    assert len(jti_do_primeiro) == 32
+    assert jti_do_primeiro != validar_token(segundo, SEGREDO)["jti"]
+
+
+def test_recusa_token_sem_jti(usuario):
+    agora = datetime.now(UTC)
+    payload = {"iss": EMISSOR, "sub": "id-ana", "iat": agora, "exp": agora + timedelta(minutes=5)}
+    token = jwt.encode(payload, SEGREDO, algorithm="HS256")
+
+    with pytest.raises(TokenInvalido):
+        validar_token(token, SEGREDO)
+
+
 def test_payload_nao_leva_email_nem_senha(usuario):
     token, _ = gerar_token(usuario, SEGREDO, 30)
 

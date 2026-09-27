@@ -8,11 +8,15 @@ from app.erros import ErroNaoAutenticado
 from app.limites import LimiteDeTentativas, endereco_de, obter_limite_de_login
 from app.modelos import AtualizacaoUsuario, LoginRequisicao, LoginResposta, NovoUsuario, Usuario, UsuarioResposta
 from app.repositorio import RepositorioUsuarios
+from app.revogacao import ListaDeRevogacao
 from app.seguranca import (
+    Sessao,
     administrador_ou_operador,
     equipe_ou_proprio_cadastro,
     obter_config,
     obter_repositorio,
+    obter_revogacao,
+    sessao_autenticada,
     somente_administrador,
 )
 from app.servicos import ServicoUsuarios, autenticar, normalizar_email
@@ -36,7 +40,7 @@ def obter_servico(repositorio: RepositorioUsuarios = Depends(obter_repositorio))
     response_model=LoginResposta,
     summary="Autenticar e obter o token JWT",
     responses={
-        401: {"description": "E-mail ou senha inválidos"},
+        401: {"description": "E-mail ou senha inválidos; tentativas_restantes diz quantas cabem antes do 429"},
         429: {"description": "Muitas senhas erradas seguidas; o cabeçalho Retry-After diz quando tentar de novo"},
     },
 )
@@ -48,17 +52,34 @@ def login(
     limite: LimiteDeTentativas = Depends(obter_limite_de_login),
 ):
     """Único endpoint público da API. Depois de 5 senhas erradas para o mesmo
-    e-mail (ou 20 do mesmo endereço) em 15 minutos, responde 429."""
+    e-mail (ou 20 do mesmo endereço) em 15 minutos, responde 429. Cada 401 diz
+    em "tentativas_restantes" quantas senhas erradas ainda cabem antes disso."""
     endereco = endereco_de(requisicao)
     email = normalizar_email(credenciais.email)
     limite.conferir(endereco, email)
     try:
         resposta = autenticar(credenciais, repositorio, config)
-    except ErroNaoAutenticado:
+    except ErroNaoAutenticado as recusa:
         limite.registrar_falha(endereco, email)
-        raise
+        # Mesma mensagem e mesma contagem com e sem conta: o número avisa
+        # quem errou a senha sem revelar se o e-mail existe.
+        raise ErroNaoAutenticado(recusa.detalhe, tentativas_restantes=limite.restantes(endereco, email)) from None
     limite.registrar_sucesso(endereco, email)
     return resposta
+
+
+@rotas_autenticacao.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Encerrar a sessão (revoga o token)",
+    responses={401: {"description": "Token ausente, inválido, expirado ou já revogado"}},
+)
+def logout(sessao: Sessao = Depends(sessao_autenticada), revogacao: ListaDeRevogacao = Depends(obter_revogacao)):
+    """Revoga o token usado nesta chamada: a partir daqui, ele responde 401 em
+    qualquer rota, mesmo antes do "exp". Os outros tokens da mesma pessoa
+    (outra aba, outro aparelho) continuam valendo até vencer."""
+    revogacao.revogar(sessao.jti, sessao.expira_em)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @rotas_usuarios.get(

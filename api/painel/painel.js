@@ -125,6 +125,25 @@ function lerJson(texto) {
 // O id vai codificado na URL: um valor como "../auth" não muda a rota chamada.
 const rotaDoUsuario = (id) => `/usuarios/${encodeURIComponent(id)}`;
 
+// Aviso das senhas erradas que ainda cabem antes do bloqueio (429). A API
+// manda a mesma contagem com e sem conta, então o aviso não revela nada.
+function avisoDasTentativas(restantes) {
+  if (typeof restantes !== 'number') {
+    return '';
+  }
+  if (restantes === 0) {
+    return 'Novas tentativas ficam bloqueadas por até 15 minutos.';
+  }
+  return restantes === 1
+    ? 'Resta 1 tentativa antes do bloqueio de 15 minutos.'
+    : `Restam ${restantes} tentativas antes do bloqueio de 15 minutos.`;
+}
+
+// Minutos até o token vencer, lidos do expira_em da própria resposta.
+function minutosDeValidade(expiraEm) {
+  return Math.max(1, Math.round((Date.parse(expiraEm) - Date.now()) / 60000));
+}
+
 // Texto de erro da API: o "detail" e, se houver, o erro de cada campo.
 function descreverErro(corpo) {
   if (!corpo || typeof corpo !== 'object') {
@@ -486,25 +505,32 @@ async function entrar(evento) {
   botao.removeAttribute('aria-busy');
 
   if (!resposta.ok) {
-    escreverMensagem('#mensagem-login', descreverErro(resposta.corpo), 'erro');
+    const tentativas = avisoDasTentativas(resposta.corpo?.tentativas_restantes);
+    escreverMensagem('#mensagem-login', [descreverErro(resposta.corpo), tentativas].filter(Boolean).join(' '), 'erro');
     return;
   }
   formulario.reset();
   escreverMensagem('#mensagem-login', '');
   salvarSessao(resposta.corpo);
   mostrarTela();
-  toast.sucesso(`Perfil ${sessao.usuario.perfil}. O token vale 30 minutos.`, {
+  toast.sucesso(`Perfil ${sessao.usuario.perfil}. O token vale ${minutosDeValidade(sessao.expira_em)} minutos.`, {
     titulo: `Bem-vindo(a), ${sessao.usuario.nome}`,
   });
   carregarUsuarios();
 }
 
-function sair() {
+// Revoga o token na API antes de apagá-lo daqui: uma cópia dele (outra aba,
+// um print, um log) deixa de valer na hora, sem esperar o exp.
+async function sair() {
+  const resposta = sessao ? await chamarApi('POST', '/auth/logout', undefined, { avisarFalha: false }) : null;
   encerrarSessao();
   cancelarEdicao();
   renderizarUsuarios(null);
   mostrarTela();
-  toast.info('O token foi descartado deste navegador.', { titulo: 'Sessão encerrada' });
+  toast.info(
+    resposta?.ok ? 'Token revogado na API e apagado deste navegador.' : 'O token foi apagado deste navegador.',
+    { titulo: 'Sessão encerrada' },
+  );
 }
 
 // ADMINISTRADOR e OPERADOR veem a lista; CLIENTE, só o próprio cadastro.
