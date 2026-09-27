@@ -65,6 +65,11 @@ class ErroIndisponivel(ErroDaApi):
     status = 503
 
 
+def _em_minutos(espera_em_segundos: int) -> str:
+    minutos = max(1, -(-espera_em_segundos // 60))
+    return f"{minutos} minuto" if minutos == 1 else f"{minutos} minutos"
+
+
 class ErroMuitasTentativas(ErroDaApi):
     """Login bloqueado por excesso de senhas erradas (força bruta). O
     Retry-After diz em quantos segundos a próxima tentativa volta a valer."""
@@ -72,10 +77,21 @@ class ErroMuitasTentativas(ErroDaApi):
     status = 429
 
     def __init__(self, espera_em_segundos: int):
-        minutos = max(1, -(-espera_em_segundos // 60))
-        unidade = "minuto" if minutos == 1 else "minutos"
         super().__init__(
-            f"Muitas tentativas de login. Tente de novo em {minutos} {unidade}.",
+            f"Muitas tentativas de login. Tente de novo em {_em_minutos(espera_em_segundos)}.",
+            {"Retry-After": str(espera_em_segundos)},
+        )
+
+
+class ErroMuitosPedidos(ErroDaApi):
+    """Pedidos de e-mail acima do limite (limites.LimiteDePedidos): protege a
+    caixa de entrada de quem recebe e a reputação do remetente."""
+
+    status = 429
+
+    def __init__(self, espera_em_segundos: int):
+        super().__init__(
+            f"Muitos pedidos seguidos. Tente de novo em {_em_minutos(espera_em_segundos)}.",
             {"Retry-After": str(espera_em_segundos)},
         )
 

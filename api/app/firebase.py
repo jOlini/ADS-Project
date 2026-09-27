@@ -55,6 +55,7 @@ class EmailNaoVerificado(Exception):
 class ClienteFirebase:
     uid: str
     email: str | None
+    email_verificado: bool = True
 
 
 class VerificadorFirebase:
@@ -68,7 +69,10 @@ class VerificadorFirebase:
             cliente = jwt.PyJWKClient(URL_DAS_CHAVES, cache_keys=True)
             self._obter_chave = lambda token: cliente.get_signing_key_from_jwt(token).key
 
-    def verificar(self, token: str) -> ClienteFirebase:
+    def verificar(self, token: str, exigir_email_verificado: bool = True) -> ClienteFirebase:
+        """exigir_email_verificado=False só na rota que manda o link de
+        confirmação (/conta/confirmacao): é justamente a conta sem o e-mail
+        confirmado que precisa dela. Todas as outras exigem."""
         if not self.projeto:
             raise FirebaseIndisponivel("FIREBASE_PROJECT_ID não configurado.")
 
@@ -99,8 +103,9 @@ class VerificadorFirebase:
         if not isinstance(payload["auth_time"], int) or payload["auth_time"] > time.time() + FOLGA_DO_RELOGIO:
             raise TokenFirebaseInvalido("auth_time no futuro.")
         # "is not True": ausente, false ou texto "true" contam como não verificado.
-        if payload.get("email_verified") is not True:
+        verificado = payload.get("email_verified") is True
+        if exigir_email_verificado and not verificado:
             raise EmailNaoVerificado(uid)
 
         email = payload.get("email")
-        return ClienteFirebase(uid=uid, email=email if isinstance(email, str) else None)
+        return ClienteFirebase(uid=uid, email=email if isinstance(email, str) else None, email_verificado=verificado)

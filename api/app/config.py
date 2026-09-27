@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Segredos em arquivo (Docker secrets, ou o Secret Manager montado como
@@ -65,6 +65,29 @@ class Configuracoes(BaseSettings):
     # rotas do cliente respondem 503, e o back-office segue funcionando.
     firebase_project_id: str = ""
 
+    # Endereço público da área do cliente, sem barra no fim. Os links dos
+    # e-mails (confirmação, nova senha) levam a páginas dele.
+    app_url: str = "http://localhost:5173/ADS-Project"
+
+    # E-mails da conta do cliente (app/emails): "resend", "smtp" ou "pasta"
+    # (só desenvolvimento: grava os e-mails em EMAIL_PASTA). Vazio = desligado:
+    # as rotas /conta respondem 503 e a área do cliente usa o envio do Firebase.
+    email_provedor: Literal["", "resend", "smtp", "pasta"] = ""
+    # Quem assina os e-mails, ex.: "OliFine <nao-responda@olifine.com.br>". O
+    # domínio precisa estar verificado no provedor (SPF e DKIM no DNS).
+    email_remetente: str = ""
+    email_responder_para: str = ""
+    resend_api_key: SecretStr = SecretStr("")
+    smtp_host: str = ""
+    smtp_porta: int = Field(default=587, gt=0, lt=65536)
+    smtp_usuario: str = ""
+    smtp_senha: SecretStr = SecretStr("")
+    email_pasta: str = "emails-enviados"
+    # Chave da conta de serviço do Firebase (caminho do JSON ou o próprio
+    # JSON, quando vem de /run/secrets/firebase_conta_de_servico). Só serve
+    # para pedir ao Firebase os códigos dos links. Fica fora do repositório.
+    firebase_conta_de_servico: str = ""
+
     # Primeiro administrador, criado só quando o banco está vazio.
     admin_nome: str = "Administrador"
     admin_email: str = ""
@@ -78,6 +101,30 @@ class Configuracoes(BaseSettings):
         if len(segredo.encode("utf-8")) < 32:
             raise ValueError("JWT_SECRET curto: use pelo menos 32 bytes (256 bits) para o HS256.")
         return segredo
+
+    @field_validator("app_url")
+    @classmethod
+    def tirar_barra_do_fim(cls, endereco: str) -> str:
+        return endereco.strip().rstrip("/")
+
+    @model_validator(mode="after")
+    def conferir_email(self) -> "Configuracoes":
+        """Provedor ligado pela metade (sem remetente, sem chave) derruba a
+        subida, em vez de só aparecer no primeiro cadastro sem e-mail."""
+        if not self.email_provedor:
+            return self
+        faltando = []
+        if "@" not in self.email_remetente:
+            faltando.append("EMAIL_REMETENTE")
+        if not self.firebase_conta_de_servico:
+            faltando.append("FIREBASE_CONTA_DE_SERVICO")
+        if self.email_provedor == "resend" and not self.resend_api_key.get_secret_value():
+            faltando.append("RESEND_API_KEY")
+        if self.email_provedor == "smtp" and not self.smtp_host:
+            faltando.append("SMTP_HOST")
+        if faltando:
+            raise ValueError(f"EMAIL_PROVEDOR={self.email_provedor} sem " + ", ".join(faltando) + ".")
+        return self
 
     @model_validator(mode="after")
     def conferir_producao(self) -> "Configuracoes":
@@ -109,6 +156,12 @@ class Configuracoes(BaseSettings):
         endereco_do_banco = urlsplit(self.mongodb_uri)
         if endereco_do_banco.scheme not in ("mongodb", "mongodb+srv") or not endereco_do_banco.password:
             problemas.append("MONGODB_URI precisa de usuário e senha (mongodb://usuario:senha@host/banco).")
+        # Os links dos e-mails levam o código que confirma a conta ou troca a
+        # senha: por http://, qualquer um no caminho da rede o leria.
+        if urlsplit(self.app_url).scheme != "https":
+            problemas.append("APP_URL precisa ser https://.")
+        if self.email_provedor == "pasta":
+            problemas.append("EMAIL_PROVEDOR=pasta é só para desenvolvimento.")
         return problemas
 
     @property

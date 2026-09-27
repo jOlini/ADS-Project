@@ -19,6 +19,7 @@ PRODUCAO_VALIDA = {
     "jwt_secret": SEGREDO_DE_TESTE,
     "cors_origens": "https://app.exemplo.com",
     "mongodb_uri": "mongodb://api:senha-do-banco@mongo:27017/pessoal-finance",
+    "app_url": "https://app.exemplo.com",
 }
 
 
@@ -51,6 +52,11 @@ def test_desenvolvimento_aceita_os_valores_de_exemplo():
         ({"cors_origens_rede": "http://192.0.2.5:5173"}, "CORS_ORIGENS_REDE"),
         ({"mongodb_uri": "mongodb://mongo:27017/pessoal-finance"}, "MONGODB_URI"),
         ({"mongodb_uri": "postgres://api:senha@banco/pf"}, "MONGODB_URI"),
+        ({"app_url": "http://app.exemplo.com"}, "APP_URL"),
+        (
+            {"email_provedor": "pasta", "email_remetente": "OliFine <a@exemplo.com>", "firebase_conta_de_servico": "x"},
+            "EMAIL_PROVEDOR=pasta",
+        ),
     ],
 )
 def test_producao_recusa_configuracao_de_desenvolvimento(alteracao, trecho):

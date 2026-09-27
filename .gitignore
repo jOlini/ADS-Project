@@ -10,6 +10,8 @@ CLAUDE.md
 
 # --- Python / FastAPI ---
 .venv/
+# E-mails gravados pelo EMAIL_PROVEDOR=pasta (desenvolvimento).
+emails-enviados/
 __pycache__/
 *.py[cod]
 .pytest_cache/
