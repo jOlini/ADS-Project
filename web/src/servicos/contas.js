@@ -1,14 +1,17 @@
-// Operações de conta do cliente final no Firebase: cadastro, login, sessão
-// e leitura dos dados pessoais. As páginas só chamam estas funções.
+// Operações de conta do cliente final no Firebase: cadastro, login, sessão,
+// confirmação do e-mail e leitura dos dados pessoais. As páginas só chamam
+// estas funções.
 import {
   createUserWithEmailAndPassword,
   deleteUser,
   onAuthStateChanged,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { limparDadosLocais } from './dadosLocais';
 
 // Um documento por usuário, com o id igual ao uid do Authentication.
 // As regras do Firestore usam essa igualdade para liberar só o dono.
@@ -39,6 +42,15 @@ export async function cadastrar({ email, senha, nome, sobrenome, dataNascimento 
     throw erro;
   }
 
+  // 3. Manda o link de confirmação. A área logada só abre com o e-mail
+  // confirmado: prova que quem se cadastrou é dono do endereço. Se o envio
+  // falhar, a tela de confirmação (depois do login) tem o "Reenviar".
+  try {
+    await sendEmailVerification(user);
+  } catch {
+    // Segue: o cadastro já está completo.
+  }
+
   // O Firebase já deixa a conta nova logada. Encerra a sessão para o fluxo
   // do enunciado seguir pela página de login.
   await signOut(auth);
@@ -48,8 +60,35 @@ export function entrar(email, senha) {
   return signInWithEmailAndPassword(auth, email.trim(), senha);
 }
 
-export function sair() {
-  return signOut(auth);
+// Sai da conta e apaga do navegador o que o app guardou dela (metas,
+// tentativas de login, sessão da aba), mesmo se o signOut falhar sem rede.
+export async function sair() {
+  try {
+    await signOut(auth);
+  } finally {
+    limparDadosLocais();
+  }
+}
+
+// Novo link de confirmação para a conta logada (ainda sem confirmar).
+export function reenviarConfirmacao() {
+  return sendEmailVerification(auth.currentUser);
+}
+
+// Depois do clique no link (em outra aba ou no celular), a sessão aberta aqui
+// ainda diz "não confirmado": reload() busca o estado novo no Firebase, e o
+// getIdToken(true) troca o token por um com email_verified, que a API exige.
+export async function conferirConfirmacao() {
+  const usuario = auth.currentUser;
+  if (!usuario) {
+    return false;
+  }
+  await usuario.reload();
+  if (!usuario.emailVerified) {
+    return false;
+  }
+  await usuario.getIdToken(true);
+  return true;
 }
 
 // Devolve { uid, nome, sobrenome, dataNascimento, criadoEm } ou null.

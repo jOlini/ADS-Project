@@ -32,6 +32,11 @@ const app = firebaseConfigurado ? initializeApp(configuracao) : null;
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
 
+// E-mails do Firebase (confirmação de conta) em português.
+if (auth) {
+  auth.languageCode = 'pt-BR';
+}
+
 if (app && usarEmulador) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8088);

@@ -128,6 +128,7 @@ def token_firebase(chave_do_google):
             "iat": agora - 60,
             "exp": agora + 3600,
             "email": f"{uid}@exemplo.com",
+            "email_verified": True,
         }
         payload.update(alteracoes)
         payload = {claim: valor for claim, valor in payload.items() if valor is not None}

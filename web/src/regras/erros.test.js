@@ -12,8 +12,11 @@ describe('mensagemDeErro', () => {
     expect(mensagemDeErro('auth/user-not-found')).toBe(mensagemDeErro('auth/wrong-password'));
   });
 
-  it('avisa quando o e-mail do cadastro já tem conta', () => {
-    expect(mensagemDeErro('auth/email-already-in-use')).toMatch(/já está cadastrado/);
+  it('não revela que o e-mail do cadastro já tem conta', () => {
+    // Enumeração de usuários: o cadastro trata o código como sucesso, e em
+    // qualquer outro lugar ele cai na mensagem genérica.
+    expect(mensagemDeErro('auth/email-already-in-use')).toBe(MENSAGEM_ERRO_GENERICO);
+    expect(mensagemDeErro('auth/email-already-in-use')).not.toMatch(/cadastrad/);
   });
 
   it('não mostra o código técnico de um erro desconhecido', () => {

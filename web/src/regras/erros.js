@@ -13,9 +13,12 @@ const MENSAGENS = {
   'auth/user-not-found': MENSAGEM_LOGIN_RECUSADO,
   'auth/wrong-password': MENSAGEM_LOGIN_RECUSADO,
   'auth/invalid-email': 'E-mail inválido.',
-  'auth/email-already-in-use': 'Este e-mail já está cadastrado. Faça login.',
+  // Sem mensagem própria para 'auth/email-already-in-use': "este e-mail já
+  // está cadastrado" revelaria quem tem conta. O cadastro trata esse código
+  // como sucesso (mesma tela de "confirme o seu e-mail"); fora dele, cai na
+  // mensagem genérica.
   'auth/weak-password': 'Senha fraca: use pelo menos 6 caracteres.',
-  'auth/too-many-requests': 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.',
+  'auth/too-many-requests': 'Muitas tentativas seguidas. Por segurança, aguarde alguns minutos e tente de novo.',
   'auth/network-request-failed': 'Sem conexão com o Firebase. Verifique a internet.',
   'permission-denied': 'O banco de dados recusou a operação (regras do Firestore).',
   unavailable: 'Banco de dados indisponível no momento. Tente de novo.',

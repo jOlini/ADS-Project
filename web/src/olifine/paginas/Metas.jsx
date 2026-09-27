@@ -297,7 +297,7 @@ export default function Metas() {
             </>
           ) : (
             <>
-              <span className="of-selo-local" title="As metas ainda não vão para o servidor: ficam só neste navegador.">
+              <span className="of-selo-local" title="As metas ainda não vão para o servidor: ficam neste navegador e saem dele quando você sai da conta.">
                 <Icone nome="cadeado" tamanho={14} />
                 Salvas neste navegador
               </span>
@@ -386,7 +386,7 @@ export default function Metas() {
         </section>
       )}
 
-      <Modal aberta={criando} titulo="Nova meta" descricao="A meta fica salva neste navegador." aoFechar={() => setCriando(false)}>
+      <Modal aberta={criando} titulo="Nova meta" descricao="A meta fica salva neste navegador até você sair da conta." aoFechar={() => setCriando(false)}>
         <FormularioDeMeta aoCriar={plantar} aoCancelar={() => setCriando(false)} />
       </Modal>
 
