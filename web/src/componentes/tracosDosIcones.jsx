@@ -290,6 +290,15 @@ export const TRACOS = {
       <path d="M12 7.5V12l3 2" />
     </>
   ),
+  // E-mail (link mandado): envelope com cantos em folha, aba em curva e o
+  // selo (seiva) onde a aba fecha.
+  envelope: (
+    <>
+      <path d={folha(3, 5.5, 18, 13, 5, 1.8)} />
+      <path d="M6.3 9c2 1.6 3.8 2.9 5.7 4 1.9-1.1 3.7-2.4 5.7-4" />
+      <circle className="seiva" cx="12" cy="13" r="2.3" />
+    </>
+  ),
 
   // ------------------------------------------------------------------ Tema
   // Sol (modo claro): o disco com seiva e oito raios curtos, soltos dele.

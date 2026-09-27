@@ -25,11 +25,13 @@
   line-height: 1.1;
 }
 
+/* Texto pequeno: --marca (5,3:1 no claro), não o --of-verde, que é cor de
+   gráfico e fica abaixo do contraste mínimo para texto. */
 .of-logo-slogan {
   font-size: var(--fonte-caps);
   font-weight: var(--peso-semi);
   letter-spacing: 0.04em;
-  color: var(--of-verde);
+  color: var(--marca);
 }
 
 /* Topo do login e do cadastro: o logo, que leva à página de apresentação, e

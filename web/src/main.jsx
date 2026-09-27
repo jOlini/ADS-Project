@@ -15,6 +15,7 @@ import './olifine/estilos/marca.css';
 import './olifine/estilos/olifine.css';
 import './estilos/movimento.css';
 import ToastProvider from './componentes/toast/ToastProvider';
+import { enderecoSemBaseAntiga } from './regras/enderecoDoApp';
 import AppRoutes from './routes';
 import { iniciarTema } from './servicos/tema';
 
@@ -28,8 +29,16 @@ iniciarTema();
 // desenvolvimento fica livre (ferramentas de prévia usam moldura).
 const emMoldura = import.meta.env.PROD && window.top !== window.self;
 
-// basename: no GitHub Pages o app vive em /ADS-Project/ (base do Vite) e,
-// no container, na raiz. O BASE_URL já vem certo nos dois casos.
+// Link antigo com o caminho do GitHub Pages (/ADS-Project/...) aberto no app
+// publicado em outro caminho (domínio próprio): o endereço é trocado antes de
+// o roteador ler, sem recarregar e sem perder o #oobCode= dos e-mails.
+const semBaseAntiga = enderecoSemBaseAntiga(window.location, import.meta.env.BASE_URL);
+if (semBaseAntiga) {
+  window.history.replaceState(window.history.state, '', semBaseAntiga);
+}
+
+// basename: no GitHub Pages o app vive em /ADS-Project/ e, num domínio próprio
+// ou no container, na raiz (VITE_BASE do build). O BASE_URL já vem certo.
 createRoot(document.getElementById('root')).render(
   emMoldura ? (
     <main className="fora-da-moldura">

@@ -1,9 +1,11 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
+import { BASE_DO_PAGES, normalizarBase } from './src/regras/enderecoDoApp.js'
 import { CAMINHO_DO_PROXY } from './src/servicos/enderecoDaApi.js'
 
-const BASE = '/ADS-Project/';
-const PREFIXO_DA_API = `${BASE}${CAMINHO_DO_PROXY}`;
+// O servidor de desenvolvimento fica sempre em /ADS-Project/, onde o
+// subir-app.py e o túnel o procuram; o caminho do build vem do VITE_BASE.
+const PREFIXO_DA_API = `${BASE_DO_PAGES}${CAMINHO_DO_PROXY}`;
 const ROTAS_DO_CLIENTE = `^${PREFIXO_DA_API}/espacos(?:[/?]|$)`;
 
 // Content-Security-Policy do build. O GitHub Pages não deixa mandar cabeçalho,
@@ -36,11 +38,16 @@ function politicaDeConteudo() {
 }
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
-  const { VITE_API_URL } = loadEnv(mode, process.cwd(), 'VITE_');
+export default defineConfig(({ command, mode, isPreview }) => {
+  // Variável de ambiente vale mais que o web/.env (é assim que o CI e o
+  // Dockerfile escolhem o caminho).
+  const { VITE_API_URL, VITE_BASE } = loadEnv(mode, process.cwd(), 'VITE_');
   return {
     plugins: [react(), politicaDeConteudo()],
-    base: BASE,
+    // Caminho da publicação: /ADS-Project/ no GitHub Pages de projeto (padrão,
+    // VITE_BASE vazio) e / num domínio próprio ou no container (VITE_BASE=/).
+    // O "npm run preview" usa o mesmo do build, para servir o dist/ que ele gerou.
+    base: command === 'build' || isPreview ? normalizarBase(VITE_BASE) : BASE_DO_PAGES,
     // Só vale no servidor de desenvolvimento (npm run dev e subir-app.py), não
     // no build do GitHub Pages.
     server: {

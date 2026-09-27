@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Icone from '../componentes/Icone';
 import { useToast } from '../componentes/toast/useToast';
 import { ESPERA_ENTRE_ENVIOS_EM_S, precisaDeLinkNovo, segundosParaReenviar } from '../regras/confirmacao';
 import { mensagemDeErro } from '../regras/erros';
@@ -75,6 +76,11 @@ export default function ConfirmarEmail({ usuario, aoConferir, aoSair }) {
         <TopoDoAcesso />
 
         <section className="acesso-formulario" aria-labelledby="titulo-confirmacao">
+          {/* O mesmo selo das páginas dos links (/auth/...): a pessoa sai daqui
+              para o e-mail e volta para uma tela com a mesma cara. */}
+          <span className="selo-da-acao" aria-hidden="true">
+            <Icone nome="envelope" tamanho={26} />
+          </span>
           <header className="acesso-cabecalho">
             <h1 id="titulo-confirmacao">Confirme o seu e-mail</h1>
             <p className="discreto">

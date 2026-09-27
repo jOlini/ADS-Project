@@ -1,7 +1,8 @@
 import { useId } from 'react';
 import '../estilos/marca.css';
 
-export const SLOGAN = 'Tecnologia a favor do seu dinheiro';
+// O mesmo dos e-mails da conta (api/app/emails/mensagens.py).
+export const SLOGAN = 'Finanças que fazem sentido';
 
 // Monograma OF: o anel do O aberto no alto, onde o F nasce; os braços do F
 // são duas folhas (crescimento). Mesmo desenho de public/olifine.svg. Os ids

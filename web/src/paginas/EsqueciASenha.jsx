@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import AvisoFirebase from '../componentes/AvisoFirebase';
 import Campo from '../componentes/Campo';
+import Icone from '../componentes/Icone';
 import { firebaseConfigurado } from '../firebase';
 import { validarCadastro } from '../regras/cadastro';
 import { mensagemDeErro } from '../regras/erros';
@@ -51,6 +52,11 @@ export default function EsqueciASenha() {
         <TopoDoAcesso />
 
         <section className="acesso-formulario" aria-labelledby="titulo-esqueci">
+          {enviadoPara && (
+            <span className="selo-da-acao" aria-hidden="true">
+              <Icone nome="envelope" tamanho={26} />
+            </span>
+          )}
           <header className="acesso-cabecalho">
             <h1 id="titulo-esqueci">Esqueci minha senha</h1>
             <p className="discreto">Mandamos um link para você criar uma senha nova.</p>

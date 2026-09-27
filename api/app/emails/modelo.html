@@ -3,81 +3,119 @@
   Modelo único dos e-mails da OliFine (mensagens.py preenche os campos marcados com cifrão).
 
   E-mail não é página: Gmail e Outlook ignoram boa parte do CSS moderno. Por
-  isso o layout é de tabelas, com o estilo escrito em cada elemento (inline);
-  o bloco <style> só acrescenta o que alguns programas entendem (celular e
-  modo escuro) e nunca é necessário para ler. Nenhuma imagem: com imagens
-  bloqueadas (padrão em vários programas), a marca continua de pé em texto.
+  isso o layout é de tabelas, com o estilo escrito em cada elemento (inline)
+  e a cor repetida no atributo bgcolor; o bloco <style> só acrescenta o que
+  alguns programas entendem (celular e modo escuro) e nunca é necessário para
+  ler. Os trechos entre if mso são só para o Outlook do Windows (motor do
+  Word): largura fixa de 560px, fonte sem cair na Times e botão desenhado em
+  VML, que ele respeita, no lugar do link com padding, que ele ignora.
 
-  Cores da identidade OliFine (DESIGN.md): faixa Deep Emerald #1F5746 com o
-  nome em branco e o slogan em Signal Green Bright #84D2A5; botão Action Green
-  #2B7857 com texto branco (5,3:1); texto Slate Ink #1A2430 sobre branco; fundo
-  Surface Light #F8FAFC; bordas Hairline #E2E8F0; cantos de 16px no cartão e
-  12px no botão. No modo escuro, a ação vira o sálvia claro #78C89E com tinta
-  #071A13, como no app.
+  Marca: o monograma OF vem do próprio app (web/public/email/olifine-monograma.png,
+  192px para 48px de exibição, nítido em tela de alta densidade). SVG não
+  serve: Gmail e Outlook não o exibem. Com imagens bloqueadas (padrão do
+  Outlook), o quadrado branco mostra "OF" em verde (texto alternativo com
+  estilo) e o nome continua em texto ao lado: a marca fica de pé.
+
+  Cores da OliFine: faixa Deep Emerald #065F46 com o nome em branco e o slogan
+  em verde-claro #BBF7D0 (6,7:1), filete Action Green #16A34A, botão #065F46
+  com texto branco (7,7:1). O #16A34A fica no filete e no monograma, sem
+  texto em cima: com branco ele dá 3,3:1, abaixo do mínimo de 4,5:1 para
+  texto. Texto Slate Ink #1A2430 sobre branco; fundo suave #F3F7F5. No modo
+  escuro, o botão vira #16A34A com tinta quase preta #03140D (5,8:1).
 -->
-<html lang="pt-BR">
+<html lang="pt-BR" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="x-apple-disable-message-reformatting">
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
 <meta name="color-scheme" content="light dark">
 <meta name="supported-color-schemes" content="light dark">
 <title>$titulo</title>
+<!--[if mso]>
+<noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+<style>table, td, p, a, h1 { font-family: 'Segoe UI', Arial, sans-serif !important; }</style>
+<![endif]-->
 <style>
-  body { margin: 0; padding: 0; width: 100%; background: #F8FAFC; }
-  a { color: #2B7857; }
+  body { margin: 0; padding: 0; width: 100%; background: #F3F7F5; -webkit-text-size-adjust: 100%; }
+  a { color: #065F46; }
   @media (max-width: 600px) {
     .faixa, .cartao, .rodape { padding-left: 22px !important; padding-right: 22px !important; }
     .titulo { font-size: 22px !important; }
   }
   @media (prefers-color-scheme: dark) {
     body, .fundo { background: #0C1311 !important; }
-    .faixa { background: #143C31 !important; }
+    .faixa { background: #053D2E !important; }
+    .filete { background: #16A34A !important; }
     .cartao { background: #131C18 !important; border-color: #222F29 !important; }
     .texto, .titulo { color: #E1EBE6 !important; }
     .suave { color: #9CACA4 !important; }
-    .link { color: #78C89E !important; }
-    .botao, .botao a { background: #78C89E !important; color: #071A13 !important; }
-    .caixa { background: #1B3A2D !important; border-color: #2B5A45 !important; color: #A3E2BF !important; }
+    .slogan { color: #86EFAC !important; }
+    .link { color: #86EFAC !important; }
+    .botao, .botao a { background: #16A34A !important; color: #03140D !important; }
+    .caixa { background: #0F2A20 !important; border-color: #1E4D3A !important; color: #86EFAC !important; }
     .divisa { border-color: #222F29 !important; }
   }
 </style>
 </head>
-<body class="fundo" style="margin:0;padding:0;width:100%;background:#F8FAFC;">
+<body class="fundo" style="margin:0;padding:0;width:100%;background:#F3F7F5;">
+<div role="article" aria-roledescription="email" aria-label="$titulo" lang="pt-BR">
 <div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;">$previa&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="fundo" style="background:#F8FAFC;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="fundo" bgcolor="#F3F7F5" style="background:#F3F7F5;">
   <tr>
     <td align="center" style="padding:32px 12px;">
+      <!--[if mso]><table role="presentation" width="560" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
         <tr>
-          <td class="faixa" style="background:#1F5746;border-radius:16px 16px 0 0;padding:26px 36px;">
-            <p style="margin:0;font-family:Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;line-height:1.1;font-weight:700;letter-spacing:-0.6px;color:#FFFFFF;">OliFine</p>
-            <p style="margin:6px 0 0;font-family:Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.4;font-weight:600;color:#84D2A5;">Tecnologia a favor do seu dinheiro</p>
-          </td>
-        </tr>
-        <tr>
-          <td class="cartao" style="background:#FFFFFF;border:1px solid #E2E8F0;border-top:0;border-radius:0 0 16px 16px;padding:36px;">
-            <h1 class="titulo" style="margin:0 0 16px;font-family:Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-0.6px;color:#1A2430;">$titulo</h1>
-$conteudo
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 8px;">
+          <td class="faixa" bgcolor="#065F46" style="background:#065F46;border-radius:16px 16px 0 0;padding:24px 36px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
               <tr>
-                <td class="botao" style="border-radius:12px;background:#2B7857;">
-                  <a href="$link" target="_blank" style="display:inline-block;padding:14px 26px;border-radius:12px;background:#2B7857;font-family:Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1;font-weight:600;color:#FFFFFF;text-decoration:none;">$rotulo</a>
+$marca
+                <td style="padding-left:14px;vertical-align:middle;">
+                  <p style="margin:0;font-family:Geist,'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;font-size:22px;line-height:1.1;font-weight:700;letter-spacing:-0.6px;color:#FFFFFF;">OliFine</p>
+                  <p class="slogan" style="margin:5px 0 0;font-family:Geist,'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.3;font-weight:600;color:#BBF7D0;">Finanças que fazem sentido</p>
                 </td>
               </tr>
             </table>
-            <p class="suave" style="margin:16px 0 0;font-family:Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.55;color:#626E7F;">Se o botão não abrir, copie este endereço no navegador:<br><a class="link" href="$link" target="_blank" style="color:#2B7857;word-break:break-all;">$link</a></p>
-            <p class="suave divisa" style="margin:28px 0 0;padding-top:20px;border-top:1px solid #E2E8F0;font-family:Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.55;color:#626E7F;">$aviso</p>
           </td>
         </tr>
         <tr>
-          <td class="rodape" style="padding:20px 36px 0;">
-            <p class="suave" style="margin:0;font-family:Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:#626E7F;">E-mail automático da OliFine. A OliFine nunca pede a sua senha por e-mail, mensagem ou telefone.</p>
+          <td class="filete" bgcolor="#16A34A" height="4" style="height:4px;background:#16A34A;font-size:0;line-height:0;">&nbsp;</td>
+        </tr>
+        <tr>
+          <td class="cartao" bgcolor="#FFFFFF" style="background:#FFFFFF;border:1px solid #E2E8F0;border-top:0;border-radius:0 0 16px 16px;padding:36px;">
+            <h1 class="titulo" style="margin:0 0 16px;font-family:Geist,'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-0.6px;color:#1A2430;">$titulo</h1>
+$conteudo
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 8px;">
+              <tr>
+                <td class="botao" bgcolor="#065F46" style="border-radius:12px;background:#065F46;">
+                  <!--[if mso]>
+                  <v:roundrect href="$link" style="height:48px;v-text-anchor:middle;width:260px;" arcsize="25%" stroke="f" fillcolor="#065F46">
+                    <w:anchorlock/>
+                    <center style="color:#FFFFFF;font-family:'Segoe UI',Arial,sans-serif;font-size:15px;font-weight:600;">$rotulo</center>
+                  </v:roundrect>
+                  <![endif]-->
+                  <!--[if !mso]><!-->
+                  <a href="$link" target="_blank" style="display:inline-block;padding:15px 28px;border-radius:12px;background:#065F46;font-family:Geist,'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1;font-weight:600;color:#FFFFFF;text-decoration:none;">$rotulo</a>
+                  <!--<![endif]-->
+                </td>
+              </tr>
+            </table>
+            <p class="suave" style="margin:16px 0 0;font-family:Geist,'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.55;color:#5B6776;">Se o botão não abrir, copie este endereço no navegador:<br><a class="link" href="$link" target="_blank" style="color:#065F46;word-break:break-all;">$link</a></p>
+            <p class="suave divisa" style="margin:28px 0 0;padding-top:20px;border-top:1px solid #E2E8F0;font-family:Geist,'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.55;color:#5B6776;">$aviso</p>
+          </td>
+        </tr>
+        <tr>
+          <td class="rodape" style="padding:22px 36px 0;">
+            <p class="suave" style="margin:0;font-family:Geist,'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#5B6776;"><strong style="color:#065F46;" class="link">OliFine</strong> · Finanças que fazem sentido$endereco_oficial</p>
+            <p class="suave" style="margin:8px 0 0;font-family:Geist,'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#5B6776;">E-mail automático da OliFine. A OliFine nunca pede a sua senha por e-mail, mensagem ou telefone.</p>
           </td>
         </tr>
       </table>
+      <!--[if mso]></td></tr></table><![endif]-->
     </td>
   </tr>
 </table>
+</div>
 </body>
 </html>

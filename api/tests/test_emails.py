@@ -71,6 +71,36 @@ def test_key_fora_do_formato_e_recusada(key):
         mensagem_da_key(key, LINK)
 
 
+def test_marca_com_monograma_hospedado_junto_com_o_app_e_slogan():
+    # O mesmo modelo serve o GitHub Pages (com caminho) e um domínio próprio.
+    for app, oficial in [
+        ("https://jolini.github.io/ADS-Project", "jolini.github.io/ADS-Project"),
+        ("https://app.exemplo.com/", "app.exemplo.com"),
+    ]:
+        mensagem = mensagem_de_confirmacao(LINK, app)
+        assert f'src="{app.rstrip("/")}/email/olifine-monograma.png"' in mensagem.html
+        assert 'alt="OF"' in mensagem.html
+        assert "Finanças que fazem sentido" in mensagem.html
+        assert f"Endereço oficial: {oficial}" in mensagem.html
+        assert f"Endereço oficial: {oficial}\n" in mensagem.texto
+        assert "OliFine · Finanças que fazem sentido" in mensagem.texto
+
+
+def test_sem_endereco_do_app_o_monograma_vira_texto():
+    mensagem = mensagem_de_nova_senha(LINK)
+    assert "<img" not in mensagem.html
+    assert ">OF</td>" in mensagem.html
+    assert "Endereço oficial" not in mensagem.html
+    assert "Endereço oficial" not in mensagem.texto
+
+
+def test_endereco_do_app_precisa_ser_http():
+    with pytest.raises(ValueError):
+        mensagem_de_confirmacao(LINK, "javascript:alert(1)")
+    mensagem = mensagem_de_confirmacao(LINK, 'https://app.exemplo.com/"><script>')
+    assert "<script>" not in mensagem.html
+
+
 # --- Provedores de envio -------------------------------------------------------
 
 EMAIL = Email("ana@exemplo.com", mensagem_de_confirmacao(LINK))
@@ -360,6 +390,9 @@ def test_correio_monta_o_link_da_area_do_cliente_com_o_codigo_no_fragmento(gerad
     textos = " ".join(arquivo.read_text(encoding="utf-8") for arquivo in tmp_path.glob("*.txt"))
     assert "https://app.exemplo.com/auth/verificar-email#oobCode=COD-1" in textos
     assert "https://app.exemplo.com/auth/redefinir-senha#oobCode=COD-1" in textos
+    # O monograma sai do mesmo endereço dos links (APP_URL).
+    paginas = " ".join(arquivo.read_text(encoding="utf-8") for arquivo in tmp_path.glob("*.html"))
+    assert paginas.count('src="https://app.exemplo.com/email/olifine-monograma.png"') == 2
 
 
 def test_criar_correio_recusa_conta_de_servico_de_outro_projeto(json_da_conta_de_servico, tmp_path):

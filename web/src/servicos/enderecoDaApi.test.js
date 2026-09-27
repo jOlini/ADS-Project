@@ -21,6 +21,11 @@ describe('enderecoDaApi', () => {
     expect(enderecoDaApi('', tunel, '/ADS-Project/')).toBe('');
   });
 
+  it('num domínio próprio, aceita a API no mesmo endereço do app (caminho relativo, sem CORS)', () => {
+    expect(enderecoDaApi('/api/', 'app.exemplo.com', '/')).toBe('/api');
+    expect(enderecoDaApi('https://app.exemplo.com/api', 'app.exemplo.com', '/')).toBe('https://app.exemplo.com/api');
+  });
+
   it('não mexe numa API hospedada, nem em endereço vazio ou inválido', () => {
     expect(enderecoDaApi('https://api.exemplo.com', '192.0.2.10')).toBe('https://api.exemplo.com');
     expect(enderecoDaApi('', '192.0.2.10')).toBe('');
