@@ -83,7 +83,9 @@
   --of-saida: #b94a44;
   --of-rosa-suave: #feeae9;
   --of-sobre-rosa: #963a35;
-  --of-fruto: #e3bb5f; /* moedas da árvore completa */
+  --of-fruto: #e3bb5f; /* selo da meta completa */
+  --of-maca: #d0554b; /* maçãs da árvore completa */
+  --of-maca-funda: #9e3a33;
   --of-terra: #9d6020;
   --of-monograma-escuro: #1f5746;
   --of-monograma-claro: #459b72;
@@ -313,6 +315,8 @@
   --of-rosa-suave: #422423;
   --of-sobre-rosa: #f5b9b6;
   --of-fruto: #e4bf6d;
+  --of-maca: #e0766b;
+  --of-maca-funda: #b54a41;
   --of-monograma-escuro: #459b72;
   --of-monograma-claro: #84d2a5;
   --of-tronco: #a3866d;
