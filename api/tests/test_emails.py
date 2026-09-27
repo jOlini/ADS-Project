@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import ValidationError
 
 from app.config import Configuracoes
+from app.emails.console import conferir, problemas_no_console
 from app.emails.correio import CorreioDaConta, criar_correio
 from app.emails.envio import (
     Email,
@@ -303,6 +304,10 @@ class GoogleFalso:
         self.erro = erro
         self.pedidos_de_token = 0
         self.pedidos_de_codigo = []
+        self.configuracao = {
+            "authorizedDomains": ["localhost", f"{PROJETO_DE_TESTE}.firebaseapp.com", "app.exemplo.com"],
+            "notification": {"sendEmail": {"callbackUri": "https://app.exemplo.com/auth/acao"}},
+        }
 
     def __call__(self, requisicao, timeout):
         if requisicao.full_url == URL_DO_TOKEN:
@@ -320,6 +325,11 @@ class GoogleFalso:
             assert declaracao["iss"].startswith("emails@")
             assert declaracao["exp"] - declaracao["iat"] == 3600
             return RespostaFalsa(b'{"access_token": "token-do-google", "expires_in": 3600}')
+
+        if requisicao.full_url.endswith(f"/admin/v2/projects/{PROJETO_DE_TESTE}/config"):
+            assert requisicao.get_method() == "GET"
+            assert requisicao.get_header("Authorization") == "Bearer token-do-google"
+            return RespostaFalsa(json.dumps(self.configuracao).encode())
 
         assert requisicao.full_url.endswith(f"/projects/{PROJETO_DE_TESTE}/accounts:sendOobCode")
         assert requisicao.get_header("Authorization") == "Bearer token-do-google"
@@ -409,3 +419,53 @@ def test_criar_correio_recusa_conta_de_servico_de_outro_projeto(json_da_conta_de
 
 def test_criar_correio_desligado_sem_provedor():
     assert criar_correio(configuracao()) is None
+
+
+# --- Conferência do Console (app/emails/console.py) ---------------------------
+
+
+def test_configuracao_do_projeto_e_lida_com_o_token_da_conta_de_servico(gerador, google):
+    assert gerador.configuracao_do_projeto() == google.configuracao
+
+
+def test_console_sem_problema_quando_bate_com_o_app_url():
+    configuracao = {
+        "authorizedDomains": ["jolini.github.io"],
+        "notification": {"sendEmail": {"callbackUri": "https://jolini.github.io/ADS-Project/auth/acao"}},
+    }
+    assert problemas_no_console(configuracao, "https://jolini.github.io/ADS-Project/") == []
+
+
+def test_console_aponta_url_de_acao_padrao_e_dominio_fora_da_lista():
+    configuracao = {
+        "authorizedDomains": ["localhost"],
+        "notification": {"sendEmail": {"callbackUri": "https://projeto.firebaseapp.com/__/auth/action"}},
+    }
+    problemas = problemas_no_console(configuracao, "https://app.exemplo.com")
+    assert len(problemas) == 2
+    assert "app.exemplo.com" in problemas[0]
+    assert "https://app.exemplo.com/auth/acao" in problemas[1]
+
+
+def test_console_com_app_local_so_exige_a_pagina_do_app():
+    configuracao = {
+        "authorizedDomains": ["localhost"],
+        "notification": {"sendEmail": {"callbackUri": "https://jolini.github.io/ADS-Project/auth/acao"}},
+    }
+    # APP_URL local: a URL de ação aponta para o endereço público, e está certo.
+    assert problemas_no_console(configuracao, "http://localhost:5173/ADS-Project") == []
+    configuracao["notification"]["sendEmail"]["callbackUri"] = ""
+    (problema,) = problemas_no_console(configuracao, "http://localhost:5173/ADS-Project")
+    assert "<endereço público do app>/auth/acao" in problema
+
+
+def test_conferir_sem_conta_de_servico_nao_chama_o_google():
+    resultado = conferir(configuracao())
+    assert resultado == {"conferido": False, "motivo": "FIREBASE_CONTA_DE_SERVICO vazio no api/.env."}
+
+
+def test_conferir_com_arquivo_que_nao_existe_explica_sem_segredo():
+    resultado = conferir(configuracao(firebase_conta_de_servico="nao-existe.json"))
+    assert resultado["conferido"] is False
+    assert "FIREBASE_CONTA_DE_SERVICO" in resultado["motivo"]
+

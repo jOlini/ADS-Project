@@ -122,10 +122,12 @@ def criar_app(
 
     # CORS: só as origens de CORS_ORIGENS chamam a API pelo navegador. O
     # cabeçalho Authorization é o único de credencial aceito; cookie, nenhum.
+    # PATCH entra já: a edição de lançamento usa esse método, e o navegador
+    # barra na pré-verificação o método que não estiver na lista.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.lista_cors,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
         expose_headers=["Location"],
     )

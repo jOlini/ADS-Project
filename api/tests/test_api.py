@@ -186,6 +186,16 @@ def test_cors_libera_so_as_origens_configuradas(api):
     assert "Access-Control-Allow-Origin" not in desconhecida.headers
 
 
+@pytest.mark.parametrize("metodo", ["GET", "POST", "PUT", "PATCH", "DELETE"])
+def test_cors_libera_os_metodos_usados_pela_area_do_cliente(api, metodo):
+    resposta = api.options(
+        "/espacos", headers={"Origin": "http://localhost:5173", "Access-Control-Request-Method": metodo}
+    )
+
+    assert resposta.status_code == 200
+    assert metodo in resposta.headers["Access-Control-Allow-Methods"]
+
+
 def test_cors_soma_a_origem_da_rede_local_sem_repetir():
     config = Configuracoes(
         _env_file=None,

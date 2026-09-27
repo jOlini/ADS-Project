@@ -2,6 +2,9 @@
 # Antes: copiar api/.env.example para api/.env e trocar os valores
 # (o "python subir-app.py up" cria o api/.env sozinho na primeira vez).
 # Subir: docker compose up --build   ·   API em http://localhost:8081
+# Com os e-mails da conta ligados, prefira o "python subir-app.py up": ele
+# monta a chave da conta de serviço no container (.subir-app/compose.local.yml);
+# o caminho do Windows no api/.env não existe dentro dele.
 
 services:
   mongo:
@@ -34,8 +37,10 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+    # /saude responde em qualquer AMBIENTE (o /openapi.json sai do ar em
+    # produção) e não consulta o banco.
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/openapi.json', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/saude', timeout=3)"]
       interval: 5s
       timeout: 5s
       retries: 12

@@ -243,7 +243,7 @@ web/                  área do cliente (React + Firebase)
   iniciar.bat/.sh     atalhos que instalam as dependências e sobem o app (npm start)
 .github/workflows/    ci-tests.yml, cd.yml e alertas.yml
 docker-compose.yml    MongoDB + API
-subir-app.py          sobe tudo com um comando (venv, dependências, Docker, Vite, links e túnel)
+subir-app.py          sobe tudo com um comando (venv, dependências, Docker, Vite, links e túnel) e verifica a configuração
 README.md             objetivo, tecnologias, instalação, execução e testes
 ARCHITECTURE.md       este documento
 DOCS_API.md           documentação técnica da API

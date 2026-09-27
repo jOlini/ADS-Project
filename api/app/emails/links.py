@@ -35,6 +35,9 @@ from app.emails.envio import TEMPO_LIMITE_EM_SEGUNDOS
 URL_DO_TOKEN = "https://oauth2.googleapis.com/token"
 ESCOPO = "https://www.googleapis.com/auth/cloud-platform"
 URL_DO_CODIGO = "https://identitytoolkit.googleapis.com/v1/projects/{projeto}/accounts:sendOobCode"
+# Configuração do Authentication (domínios autorizados, URL de ação). Só
+# leitura: app/emails/console.py confere o que falta no Console.
+URL_DA_CONFIGURACAO = "https://identitytoolkit.googleapis.com/admin/v2/projects/{projeto}/config"
 
 # O token de acesso do Google vale 1 hora; é trocado um minuto antes.
 FOLGA_DO_TOKEN = 60
@@ -118,6 +121,16 @@ class GeradorDeLinks:
             raise FalhaNoFirebase("RESPOSTA_SEM_CODIGO")
         return codigo
 
+    def configuracao_do_projeto(self) -> dict:
+        """Configuração do Authentication do projeto, como o Console mostra.
+        Só leitura; exige o papel "Administrador do Firebase Authentication"."""
+        return self._pedir(
+            URL_DA_CONFIGURACAO.format(projeto=self.credencial.projeto),
+            None,
+            {"Authorization": f"Bearer {self._token_de_acesso()}"},
+            metodo="GET",
+        )
+
     def _token_de_acesso(self) -> str:
         with self._trava:
             agora = self._relogio()
@@ -147,8 +160,8 @@ class GeradorDeLinks:
             self._vence_em = instante + int(resposta.get("expires_in", 3600))
             return self._token
 
-    def _pedir(self, url: str, corpo: bytes, cabecalhos: dict[str, str]) -> dict:
-        requisicao = urllib.request.Request(url, data=corpo, method="POST", headers=cabecalhos)
+    def _pedir(self, url: str, corpo: bytes | None, cabecalhos: dict[str, str], metodo: str = "POST") -> dict:
+        requisicao = urllib.request.Request(url, data=corpo, method=metodo, headers=cabecalhos)
         try:
             with self._abrir(requisicao, timeout=TEMPO_LIMITE_EM_SEGUNDOS) as resposta:
                 return json.loads(resposta.read())

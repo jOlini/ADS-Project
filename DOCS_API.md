@@ -1041,8 +1041,13 @@ variável de ambiente, `api/.env`, arquivo.
   modelos (confirmação, senha nova e key de acesso) com dados fictícios. O monograma vem de
   `<endereço do app>/email/olifine-monograma.png` (padrão `http://localhost:5173/ADS-Project`, com o `npm run dev`
   no ar).
-- **Fluxo completo sem provedor:** `EMAIL_PROVEDOR=pasta` e a API fora do Docker (opção C do README): cada e-mail
-  vira um `.html` em `api/emails-enviados/`; abra e clique no link.
+- **Fluxo completo sem provedor:** `EMAIL_PROVEDOR=pasta` com o `python subir-app.py up` (ele monta a pasta no
+  container) ou com a API fora do Docker (opção C do README): cada e-mail vira um `.html` em `api/emails-enviados/`;
+  abra e clique no link.
+- **Console do Firebase:** `.venv\Scripts\python -m app.emails.console` em `api/` lê, com a conta de serviço, a URL
+  de ação personalizada e os domínios autorizados e aponta o que não bate com o `APP_URL` (só leitura; o
+  `python subir-app.py verificar` usa). A URL de ação só muda pelo Console: a API de administração recusa a troca em
+  projeto sem Identity Platform (`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`).
 
 ---
 
