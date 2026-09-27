@@ -2,13 +2,14 @@
 
 API REST do Pessoal Finance. Partes 1 a 5: gestão de usuários do back-office, com autenticação por JWT e
 controle de acesso por perfil (RBAC). Parte 6: livro-caixa do cliente final (contas, categorias e lançamentos),
-acessado com o ID token do Firebase. Parte 7: relatórios do livro-caixa (Dashboard).
+acessado com o ID token do Firebase. Parte 7: relatórios do livro-caixa (Dashboard). Parte 8: e-mails da conta
+do cliente (confirmação e senha nova) e o modo de produção.
 
 | Item | Valor |
 |---|---|
 | Tecnologia | Python 3.13 · FastAPI · PyJWT (HS256 e RS256) · bcrypt · MongoDB (pymongo) |
 | URL base (local) | `http://localhost:8081` |
-| Documentação interativa (OpenAPI) | `http://localhost:8081/docs` |
+| Documentação interativa (OpenAPI) | `http://localhost:8081/docs` (fora do ar com `AMBIENTE=producao`) |
 | Painel de demonstração (HTML, CSS e JS) | `http://localhost:8081/painel/` |
 | Formato | JSON (`application/json`); erros em Problem Details (`application/problem+json`, RFC 9457) |
 | Código | [`api/`](api) |
@@ -389,6 +390,10 @@ sequenceDiagram
 | **Força bruta no login** | Script testa milhares de senhas no `POST /auth/login`, o único endpoint público | Trava de 15 minutos por e-mail + endereço (5 erros) e por endereço (20 erros), com `429` e `Retry-After`; o `429` e o `tentativas_restantes` do `401` saem iguais para e-mail existente e inexistente | `limites.py`, `rotas.py` |
 | **Script injetado na documentação (`/docs`)** | CDN comprometida ou script inline rouba o token colado em "Authorize" | Swagger UI de versão fixa com Subresource Integrity (o navegador recusa arquivo alterado); inicialização num arquivo da própria API; CSP própria sem `unsafe-inline` e com a CDN limitada ao caminho da versão; ReDoc desligado | `documentacao.py` |
 | **Conta do cliente com e-mail alheio** | Alguém cria conta no Firebase com o e-mail de outra pessoa e usa o livro-caixa | O livro-caixa exige `email_verified: true` no ID token (`403` sem ele); a área do cliente só abre depois do link de confirmação | `firebase.py`, `financeiro/acesso.py` |
+| **Enumeração pelo "Esqueci minha senha"** | Pedir o link para vários e-mails e ver qual resposta (ou qual tempo) muda | `POST /conta/nova-senha` responde `202` com o mesmo corpo com e sem conta; o pedido ao Firebase e o envio rodam depois da resposta, então o tempo também é igual; os limites contam todo pedido, com ou sem conta | `emails/rotas.py` |
+| **E-mail bomba e phishing com o remetente da OliFine** | Script pede centenas de links para a caixa de alguém; ou escreve um texto próprio no e-mail | 1 link por minuto e 5 por hora por conta ou e-mail, 10 a cada 15 minutos por endereço (`429` com `Retry-After`); nenhum campo do e-mail vem de quem pediu (sem nome nem mensagem livre); link e key escapados no HTML | `limites.py`, `emails/mensagens.py` |
+| **Código do link vazado** | O código de confirmação ou de senha nova fica no log do servidor de páginas ou no `Referer` | O código vai depois do `#` (o fragmento não sai do navegador); a página tira o código do endereço ao abrir; `Referrer-Policy: no-referrer`; em produção, `APP_URL` só com HTTPS | `emails/correio.py`, `web/src/paginas/*` |
+| **Configuração de desenvolvimento em produção** | Servidor sobe com o `.env.example` copiado, CORS aberto ou banco sem senha | `AMBIENTE=producao` recusa subir e lista todos os problemas de uma vez; Swagger e `/openapi.json` fora do ar; segredos lidos de `/run/secrets` | `config.py`, `main.py` |
 | **Negação de serviço por corpo gigante** | Enviar centenas de MB no login (público) para esgotar a memória | Corpo acima de 2 MB recusado com `413`: pelo `Content-Length` antes de ler, ou contando os bytes no envio em partes | `limites.py` |
 | **XSS no painel** | Nome de usuário com `<script>` executa no navegador do administrador e rouba o token | Dados inseridos com `textContent`, nunca `innerHTML`; CSP `default-src 'self'; object-src 'none'; base-uri 'none'` bloqueia script embutido | `painel.js`, `seguranca.py` |
 | **Clickjacking e recursos do navegador** | Site embute o painel num `<iframe>` invisível e induz cliques; script injetado usa câmera ou localização | `X-Frame-Options: DENY` e `frame-ancestors 'none'`; `Permissions-Policy` desligando câmera, microfone, localização e pagamento; `Cross-Origin-Opener-Policy: same-origin`; `Strict-Transport-Security` quando a requisição chega por HTTPS | `seguranca.py` |
@@ -406,11 +411,15 @@ sequenceDiagram
   registrar, `ZREMRANGEBYSCORE` + `ZRANGE` para contar, `DEL` para zerar), numa transação `MULTI`/`EXEC` ou num
   script Lua. **MongoDB:** um documento por falha com índice TTL. Nos dois, o relógio passa a ser `time.time`.
   Atrás de um proxy, todos os clientes chegam com o IP do proxy: a trava por endereço passa a valer para todos
-  juntos (o proxy precisa repassar o IP real, e a API só confia nele vindo do proxy).
+  juntos. Por isso, em produção, `FORWARDED_ALLOW_IPS` recebe o IP do proxy (o Uvicorn só lê o `X-Forwarded-For`
+  vindo dele), e a API avisa no log quando falta.
 - **HTTPS:** em execução local a API usa HTTP. Em produção, fica atrás de um proxy reverso com TLS; o HSTS já sai
   quando a requisição chega por HTTPS (com o Uvicorn em `--proxy-headers`).
 - **"Sair de todos os aparelhos":** o logout revoga só o token usado. Encerrar todas as sessões de uma pessoa
   (ex.: depois de trocar a senha) pediria um marco `tokens_validos_desde` no usuário, conferido contra o `iat`.
+- **Conta criada direto no Firebase:** qualquer um cria uma conta no Authentication pela API pública do Google,
+  com qualquer e-mail, e pode pedir o link de confirmação para ela. O limite por conta e o texto fixo do e-mail
+  reduzem o abuso; bloquear na origem exige as Blocking Functions do Identity Platform.
 - **Actions do CI fixadas por SHA:** protege contra tag movida, mas a atualização é manual (o comentário ao lado
   diz a versão). Um robô de atualização (Dependabot) abriria PRs que não recebem os secrets do Discord.
 
@@ -950,6 +959,81 @@ GET /espacos/<espaco_id>/relatorios/cartoes
   filtro de conta, gasto por categoria com a fatia, faturas comprometidas, espaço e conta alheios em `404`).
 - **Manual (Swagger):** com o ID token de uma conta de teste (Parte 6, "Como testar o livro-caixa"), abra a tag
   **Relatórios** e chame `GET /espacos/{espaco_id}/relatorios/mensal` sem parâmetros (os últimos 12 meses).
+
+---
+
+## Parte 8 – E-mails da conta e modo de produção
+
+A confirmação do e-mail e a senha nova saem da API, com a marca OliFine, no lugar do e-mail padrão do Firebase
+(remetente `noreply@<projeto>.firebaseapp.com`, que cai no spam com frequência, e página genérica do Google). O
+Firebase continua dono da conta: a API só pede a ele o **código** do link.
+
+```
+Área do cliente ── POST /conta/confirmacao (ID token) ──┐
+       ou         ── POST /conta/nova-senha (e-mail) ────┤
+                                                         ▼
+                        API ── 202 na hora; depois da resposta:
+                         1. accounts:sendOobCode (returnOobLink, conta de serviço) ── Firebase devolve o código
+                         2. monta o e-mail (modelo OliFine: HTML + texto)
+                         3. manda pelo provedor (Resend, SMTP ou pasta)
+                                                         ▼
+Caixa de entrada ── link <APP_URL>/auth/verificar-email#oobCode=… ── página do app aplica o código (SDK do Firebase)
+```
+
+### Endpoints
+
+| Método | Endpoint | Quem pode | Corpo | Resposta |
+|---|---|---|---|---|
+| `POST` | `/conta/confirmacao` | Cliente com ID token do Firebase, **mesmo sem o e-mail confirmado** (a única rota assim) | — | `202` (conta já confirmada: `202` sem mandar) |
+| `POST` | `/conta/nova-senha` | Público | `{"email": "ana@exemplo.com"}` | `202`, igual com e sem conta |
+| `GET` | `/saude` | Público | — | `200 {"status": "ok"}` |
+
+Sem `EMAIL_PROVEDOR`, as duas rotas `/conta` respondem `503`; a área do cliente percebe e usa o envio do próprio
+Firebase (o mesmo vale para a API fora do ar e para o GitHub Pages, que não tem API). Limites (`429` com
+`Retry-After`): confirmação, 1 por minuto e 5 por hora por conta, 20 por hora por endereço; senha nova, 1 por
+minuto para o mesmo e-mail do mesmo endereço, 5 por hora por e-mail e 10 a cada 15 minutos por endereço.
+
+### Provedores
+
+| `EMAIL_PROVEDOR` | Como manda | Configuração |
+|---|---|---|
+| `resend` | API HTTPS do Resend (porta 443) | `RESEND_API_KEY`, domínio do remetente verificado (SPF e DKIM) |
+| `smtp` | Qualquer servidor SMTP com senha: SSL na 465, STARTTLS nas outras (nunca texto puro) | `SMTP_HOST`, `SMTP_PORTA`, `SMTP_USUARIO`, `SMTP_SENHA` |
+| `pasta` | Não manda: grava `.html` e `.txt` em `EMAIL_PASTA` (desenvolvimento; recusado em produção) | — |
+
+Todos precisam de `EMAIL_REMETENTE`, `APP_URL` e `FIREBASE_CONTA_DE_SERVICO` (chave JSON de uma conta de
+serviço do mesmo projeto do `FIREBASE_PROJECT_ID`; a API não sobe com projeto diferente). O token de acesso da
+conta de serviço é pedido ao Google com um JWT RS256 (OAuth 2.0, RFC 7523), sem SDK a mais, e reaproveitado até
+um minuto antes de vencer.
+
+### Páginas da área do cliente
+
+| Página | O que faz |
+|---|---|
+| `/auth/verificar-email` | Aplica o código (`applyActionCode`) e mostra **E-mail confirmado**; com a conta logada na mesma aba, a área logada abre na hora. Link vencido, usado ou sem rede: mensagem própria e o caminho seguinte |
+| `/auth/redefinir-senha` | Confere o código, mostra o e-mail da conta e pede a senha nova duas vezes (`confirmPasswordReset`) |
+| `/auth/esqueci-a-senha` | Pede o link; a resposta na tela é a mesma com e sem conta |
+| `/auth/acao` | Endereço para a "URL de ação personalizada" do Console do Firebase: leva os links do próprio Firebase à página certa |
+
+### Modo de produção
+
+`AMBIENTE=producao` recusa subir quando encontra: `JWT_SECRET` ou `ADMIN_SENHA` do exemplo; origem de CORS sem
+`https://` ou curinga; `CORS_ORIGENS_REDE` preenchido; `MONGODB_URI` sem usuário e senha; `APP_URL` sem
+`https://`; `EMAIL_PROVEDOR=pasta`. A mensagem lista todos de uma vez. O `/docs` e o `/openapi.json` saem do ar.
+
+Segredos podem vir de arquivo: um por variável em `/run/secrets`, com o nome em minúsculas
+(`/run/secrets/jwt_secret`, `/run/secrets/resend_api_key`, `/run/secrets/firebase_conta_de_servico` com o JSON).
+Assim eles não aparecem no `docker inspect` nem em quem liste as variáveis do processo. A ordem de prioridade é:
+variável de ambiente, `api/.env`, arquivo.
+
+### Como testar
+
+- **Automatizados:** `api/tests/test_emails.py` (modelos, provedores, código do Firebase com o Google simulado),
+  `test_emails_rotas.py` (rotas, limites, resposta igual com e sem conta) e `test_producao.py`.
+- **Modelos:** `.venv\Scripts\python -m app.emails.previa <pasta>` em `api/` grava os três modelos
+  (confirmação, senha nova e key de acesso) com dados fictícios.
+- **Fluxo completo sem provedor:** `EMAIL_PROVEDOR=pasta` e a API fora do Docker (opção C do README): cada e-mail
+  vira um `.html` em `api/emails-enviados/`; abra e clique no link.
 
 ---
 
