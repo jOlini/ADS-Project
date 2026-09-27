@@ -57,6 +57,12 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          # Caminho e API do site publicado: variáveis do repositório (vars),
+          # não secrets, porque nenhuma é segredo. Vazias, o build é o de
+          # sempre: /ADS-Project/ e sem API. Com domínio próprio no Pages,
+          # VITE_BASE=/ (o site passa a morar na raiz do domínio).
+          VITE_BASE: ${{ vars.VITE_BASE }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
 
       # O Pages só conhece arquivos: /ADS-Project/principal não existe no
       # disco e daria 404 ao recarregar. Um 404.html igual ao index.html faz o

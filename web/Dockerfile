@@ -14,17 +14,19 @@ RUN npm ci
 
 COPY . .
 
-# O vite.config.js define base: '/ADS-Project/', que é o caminho do
-# GitHub Pages. Dentro do container o nginx serve a partir da raiz,
-# então sobrescreve o base aqui. Sem isso o index.html procuraria
-# os assets em /ADS-Project/assets/... e a página abriria em branco.
+# Caminho da publicação (vite.config.js). Sem VITE_BASE, o build sai para
+# /ADS-Project/, o caminho do GitHub Pages. Dentro do container o nginx
+# serve a partir da raiz, então o padrão aqui é "/". Sem isso o index.html
+# procuraria os assets em /ADS-Project/assets/... e a página abriria em
+# branco. Outro caminho: docker build --build-arg VITE_BASE=/app/ ...
+ARG VITE_BASE=/
 #
 # A configuração do Firebase (web/.env) entra como secret de build:
 #   docker build --secret id=env,src=web/.env -t pessoal-finance-web web
 # O arquivo fica montado só durante este RUN e não é gravado em nenhuma
 # camada da imagem (o .dockerignore também barra o .env do contexto).
 # Sem o --secret, o build funciona e as páginas avisam que falta o Firebase.
-RUN --mount=type=secret,id=env,target=/app/.env npm run build -- --base=/
+RUN --mount=type=secret,id=env,target=/app/.env npm run build
 
 # Execução
 # Só os arquivos estáticos e um servidor web. Sem Node, sem npm, sem dependências de desenvolvimento.
