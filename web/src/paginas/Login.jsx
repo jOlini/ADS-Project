@@ -101,7 +101,8 @@ export default function Login() {
           {emailParaConfirmar && (
             <p className="mensagem info" role="status">
               Se o e-mail puder ser usado, enviamos um link de confirmação para <b>{emailParaConfirmar}</b>. Abra o
-              link e depois entre com seu e-mail e senha. Não chegou? Confira o spam.
+              link e depois entre com seu e-mail e senha. Não chegou? Confira o spam ou entre assim mesmo: se faltar
+              confirmar, mandamos um link novo.
             </p>
           )}
 

@@ -1,7 +1,7 @@
 // O que o app guarda no navegador e o que sai no logout.
 //
 // Chaves do app começam com "olifine:" (metas por conta, contagem de
-// tentativas de login, tema). Sair da conta apaga todas, menos a preferência
+// tentativas de login, último link de confirmação do e-mail, tema). Sair da conta apaga todas, menos a preferência
 // de tema, que não diz nada sobre a pessoa. Num computador compartilhado, quem
 // senta depois não encontra as metas nem os rastros de quem saiu.
 //
