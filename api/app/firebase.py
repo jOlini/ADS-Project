@@ -12,6 +12,12 @@ third-party JWT library"):
 - "exp" no futuro, "iat" e "auth_time" no passado;
 - "sub" (o uid) texto não vazio de até 128 caracteres.
 
+Além das regras do Firebase, a API exige "email_verified": true. A área do
+cliente já segura quem não confirmou o e-mail, mas quem chama a API direto
+(curl, script) passaria por cima da tela; sem esta checagem, uma conta criada
+com o e-mail de outra pessoa usaria o livro-caixa sem nunca provar que é dona
+do endereço.
+
 O token do back-office (HS256, emitido em /auth/login) nunca passa aqui: o
 algoritmo é fixo em RS256 e o emissor é outro. O inverso vale em tokens.py.
 Assim uma credencial de cliente nunca alcança a área administrativa, e o
@@ -39,6 +45,10 @@ class TokenFirebaseInvalido(Exception):
 
 class FirebaseIndisponivel(Exception):
     """Projeto não configurado ou chaves públicas do Google inacessíveis."""
+
+
+class EmailNaoVerificado(Exception):
+    """Token válido de uma conta que ainda não confirmou o e-mail."""
 
 
 @dataclass(frozen=True)
@@ -88,6 +98,9 @@ class VerificadorFirebase:
             raise TokenFirebaseInvalido("sub inválido.")
         if not isinstance(payload["auth_time"], int) or payload["auth_time"] > time.time() + FOLGA_DO_RELOGIO:
             raise TokenFirebaseInvalido("auth_time no futuro.")
+        # "is not True": ausente, false ou texto "true" contam como não verificado.
+        if payload.get("email_verified") is not True:
+            raise EmailNaoVerificado(uid)
 
         email = payload.get("email")
         return ClienteFirebase(uid=uid, email=email if isinstance(email, str) else None)

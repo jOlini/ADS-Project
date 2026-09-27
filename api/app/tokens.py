@@ -1,6 +1,7 @@
 """Emissão e validação do JWT (HS256, com a biblioteca PyJWT)."""
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import jwt
 
@@ -20,6 +21,10 @@ def gerar_token(usuario: Usuario, segredo: str, validade_minutos: int, agora: da
     O payload de um JWT é só Base64: qualquer um lê. Por isso ele leva o mínimo
     para identificar e autorizar (id, nome, perfil e datas) e nunca senha, hash
     ou e-mail. A assinatura impede alteração, não leitura.
+
+    O "jti" (identificador único do token, RFC 7519) é o que o logout revoga
+    (revogacao.py): sem ele, não daria para desligar um token sem desligar
+    todos os outros do mesmo usuário.
     """
     # O JWT guarda datas em segundos inteiros (RFC 7519). Zerar os
     # microssegundos faz o "expira_em" da resposta bater com o exp do token.
@@ -33,6 +38,7 @@ def gerar_token(usuario: Usuario, segredo: str, validade_minutos: int, agora: da
         "perfil": usuario.perfil.value,
         "iat": emitido_em,
         "exp": expira_em,
+        "jti": uuid4().hex,
     }
     return jwt.encode(payload, segredo, algorithm=ALGORITMO), expira_em
 
@@ -41,8 +47,9 @@ def validar_token(token: str, segredo: str) -> dict:
     """Devolve o payload ou lança TokenInvalido.
 
     Recusa assinatura que não confere, token vencido (exp), emissor diferente
-    (iss) e claim obrigatório ausente. A lista de algoritmos é fixa em HS256:
-    um token com "alg": "none" ou outro algoritmo é recusado, sem exceção.
+    (iss) e claim obrigatório ausente (inclusive o jti, que a revogação usa).
+    A lista de algoritmos é fixa em HS256: um token com "alg": "none" ou outro
+    algoritmo é recusado, sem exceção.
     """
     try:
         return jwt.decode(
@@ -50,7 +57,7 @@ def validar_token(token: str, segredo: str) -> dict:
             segredo,
             algorithms=[ALGORITMO],
             issuer=EMISSOR,
-            options={"require": ["iss", "sub", "iat", "exp"]},
+            options={"require": ["iss", "sub", "iat", "exp", "jti"]},
         )
     except jwt.InvalidTokenError as erro:
         raise TokenInvalido(str(erro)) from erro

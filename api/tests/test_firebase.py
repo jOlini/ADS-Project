@@ -11,7 +11,7 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from app.firebase import FirebaseIndisponivel, TokenFirebaseInvalido, VerificadorFirebase
+from app.firebase import EmailNaoVerificado, FirebaseIndisponivel, TokenFirebaseInvalido, VerificadorFirebase
 from tests.conftest import PROJETO_DE_TESTE, SEGREDO_DE_TESTE
 
 
@@ -39,6 +39,29 @@ def test_token_valido_devolve_o_uid_e_o_email(verificador, token_firebase):
 def test_token_com_claim_invalido_e_recusado(verificador, token_firebase, alteracoes):
     with pytest.raises(TokenFirebaseInvalido):
         verificador.verificar(token_firebase("uid-ana", **alteracoes))
+
+
+@pytest.mark.parametrize(
+    "confirmado",
+    [
+        pytest.param(False, id="e-mail não confirmado"),
+        pytest.param(None, id="sem email_verified"),
+        pytest.param("true", id="email_verified como texto"),
+    ],
+)
+def test_conta_sem_email_confirmado_e_recusada(verificador, token_firebase, confirmado):
+    with pytest.raises(EmailNaoVerificado):
+        verificador.verificar(token_firebase("uid-ana", email_verified=confirmado))
+
+
+def test_livro_caixa_responde_403_a_conta_sem_email_confirmado(api, token_firebase):
+    # A tela segura quem não confirmou o e-mail; a API também, para quem a
+    # chama direto com o token.
+    token = token_firebase("uid-ana", email_verified=False)
+    resposta = api.get("/espacos", headers={"Authorization": f"Bearer {token}"})
+
+    assert resposta.status_code == 403
+    assert resposta.json()["detail"] == "Confirme o seu e-mail pelo link que enviamos para usar o app."
 
 
 def test_assinatura_de_outra_chave_e_recusada(verificador, token_firebase):

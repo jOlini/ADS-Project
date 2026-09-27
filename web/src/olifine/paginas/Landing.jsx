@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
+import AlternadorDeTema from '../../componentes/AlternadorDeTema';
 import Arvore from '../componentes/Arvore';
 import Icone from '../../componentes/Icone';
 import Logo, { MarcaOliFine, SLOGAN } from '../componentes/Logo';
@@ -8,6 +9,7 @@ import { HOJE_DE_EXEMPLO, LANCAMENTOS_DE_EXEMPLO, MESES_DE_EXEMPLO, METAS_DE_EXE
 import { caminhoSuave } from '../regras/curva';
 import { iconeDaLinha } from '../regras/icones';
 import { planoMensal, porcentagem } from '../regras/metas';
+import { FAIXAS, simularOrcamento, textoDaLeitura, textoDoPrazo, VALORES_INICIAIS } from '../regras/simulador';
 import { fatiasDaRosca, montarVisao } from '../regras/visao';
 import { leituraDaVariacao, textoDaVariacao } from '../regras/tendencia';
 import '../estilos/landing.css';
@@ -261,16 +263,18 @@ const BENEFICIOS = [
   },
 ];
 
+// O que protege a conta hoje, dito sem exagero: cada item existe no código
+// (ARCHITECTURE.md, seção 4).
 const SEGURANCA = [
   {
     icone: 'cadeado',
-    titulo: 'Privacidade',
-    texto: 'Nada de ligar o app ao seu banco: você decide o que entra, lançando ou importando o extrato.',
+    titulo: 'Privacidade sob seu controle',
+    texto: 'Você decide o que entra na sua conta, e nada é compartilhado sem a sua autorização.',
   },
   {
     icone: 'escudo',
-    titulo: 'Segurança',
-    texto: 'Entrada protegida por conta e senha, e mensagens de erro que nunca revelam quem tem cadastro.',
+    titulo: 'Proteção em cada acesso',
+    texto: 'Conexão criptografada, e-mail confirmado, sessão que termina ao fechar o navegador e bloqueio depois de senhas erradas.',
   },
   {
     icone: 'documento',
@@ -286,6 +290,91 @@ const RECURSOS_GRATUITOS = [
   'Visão geral do mês com gráficos',
   'Metas com a árvore que cresce',
 ];
+
+// Um controle deslizante do simulador, em reais inteiros, com o valor escrito
+// ao lado (e lido pelo leitor de tela em aria-valuetext).
+function Controle({ campo, rotulo, valor, aoMudar }) {
+  const id = useId();
+  const faixa = FAIXAS[campo];
+  const texto = formatarBRL(valor * 100);
+  return (
+    <div className="lp-controle">
+      <label htmlFor={id}>{rotulo}</label>
+      <output htmlFor={id}>{texto}</output>
+      <input
+        id={id}
+        type="range"
+        min={faixa.minimo}
+        max={faixa.maximo}
+        step={faixa.passo}
+        value={valor}
+        aria-valuetext={texto}
+        onChange={(evento) => aoMudar(campo, Number(evento.target.value))}
+        style={{ '--p': `${((valor - faixa.minimo) / (faixa.maximo - faixa.minimo)) * 100}%` }}
+      />
+    </div>
+  );
+}
+
+// Simulador de orçamento: renda e gastos em controles, e na hora a sobra do
+// mês, o ano e o prazo da reserva de emergência (regras/simulador.js). Nada
+// sai da página.
+function Simulador() {
+  const [valores, setValores] = useState(VALORES_INICIAIS);
+  const resultado = simularOrcamento({
+    renda: valores.renda * 100,
+    fixos: valores.fixos * 100,
+    variaveis: valores.variaveis * 100,
+  });
+  const mudar = (campo, valor) => setValores((atuais) => ({ ...atuais, [campo]: valor }));
+
+  return (
+    <div className="lp-simulador">
+      <form className="lp-simulador-controles" onSubmit={(evento) => evento.preventDefault()} aria-label="Valores da simulação">
+        <Controle campo="renda" rotulo="Renda do mês" valor={valores.renda} aoMudar={mudar} />
+        <Controle campo="fixos" rotulo="Gastos fixos (moradia, contas, escola)" valor={valores.fixos} aoMudar={mudar} />
+        <Controle campo="variaveis" rotulo="Gastos do dia a dia (mercado, transporte, lazer)" valor={valores.variaveis} aoMudar={mudar} />
+        <button type="button" className="lp-simulador-refazer" onClick={() => setValores(VALORES_INICIAIS)}>
+          Voltar aos valores de exemplo
+        </button>
+      </form>
+
+      <div className={`lp-simulador-resultado ${resultado.leitura}`}>
+        <p className="lp-simulador-rotulo">Sobra do mês</p>
+        <p className="lp-simulador-sobra">{formatarBRL(resultado.sobra)}</p>
+        <div className="lp-simulador-barra" aria-hidden="true">
+          {resultado.partes.map((parte) => (
+            <i key={parte.id} className={parte.id} style={{ width: `${parte.fatia}%` }} />
+          ))}
+        </div>
+        <ul className="lp-simulador-legenda">
+          {resultado.partes.map((parte) => (
+            <li key={parte.id} className={parte.id}>
+              <span>{parte.rotulo}</span>
+              <b>{parte.fatia}%</b>
+            </li>
+          ))}
+        </ul>
+        {/* Só a leitura é anunciada a cada mudança; os números ficam na tela. */}
+        <p className="lp-simulador-leitura" aria-live="polite">
+          {textoDaLeitura(resultado)}
+        </p>
+        <dl className="lp-simulador-numeros">
+          <div>
+            <dt>Guardando a sobra por 1 ano</dt>
+            <dd>{formatarBRL(resultado.emUmAno)}</dd>
+          </div>
+          <div>
+            <dt>Reserva de emergência</dt>
+            <dd>{textoDoPrazo(resultado.mesesParaReserva)}</dd>
+            <dd className="lp-simulador-nota">6 meses de gastos: {formatarBRL(resultado.reserva)}</dd>
+          </div>
+        </dl>
+        <p className="lp-ficticio-claro">Simulação ilustrativa: nada é gravado nem enviado.</p>
+      </div>
+    </div>
+  );
+}
 
 // Ondas orgânicas do fundo esmeralda: três faixas que deslizam devagar
 // (param com prefers-reduced-motion).
@@ -343,6 +432,7 @@ export default function Landing() {
             <a href="#planos">Planos</a>
           </div>
           <div className="lp-nav-acoes">
+            <AlternadorDeTema />
             {logado ? (
               <Link to="/principal" className="lp-botao">
                 Ir para o app
@@ -462,15 +552,22 @@ export default function Landing() {
           <Laptop />
         </section>
 
+        <section className="lp-secao lp-simulacao" id="simulador" aria-labelledby="lp-simulador-titulo">
+          <div className="lp-simulacao-texto">
+            <h2 id="lp-simulador-titulo">Quanto sobra no seu mês?</h2>
+            <p className="lp-secao-apoio">
+              Mova a renda e os gastos e veja na hora a sobra, quanto ela vira em um ano e em quanto tempo você monta uma
+              reserva de emergência.
+            </p>
+          </div>
+          <Simulador />
+        </section>
+
         <section className="lp-secao lp-seguranca" id="seguranca" aria-labelledby="lp-seguranca-titulo">
           <Contornos className="seguranca" />
           <div className="lp-seguranca-texto">
-            <h2 id="lp-seguranca-titulo">
-              Seu dinheiro é pessoal.
-              <br />
-              Seus dados também.
-            </h2>
-            <p>A OliFine foi pensada desde o início com privacidade e transparência.</p>
+            <h2 id="lp-seguranca-titulo">Segurança de nível bancário.</h2>
+            <p>Criptografia ponta a ponta e total controle sobre a privacidade dos seus dados.</p>
           </div>
           <div className="lp-seguranca-grade">
             {SEGURANCA.map((item) => (

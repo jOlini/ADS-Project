@@ -16,6 +16,11 @@ import './olifine/estilos/olifine.css';
 import './estilos/movimento.css';
 import ToastProvider from './componentes/toast/ToastProvider';
 import AppRoutes from './routes';
+import { iniciarTema } from './servicos/tema';
+
+// Tema claro ou escuro (escolha salva ou o do sistema) e a cor da barra do
+// celular, antes do primeiro render.
+iniciarTema();
 
 // Clickjacking: o GitHub Pages não deixa mandar X-Frame-Options, e a CSP em
 // <meta> não aceita frame-ancestors. Aberto numa moldura (<iframe>) de outro

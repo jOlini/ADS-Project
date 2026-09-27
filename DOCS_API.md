@@ -22,6 +22,7 @@ acessado com o ID token do Firebase. Parte 7: relatórios do livro-caixa (Dashbo
 | Método | Endpoint | Finalidade | Quem pode | Resposta de sucesso | Erros possíveis |
 |---|---|---|---|---|---|
 | `POST` | `/auth/login` | Autenticar e-mail e senha e obter o token JWT | Público | `200 OK` | `400`, `401`, `413`, `429` |
+| `POST` | `/auth/logout` | Encerrar a sessão: revoga o token usado na chamada | Qualquer perfil autenticado | `204 No Content` | `401` |
 | `GET` | `/usuarios` | Listar todos os usuários | Administrador, Operador | `200 OK` | `401`, `403` |
 | `GET` | `/usuarios/{id}` | Consultar um usuário pelo ID | Administrador, Operador; Cliente só o próprio | `200 OK` | `401`, `403`, `404` |
 | `POST` | `/usuarios` | Criar usuário (nome, e-mail, senha, perfil) | Administrador | `201 Created` + cabeçalho `Location` | `400`, `401`, `403`, `409` |
@@ -34,9 +35,9 @@ acessado com o ID token do Firebase. Parte 7: relatórios do livro-caixa (Dashbo
 |---|---|
 | `200 OK` | Consulta, atualização ou login bem-sucedidos |
 | `201 Created` | Usuário criado; o cabeçalho `Location` aponta para `/usuarios/{id}` do novo recurso |
-| `204 No Content` | Usuário excluído (resposta sem corpo) |
+| `204 No Content` | Usuário excluído ou sessão encerrada no logout (resposta sem corpo) |
 | `400 Bad Request` | JSON malformado, campo inválido ou campo desconhecido; o corpo traz o erro de cada campo em `campos` |
-| `401 Unauthorized` | Login recusado, ou token ausente, adulterado, expirado ou de usuário excluído |
+| `401 Unauthorized` | Login recusado (o corpo diz em `tentativas_restantes` quantas senhas erradas ainda cabem antes do `429`), ou token ausente, adulterado, expirado, revogado no logout ou de usuário excluído |
 | `403 Forbidden` | Token válido, mas o perfil não tem permissão para a operação |
 | `404 Not Found` | Usuário ou rota inexistente |
 | `409 Conflict` | E-mail já cadastrado, ou operação sobre a própria conta (excluir a si mesmo, mudar o próprio perfil) |
@@ -68,6 +69,19 @@ Content-Type: application/json
     "criado_em": "2026-09-18T23:12:32.551000Z",
     "atualizado_em": "2026-09-18T23:12:32.551000Z"
   }
+}
+```
+
+Login recusado (mesma resposta para e-mail sem conta e para senha errada; a contagem também é igual):
+
+```json
+{
+  "type": "about:blank",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "E-mail ou senha inválidos.",
+  "instance": "/auth/login",
+  "tentativas_restantes": 3
 }
 ```
 
@@ -130,6 +144,10 @@ Erro (todos os erros seguem este formato):
    se distingue dos errados). A contagem vale para e-mail existente e inexistente, então o `429` também não
    revela quem tem conta. O e-mail sozinho não trava: senão qualquer pessoa trancaria o administrador de
    propósito. Um login certo zera a contagem do par, não a do endereço.
+6. **Aviso das tentativas restantes:** cada `401` do login traz `tentativas_restantes`, o número de senhas
+   erradas que ainda cabem antes do `429` (o menor entre o que resta ao par e ao endereço). O painel mostra
+   "Restam 3 tentativas antes do bloqueio de 15 minutos.". O número sobe e desce igual com e sem conta: avisa
+   quem errou a senha sem revelar se o e-mail existe.
 
 Código: `autenticar()` em [`api/app/servicos.py`](api/app/servicos.py) e `LimiteDeTentativas` em
 [`api/app/limites.py`](api/app/limites.py).
@@ -152,8 +170,9 @@ precisasse validar, o caminho seria RS256 (chave privada assina, chave pública 
 | `nome` | Nome do usuário | Exibir na interface sem nova consulta |
 | `perfil` | `ADMINISTRADOR`, `OPERADOR` ou `CLIENTE` | Interface decidir o que mostrar |
 | `iat` | Data de emissão (segundos desde 1970, UTC) | Auditoria e cálculo da validade |
-| `exp` | Data de expiração (`iat` + 30 min) | Recusar token vencido |
+| `exp` | Data de expiração (`iat` + 15 min) | Recusar token vencido |
 | `iss` | `pessoal-finance-api` | Recusar token emitido por outro sistema |
+| `jti` | Identificador único do token (32 caracteres hexadecimais) | Revogar este token no logout, sem derrubar as outras sessões |
 
 Exemplo de payload decodificado:
 
@@ -164,7 +183,8 @@ Exemplo de payload decodificado:
   "nome": "Olga Operadora",
   "perfil": "OPERADOR",
   "iat": 1789773215,
-  "exp": 1789775015
+  "exp": 1789774115,
+  "jti": "5f0c3b7e9a2d4c61b8e7f1a0d3c9e245"
 }
 ```
 
@@ -181,26 +201,34 @@ Toda rota protegida exige `Authorization: Bearer <token>`. A dependência `usuar
 - assinatura que não confere (token adulterado ou assinado com outra chave);
 - algoritmo diferente de HS256: a lista de algoritmos aceitos é fixa, então um token com `"alg": "none"` é
   recusado;
-- token vencido (`exp`), de outro emissor (`iss`) ou sem algum claim obrigatório;
+- token vencido (`exp`), de outro emissor (`iss`) ou sem algum claim obrigatório (inclusive o `jti`);
+- token revogado no logout (`jti` na lista de revogados), com a mensagem "Sessão encerrada. Faça login
+  novamente.";
 - usuário do token que não existe mais no banco.
 
 O perfil usado na autorização é o **atual, lido do banco**, não o gravado no token. Um usuário excluído perde o
 acesso na hora, e um rebaixamento de perfil vale já na requisição seguinte.
 
-### Política de expiração: 30 minutos
+### Política de expiração e revogação: 15 minutos e logout que desliga o token
 
-O token vale **30 minutos** (`JWT_EXPIRATION=30`), sem refresh token: vencido, o usuário faz login de novo.
+O token vale **15 minutos** (`JWT_EXPIRATION=15`), sem refresh token: vencido, o usuário faz login de novo. O
+**logout revoga** o token na hora (`POST /auth/logout`).
 
 Justificativa:
 
 - **Privilégio alto:** a API administra contas de usuário. Um token roubado de administrador permite criar e
   excluir contas; quanto menor a validade, menor a janela de uso indevido.
-- **JWT não se revoga individualmente:** por ser autocontido, o servidor não "desliga" um token emitido. A
-  expiração curta é o limite natural de estrago. (A leitura do perfil no banco a cada requisição cobre exclusão
-  e rebaixamento, mas não um token roubado de um usuário que continua ativo.)
-- **Equilíbrio com o uso:** 30 minutos cobrem uma sessão típica de administração sem pedir login a toda hora. 24
-  horas seriam longas demais para um perfil administrativo; 5 minutos obrigariam login constante sem um fluxo de
-  renovação.
+- **Revogação no logout:** por ser autocontido, um JWT continuaria valendo até o `exp` mesmo depois de a pessoa
+  sair. Por isso cada token leva um `jti`, e o `POST /auth/logout` grava esse `jti` na coleção
+  `tokens_revogados` do MongoDB até a hora em que ele venceria (índice TTL: a entrada some sozinha depois). Toda
+  requisição confere a lista. Uma cópia vazada (outra aba, print, log) deixa de valer quando a pessoa sai; as
+  outras sessões dela continuam. A lista fica no banco, e não na memória, para valer em todas as instâncias da
+  API e sobreviver ao reinício ([`api/app/revogacao.py`](api/app/revogacao.py)).
+- **Validade curta para o que não foi encerrado:** um token roubado de quem não clicou em Sair vale no máximo
+  15 minutos (antes, 30). A leitura do perfil no banco a cada requisição já cobria exclusão e rebaixamento.
+- **Equilíbrio com o uso:** 15 minutos cobrem uma tarefa administrativa típica; o painel avisa a validade no
+  login. 24 horas seriam longas demais para um perfil administrativo; 5 minutos obrigariam login constante sem um
+  fluxo de renovação.
 - **Proteções complementares:** o painel guarda o token no `sessionStorage` (some ao fechar a aba) e a API envia
   `Content-Security-Policy` e `Cache-Control: no-store`, reduzindo as chances de o token vazar.
 
@@ -243,7 +271,8 @@ requisição
   ├─ LimiteDoCorpo ............. corpo acima de 2 MB                              → 413
   │
   ├─ LimiteDeTentativas ........ só no POST /auth/login: senhas erradas seguidas → 429
-  ├─ usuario_autenticado ....... valida o JWT e carrega o usuário do banco      → falhou: 401
+  ├─ usuario_autenticado ....... valida o JWT, recusa o revogado no logout e
+  │                              carrega o usuário do banco                     → falhou: 401
   ├─ exigir_perfis(...) ........ compara o perfil com a tabela de RBAC          → sem permissão: 403
   │  ou equipe_ou_proprio_cadastro (GET /usuarios/{id})
   │
@@ -349,7 +378,7 @@ sequenceDiagram
 
 | Risco | Como seria explorado | Mitigação implementada | Onde |
 |---|---|---|---|
-| **Roubo de token JWT** | Token capturado na rede, em log ou por script malicioso é reutilizado | HTTPS em produção; expiração de 30 min; token no `sessionStorage` (some ao fechar a aba); `Content-Security-Policy` e `no-store`; perfil lido do banco a cada requisição | `tokens.py`, `seguranca.py`, `painel.js` |
+| **Roubo de token JWT** | Token capturado na rede, em log ou por script malicioso é reutilizado | HTTPS em produção; logout que revoga o token pelo `jti` (lista no MongoDB com TTL); expiração de 15 min; token no `sessionStorage` (some ao fechar a aba); `Content-Security-Policy` e `no-store`; perfil lido do banco a cada requisição | `tokens.py`, `revogacao.py`, `seguranca.py`, `painel.js` |
 | **Senhas armazenadas em texto puro** | Vazamento do banco expõe as senhas, reaproveitadas em outros sites | Hash BCrypt com salt aleatório e custo 12; hash nunca sai na resposta; senha fora do token e dos logs | `senhas.py`, `modelos.py` |
 | **Acesso indevido a endpoints** | Cliente ou operador chama rota administrativa direto pela API | RBAC por dependência em cada rota; matriz de permissões coberta por teste em toda PR | `seguranca.py`, `rotas.py`, `test_api.py` |
 | **Escalação de privilégio** | Operador envia `PUT` mudando o próprio perfil para `ADMINISTRADOR` | Só administrador altera perfil; operador não edita administrador; ninguém muda o próprio perfil | `servicos.py` |
@@ -357,7 +386,9 @@ sequenceDiagram
 | **Enumeração de usuários** | Mensagem ou tempo de resposta do login revela quais e-mails têm conta | Mesma mensagem para e-mail inexistente e senha errada; BCrypt roda contra hash fictício quando o e-mail não existe | `servicos.py`, `main.py` |
 | **Mass assignment** | Enviar `"senha_hash"` ou `"id"` no JSON para gravar valor escolhido | DTOs de entrada separados da entidade, com `extra="forbid"` (campo desconhecido = `400`) | `modelos.py` |
 | **Injeção NoSQL** | Enviar `{"$ne": null}` no lugar de um e-mail para burlar a consulta | Pydantic exige texto nos campos; consultas pymongo montadas com valores tipados; ID validado como ObjectId | `modelos.py`, `repositorio.py` |
-| **Força bruta no login** | Script testa milhares de senhas no `POST /auth/login`, o único endpoint público | Trava de 15 minutos por e-mail + endereço (5 erros) e por endereço (20 erros), com `429` e `Retry-After`; o `429` sai igual para e-mail existente e inexistente | `limites.py`, `rotas.py` |
+| **Força bruta no login** | Script testa milhares de senhas no `POST /auth/login`, o único endpoint público | Trava de 15 minutos por e-mail + endereço (5 erros) e por endereço (20 erros), com `429` e `Retry-After`; o `429` e o `tentativas_restantes` do `401` saem iguais para e-mail existente e inexistente | `limites.py`, `rotas.py` |
+| **Script injetado na documentação (`/docs`)** | CDN comprometida ou script inline rouba o token colado em "Authorize" | Swagger UI de versão fixa com Subresource Integrity (o navegador recusa arquivo alterado); inicialização num arquivo da própria API; CSP própria sem `unsafe-inline` e com a CDN limitada ao caminho da versão; ReDoc desligado | `documentacao.py` |
+| **Conta do cliente com e-mail alheio** | Alguém cria conta no Firebase com o e-mail de outra pessoa e usa o livro-caixa | O livro-caixa exige `email_verified: true` no ID token (`403` sem ele); a área do cliente só abre depois do link de confirmação | `firebase.py`, `financeiro/acesso.py` |
 | **Negação de serviço por corpo gigante** | Enviar centenas de MB no login (público) para esgotar a memória | Corpo acima de 2 MB recusado com `413`: pelo `Content-Length` antes de ler, ou contando os bytes no envio em partes | `limites.py` |
 | **XSS no painel** | Nome de usuário com `<script>` executa no navegador do administrador e rouba o token | Dados inseridos com `textContent`, nunca `innerHTML`; CSP `default-src 'self'; object-src 'none'; base-uri 'none'` bloqueia script embutido | `painel.js`, `seguranca.py` |
 | **Clickjacking e recursos do navegador** | Site embute o painel num `<iframe>` invisível e induz cliques; script injetado usa câmera ou localização | `X-Frame-Options: DENY` e `frame-ancestors 'none'`; `Permissions-Policy` desligando câmera, microfone, localização e pagamento; `Cross-Origin-Opener-Policy: same-origin`; `Strict-Transport-Security` quando a requisição chega por HTTPS | `seguranca.py` |
@@ -368,15 +399,20 @@ sequenceDiagram
 
 **Riscos residuais (próximos passos):**
 
-- **Limite de tentativas em memória:** vale para uma instância da API (o Docker Compose sobe uma). Com várias
-  réplicas, o contador precisa de um armazenamento comum (ex.: coleção do MongoDB com índice TTL). Atrás de um
-  proxy, todos os clientes chegam com o IP do proxy: a trava por endereço passa a valer para todos juntos.
+- **Limite de tentativas em memória:** vale para uma instância da API (o Docker Compose sobe uma). O
+  `LimiteDeTentativas` já recebe o armazenamento por um contrato (`ArmazenamentoDeFalhas`, em
+  [`api/app/limites.py`](api/app/limites.py)); com várias réplicas, basta passar uma implementação comum, sem
+  mudar a regra. **Redis:** um sorted set por chave, com o instante como score (`ZADD` + `EXPIRE` para
+  registrar, `ZREMRANGEBYSCORE` + `ZRANGE` para contar, `DEL` para zerar), numa transação `MULTI`/`EXEC` ou num
+  script Lua. **MongoDB:** um documento por falha com índice TTL. Nos dois, o relógio passa a ser `time.time`.
+  Atrás de um proxy, todos os clientes chegam com o IP do proxy: a trava por endereço passa a valer para todos
+  juntos (o proxy precisa repassar o IP real, e a API só confia nele vindo do proxy).
 - **HTTPS:** em execução local a API usa HTTP. Em produção, fica atrás de um proxy reverso com TLS; o HSTS já sai
   quando a requisição chega por HTTPS (com o Uvicorn em `--proxy-headers`).
-- **Revogação imediata de token de usuário ativo:** exigiria lista de tokens revogados (`jti`) ou refresh token
-  com rotação. Hoje, sair do painel apaga o token do navegador, mas uma cópia roubada vale até expirar (30 min).
-- **Documentação interativa (`/docs`):** carrega o Swagger de CDN e fica sem a CSP restritiva. Em produção, pode
-  ser desligada ou servida com os arquivos locais.
+- **"Sair de todos os aparelhos":** o logout revoga só o token usado. Encerrar todas as sessões de uma pessoa
+  (ex.: depois de trocar a senha) pediria um marco `tokens_validos_desde` no usuário, conferido contra o `iat`.
+- **Actions do CI fixadas por SHA:** protege contra tag movida, mas a atualização é manual (o comentário ao lado
+  diz a versão). Um robô de atualização (Dependabot) abriria PRs que não recebem os secrets do Discord.
 
 ---
 
@@ -394,7 +430,7 @@ Todos exigem o ID token do Firebase. Tudo que é do cliente fica sob um **espaç
 
 | Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
 |---|---|---|---|---|
-| `GET` | `/espacos` | Listar meus espaços; no primeiro acesso, cria o espaço pessoal com as categorias iniciais | `200 OK` | `401`, `503` |
+| `GET` | `/espacos` | Listar meus espaços; no primeiro acesso, cria o espaço pessoal com as categorias iniciais | `200 OK` | `401`, `403` (e-mail não confirmado), `503` |
 | `GET` | `/espacos/{espaco_id}` | Consultar um espaço | `200 OK` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/contas` | Listar contas com o saldo de cada uma | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial) ou cartão de crédito (tipo `CARTAO_CREDITO`, com limite, fechamento e vencimento) | `201 Created` + `Location` | `400`, `401`, `404` |
@@ -730,6 +766,11 @@ A API é *resource server*: não emite esse token, só confere que o Google o em
   de diferença entre os relógios (o Docker Desktop costuma atrasar depois que o computador dorme);
 - `sub` (o `uid`) ausente, vazio ou com mais de 128 caracteres.
 
+Token válido de uma conta que **ainda não confirmou o e-mail** (`email_verified` ausente ou diferente de `true`)
+responde `403 Forbidden`, "Confirme o seu e-mail pelo link que enviamos para usar o app.". A área do cliente já
+segura essa conta na tela de confirmação; a API repete a regra para quem a chama direto, e assim ninguém usa o
+livro-caixa com o e-mail de outra pessoa.
+
 Sem `FIREBASE_PROJECT_ID`, ou sem acesso às chaves do Google, a resposta é `503 Service Unavailable`: a falha é
 do servidor, não de quem chamou. O back-office continua funcionando.
 
@@ -748,7 +789,7 @@ do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
 
 ### Como testar o livro-caixa
 
-- **Testes automatizados:** `api/tests/test_firebase.py` (validação do ID token), `test_financeiro_regras.py`
+- **Testes automatizados:** `api/tests/test_firebase.py` (validação do ID token e o `403` sem e-mail confirmado), `test_financeiro_regras.py`
   (partidas, estorno e coerência), `test_financeiro_api.py` (rotas, isolamento, saldos e estorno),
   `test_financeiro_importacao.py` (leitura do CSV, chave por linha e importação sem duplicar),
   `test_financeiro_layouts.py` (formatos de vários bancos, mapeamento das colunas e começo do arquivo) e
@@ -763,7 +804,8 @@ do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
   ```
 
   Copie o `idToken` da resposta (vale 1 hora), clique em **Authorize** no Swagger, cole-o em
-  **IdTokenFirebase** e chame `GET /espacos`.
+  **IdTokenFirebase** e chame `GET /espacos`. A conta de teste precisa ter o e-mail confirmado; sem isso, a
+  resposta é `403`.
 - **Pela área do cliente:** com `VITE_API_URL` no `web/.env` e `CORS_ORIGENS` no `api/.env`, as telas
   Lançamentos, Contas & Cartões (com a tela de cada cartão) e Categorias usam estas rotas com o login do Firebase. Roteiro em
   [`README.md`, "Teste manual da área do cliente"](README.md#4-teste-manual-da-área-do-cliente).
@@ -920,7 +962,9 @@ GET /espacos/<espaco_id>/relatorios/cartoes
   uma ação proibida e veja o `403` no aviso e em "Respostas da API". O roteiro completo, com a resposta
   esperada de cada passo, está na seção "Como testar" do [`README.md`](README.md#como-testar).
 - **Swagger:** `http://localhost:8081/docs`. Rode `POST /auth/login`, copie o `token`, clique em
-  **Authorize** e cole o token.
+  **Authorize** e cole o token. Depois rode `POST /auth/logout` (`204`) e repita um `GET /usuarios`: `401`,
+  "Sessão encerrada. Faça login novamente.". A página do Swagger sai com a própria CSP
+  (`curl -sI http://localhost:8081/docs` mostra o `Content-Security-Policy`).
 - **Linha de comando:**
 
   ```bash

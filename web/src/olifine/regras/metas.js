@@ -9,14 +9,14 @@ import { dataExiste } from '../../regras/datas';
 import { LIMITE_EM_CENTAVOS } from '../../regras/dinheiro';
 
 // Fases da árvore, cada uma a partir de uma fração do alvo. O broto nasce no
-// primeiro aporte, de qualquer valor; os frutos, só com a meta completa.
+// primeiro aporte, de qualquer valor; as maçãs, só com a meta completa.
 export const FASES = Object.freeze([
   { id: 'semente', nome: 'Semente', aPartirDe: 0 },
   { id: 'broto', nome: 'Broto', aPartirDe: 0 },
   { id: 'muda', nome: 'Muda', aPartirDe: 0.2 },
   { id: 'arvoreta', nome: 'Arvoreta', aPartirDe: 0.45 },
   { id: 'arvore', nome: 'Árvore', aPartirDe: 0.75 },
-  { id: 'frutos', nome: 'Árvore com frutos', aPartirDe: 1 },
+  { id: 'frutos', nome: 'Árvore com maçãs', aPartirDe: 1 },
 ]);
 
 export const TAMANHO_MAXIMO_DO_NOME = 60;

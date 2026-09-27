@@ -1,8 +1,9 @@
 """Autenticação e autorização das rotas do livro-caixa (dependências do FastAPI).
 
 1. cliente_autenticado: lê "Authorization: Bearer <ID token do Firebase>" e
-   confere o token (firebase.py). Falhou: 401. Firebase não configurado ou
-   chaves do Google inacessíveis: 503.
+   confere o token (firebase.py). Falhou: 401. Conta com o e-mail ainda não
+   confirmado: 403. Firebase não configurado ou chaves do Google
+   inacessíveis: 503.
 2. espaco_do_cliente: carrega o espaço da URL e confere que o uid é membro
    dele. Não é: 404, o mesmo de um espaço inexistente. Responder 403 contaria
    a quem tenta ids alheios que aquele espaço existe (IDOR).
@@ -11,10 +12,16 @@
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.erros import ErroIndisponivel, ErroNaoAutenticado, ErroNaoEncontrado
+from app.erros import ErroIndisponivel, ErroNaoAutenticado, ErroNaoEncontrado, ErroPermissao
 from app.financeiro.modelos import Espaco
 from app.financeiro.repositorio import RepositorioLivroCaixa
-from app.firebase import ClienteFirebase, FirebaseIndisponivel, TokenFirebaseInvalido, VerificadorFirebase
+from app.firebase import (
+    ClienteFirebase,
+    EmailNaoVerificado,
+    FirebaseIndisponivel,
+    TokenFirebaseInvalido,
+    VerificadorFirebase,
+)
 from app.seguranca import DESAFIO_SEM_TOKEN, DESAFIO_TOKEN_INVALIDO
 
 # Esquema próprio (nome diferente do Bearer do back-office) para o Swagger
@@ -47,6 +54,8 @@ def cliente_autenticado(
         return verificador.verificar(credenciais.credentials)
     except TokenFirebaseInvalido:
         raise ErroNaoAutenticado("Sessão inválida ou expirada. Entre de novo.", DESAFIO_TOKEN_INVALIDO)
+    except EmailNaoVerificado:
+        raise ErroPermissao("Confirme o seu e-mail pelo link que enviamos para usar o app.")
     except FirebaseIndisponivel:
         raise ErroIndisponivel("Login do cliente indisponível no momento. Tente de novo em instantes.")
 

@@ -61,14 +61,18 @@ repositório), as telas do livro-caixa passam a funcionar com o login do Firebas
 
 ## Como testar
 
-1. Em **Criar conta** (`/cadastro`), preencha e-mail, senha (6 ou mais caracteres), nome, sobrenome e data de
-   nascimento. O app cria a conta no Firebase Authentication, grava os dados com o UID no Firestore e leva
-   para o login.
+1. Em **Criar conta** (`/cadastro`), preencha e-mail (um endereço que você recebe), senha (6 ou mais
+   caracteres), nome, sobrenome e data de nascimento. O app cria a conta no Firebase Authentication, grava os
+   dados com o UID no Firestore, manda um **link de confirmação** para o e-mail e leva para o login.
 2. Em **Entrar** (`/login`), use um e-mail não cadastrado ou uma senha errada: aparece
-   "Usuário não cadastrado ou senha incorreta.".
-3. Entre com a conta criada: a página **Principal** (`/principal`) mostra nome, sobrenome e data de
-   nascimento lidos do Firestore.
-4. Clique em **Sair** e abra `/principal` direto na barra de endereço: sem sessão, o app volta para o login.
+   "Usuário não cadastrado ou senha incorreta." e quantas tentativas restam antes de o acesso com aquele e-mail
+   ficar bloqueado por 15 minutos.
+3. Entre com a conta criada. Antes de abrir o link do e-mail, o app mostra **Confirme o seu e-mail** (com
+   "Reenviar o link"); depois de abrir o link, clique em **Já confirmei**. A página **Principal**
+   (`/principal`) mostra nome, sobrenome e data de nascimento lidos do Firestore.
+4. Clique em **Sair** e abra `/principal` direto na barra de endereço: sem sessão, o app volta para o login. As
+   metas e os demais dados do app saem do navegador junto com a sessão.
+5. O botão de lua (ou de sol) no topo troca entre o modo claro e o escuro; a escolha fica para a próxima visita.
 
 Testes automatizados (Vitest): `npm test -- --run` (resultado esperado: todos os arquivos e testes passam, sem
 falha; a contagem de cada versão está no `README.md` da raiz do repositório).
@@ -82,15 +86,15 @@ envolve o app com o `BrowserRouter`.
 
 | Endereço | Página | Acesso |
 |---|---|---|
-| `/cadastro` | Cadastro (5 campos e o botão Criar conta) | Público |
+| `/cadastro` | Cadastro (5 campos e o botão Criar conta); manda o link de confirmação do e-mail | Público |
 | `/login` | Login (e-mail, senha e o botão Entrar) | Público |
-| `/principal` | Principal, a Visão geral (nome, sobrenome e data de nascimento em "Seus dados"; números do mês, gráficos e últimas transações com a API) | Só com sessão; sem sessão volta ao login |
+| `/principal` | Principal, a Visão geral (nome, sobrenome e data de nascimento em "Seus dados"; números do mês, gráficos e últimas transações com a API) | Só com sessão e e-mail confirmado; sem sessão volta ao login, sem confirmação mostra "Confirme o seu e-mail" |
 | `/lancamentos` | Extrato do mês, novo lançamento e estorno | Só com sessão; precisa da API |
 | `/contas` | Contas com saldo, criar e editar | Só com sessão; precisa da API |
 | `/categorias` | Categorias de despesa e receita, criar e editar | Só com sessão; precisa da API |
 | `/metas` | Metas de economia, cada uma uma árvore que cresce com os aportes (salvas no navegador) | Só com sessão |
 | `/relatorios` | Receitas e despesas por mês e gasto por categoria no período | Só com sessão; precisa da API |
-| `/` | Página de apresentação, com os atalhos para entrar e criar conta | Público |
+| `/` | Página de apresentação, com o simulador "Quanto sobra no seu mês?" e os atalhos para entrar e criar conta | Público |
 | qualquer outro | Redireciona para `/login` | — |
 
 ## Estrutura
@@ -100,11 +104,13 @@ src/
   routes.jsx            arquivo de rotas (React Router Dom)
   main.jsx              BrowserRouter e provedor de avisos
   firebase.js           inicialização do Firebase (Authentication e Firestore)
-  paginas/              Cadastro, Login, Lancamentos, Contas, Cartao, Categorias e Relatorios
+  paginas/              Cadastro, Login, ConfirmarEmail, Lancamentos, Contas, Cartao, Categorias e Relatorios
   olifine/              identidade OliFine: casca, Visão geral (/principal), Metas e página de apresentação
-  servicos/contas.js    cadastro, login, sessão e leitura dos dados no Firebase
+  servicos/contas.js    cadastro (com o link de confirmação), login, sessão, logout e leitura dos dados
+  servicos/tema.js      modo claro ou escuro (public/tema.js aplica a escolha antes da primeira pintura)
   servicos/livroCaixa.js chamadas à API do livro-caixa com o ID token do Firebase
-  regras/               regras puras e testadas (validação, dinheiro em centavos, extrato, datas)
+  regras/               regras puras e testadas (validação, dinheiro em centavos, extrato, datas, tentativas
+                        de login, o que o logout apaga, tema)
   componentes/          layout, campos, ícones próprios, gráficos, esqueletos de carga e avisos (toasts)
   estilos/              design tokens, movimento e o CSS de cada tela
 firestore.rules         regras de segurança do Firestore

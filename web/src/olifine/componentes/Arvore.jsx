@@ -7,6 +7,34 @@ const TONS = ['var(--of-verde)', 'var(--of-verde-vivo)', 'var(--of-lima)', 'var(
 const DURACAO_DO_CRESCIMENTO = 1400;
 const ESPERA_DA_AGUA = 520;
 
+// Maçã de uns 13 de largura, centrada no ponto do fruto: corpo em dois lobos,
+// cabinho, folha e um brilho. É o fruto da árvore completa e a colheita.
+function Maca({ className = 'of-arvore-maca', style }) {
+  return (
+    <g className={className} style={style}>
+      <path
+        className="of-arvore-maca-corpo"
+        d="M0-3.6C-1.4-5.2-6.2-5-6.2.2c0 4.4 3.2 6.8 4.6 6.8.8 0 1-.5 1.6-.5s.8.5 1.6.5c1.4 0 4.6-2.4 4.6-6.8 0-5.2-4.8-5.4-6.2-3.8Z"
+      />
+      <path className="of-arvore-maca-cabo" d="M0-3.6c0-1.4.4-2.6 1.2-3.4" />
+      <path className="of-arvore-maca-folha" d="M.8-5.4c.8-2 2.8-2.4 4.2-1.6-.8 1.6-2.6 2.2-4.2 1.6Z" />
+      <ellipse className="of-arvore-maca-brilho" cx="-2.6" cy="-1" rx="1.1" ry="1.8" />
+    </g>
+  );
+}
+
+// Conta as colheitas: a rega que leva a meta a 100% faz as maçãs caírem.
+// Ajustado durante a renderização (e não num efeito), como o React indica
+// para estado derivado de uma prop que mudou.
+function useColheita(progresso, rega) {
+  const [visto, setVisto] = useState({ progresso, rega, colheita: 0 });
+  if (visto.progresso !== progresso || visto.rega !== rega) {
+    const completou = rega !== visto.rega && progresso >= 1 && visto.progresso < 1;
+    setVisto({ progresso, rega, colheita: visto.colheita + (completou ? 1 : 0) });
+  }
+  return visto.colheita;
+}
+
 function preferePoucoMovimento() {
   return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 }
@@ -58,7 +86,21 @@ function useProgressoAnimado(progresso, rega) {
 export default function Arvore({ semente, progresso, rega = 0, compacta = false, rotulo }) {
   const galhos = useMemo(() => montarGalhos(semente), [semente]);
   const mostrado = useProgressoAnimado(progresso, rega);
+  const colheita = useColheita(progresso, rega);
   const quadro = useMemo(() => desenharArvore(galhos, mostrado), [galhos, mostrado]);
+  // Da copa para o chão: as maçãs da colheita saem de onde os frutos nascem
+  // (ou do meio da copa, numa árvore sem ponto de fruto).
+  const queda = useMemo(() => {
+    const completa = desenharArvore(galhos, 1);
+    const origens = completa.frutos.length > 0 ? completa.frutos : completa.copas;
+    return origens.slice(0, 5).map((ponto, indice) => ({
+      id: ponto.id,
+      x: ponto.x,
+      y: ponto.y,
+      queda: RAIZ.y + 4 + (indice % 3) * 3 - ponto.y,
+      desvio: (indice % 2 ? 1 : -1) * (8 + indice * 5),
+    }));
+  }, [galhos]);
   const recorte = compacta ? recorteDaMiniatura(quadro) : null;
   // Na miniatura, folhas maiores: a copa precisa ler como viva em 52px.
   const escalaDaFolha = compacta ? 1.45 : 1;
@@ -130,10 +172,26 @@ export default function Arvore({ semente, progresso, rega = 0, compacta = false,
             // O translate fica no <g> de fora: o transform do CSS (animação)
             // substituiria o atributo transform do SVG.
             <g key={fruto.id} transform={`translate(${fruto.x.toFixed(1)} ${fruto.y.toFixed(1)})`}>
-              <g className="of-arvore-moeda" style={{ '--atraso': `${indice * 70}ms` }}>
-                <circle r="6.2" />
-                <circle r="3.6" className="of-arvore-moeda-miolo" />
-              </g>
+              <Maca style={{ '--atraso': `${indice * 70}ms` }} />
+            </g>
+          ))}
+        </g>
+      )}
+
+      {!compacta && colheita > 0 && (
+        // Colheita da meta completa: depois do crescimento, maçãs caem da
+        // copa e ficam na grama. A key reinicia a animação a cada colheita.
+        <g className="of-arvore-colheita" key={colheita} aria-hidden="true">
+          {queda.map((maca, indice) => (
+            <g key={maca.id} transform={`translate(${maca.x.toFixed(1)} ${maca.y.toFixed(1)})`}>
+              <Maca
+                className="of-arvore-maca caindo"
+                style={{
+                  '--atraso': `${indice * 140}ms`,
+                  '--queda': `${maca.queda.toFixed(1)}px`,
+                  '--desvio': `${maca.desvio}px`,
+                }}
+              />
             </g>
           ))}
         </g>

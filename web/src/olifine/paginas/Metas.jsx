@@ -94,7 +94,7 @@ function ReguaDeFases({ meta }) {
       <ol className="of-fases-nomes" aria-label="Fases da árvore">
         {marcos.map((fase) => (
           <li key={fase.id} className={alcancada(fase) ? 'alcancada' : ''} style={{ left: `${posicaoDaFase(fase)}%` }}>
-            {fase.id === 'frutos' ? 'Frutos' : fase.nome}
+            {fase.id === 'frutos' ? 'Maçãs' : fase.nome}
           </li>
         ))}
       </ol>
@@ -161,10 +161,10 @@ function Estufa({ meta, rega, aoRegar, aoExcluir }) {
             <li>
               <Icone nome="broto" tamanho={16} />
               {completa
-                ? 'Meta completa: a árvore deu frutos.'
+                ? 'Meta completa: a árvore deu maçãs.'
                 : proxima.fase.id === 'broto'
                   ? 'Faça o primeiro aporte para a semente brotar.'
-                  : `Faltam ${formatarBRL(proxima.faltam)} para virar ${proxima.fase.id === 'frutos' ? 'árvore com frutos' : proxima.fase.nome.toLowerCase()}.`}
+                  : `Faltam ${formatarBRL(proxima.faltam)} para virar ${proxima.fase.id === 'frutos' ? 'árvore com maçãs' : proxima.fase.nome.toLowerCase()}.`}
             </li>
             <li>
               <Icone nome="gota" tamanho={16} />
@@ -251,7 +251,7 @@ export default function Metas() {
     const depois = faseDaMeta({ ...meta, aportes: [...meta.aportes, aporte] });
     const desfazer = { rotulo: 'Desfazer', aoClicar: () => desfazerAporte(meta.id, aporte.id) };
     if (depois.id === 'frutos') {
-      toast.sucesso(`${meta.nome} chegou a ${formatarBRL(meta.alvo)}.`, { titulo: 'Meta completa: a árvore deu frutos!', acao: desfazer });
+      toast.sucesso(`${meta.nome} chegou a ${formatarBRL(meta.alvo)}.`, { titulo: 'Meta completa: hora da colheita de maçãs!', acao: desfazer });
     } else if (depois.id !== antes.id) {
       toast.sucesso(`+ ${formatarBRL(valor)} em ${meta.nome}.`, { titulo: `Nova fase: ${depois.nome}!`, acao: desfazer });
     } else {
@@ -282,7 +282,7 @@ export default function Metas() {
       <header className="of-cabecalho">
         <div>
           <h1>Metas</h1>
-          <p>Cada aporte rega a sua árvore. Complete a meta e ela dá frutos.</p>
+          <p>Cada aporte rega a sua árvore. Complete a meta e ela dá maçãs.</p>
         </div>
         <div className="of-cabecalho-acoes">
           {exemplo ? (
@@ -297,7 +297,7 @@ export default function Metas() {
             </>
           ) : (
             <>
-              <span className="of-selo-local" title="As metas ainda não vão para o servidor: ficam só neste navegador.">
+              <span className="of-selo-local" title="As metas ainda não vão para o servidor: ficam neste navegador e saem dele quando você sai da conta.">
                 <Icone nome="cadeado" tamanho={14} />
                 Salvas neste navegador
               </span>
@@ -370,7 +370,7 @@ export default function Metas() {
             <h2>Plante a sua primeira meta</h2>
             <p>
               Diga quanto quer juntar e para quê. Cada aporte rega a árvore: ela brota, vira muda, cresce e, quando a meta
-              fica completa, dá frutos. Regar toda semana mantém a sequência viva.
+              fica completa, dá maçãs. Regar toda semana mantém a sequência viva.
             </p>
             <div className="of-metas-vazio-acoes">
               <button type="button" onClick={() => setCriando(true)}>
@@ -386,7 +386,7 @@ export default function Metas() {
         </section>
       )}
 
-      <Modal aberta={criando} titulo="Nova meta" descricao="A meta fica salva neste navegador." aoFechar={() => setCriando(false)}>
+      <Modal aberta={criando} titulo="Nova meta" descricao="A meta fica salva neste navegador até você sair da conta." aoFechar={() => setCriando(false)}>
         <FormularioDeMeta aoCriar={plantar} aoCancelar={() => setCriando(false)} />
       </Modal>
 

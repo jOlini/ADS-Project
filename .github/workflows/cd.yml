@@ -6,6 +6,13 @@ on:
   push:
     branches: [main]
 
+# Cada action fica presa ao SHA do commit, com a versão no comentário ao
+# lado. Uma tag (@v4) pode ser movida para outro código por quem controlar o
+# repositório da action, e o workflow rodaria esse código com os secrets e o
+# token do repositório (ataque de cadeia de suprimentos, como o do
+# tj-actions/changed-files em 2025). O SHA não muda. Para atualizar:
+#   git ls-remote --tags https://github.com/actions/<action> "v4*"
+# e trocar o SHA e o comentário juntos.
 permissions:
   contents: read
   pages: write
@@ -22,10 +29,13 @@ jobs:
 
     steps:
       - name: Baixar o código do repositório
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        # Sem guardar o token no .git/config: nenhum passo faz push.
+        with:
+          persist-credentials: false
 
       - name: Preparar o Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
           cache: npm
@@ -55,10 +65,10 @@ jobs:
         run: cp web/dist/index.html web/dist/404.html
 
       - name: Configurar o GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
 
       - name: Empacotar o resultado do build
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: web/dist
 
@@ -75,4 +85,4 @@ jobs:
     steps:
       - name: Publicar no GitHub Pages
         id: publicacao
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

@@ -4,8 +4,10 @@
  * visual é mudar um token, e o resto acompanha.
  *
  * Três camadas:
- * 1. Tema (cores): um bloco claro e um escuro, trocados pelo
- *    prefers-color-scheme. Os nomes seguem o DESIGN.md do produto.
+ * 1. Tema (cores): um bloco claro e um escuro, trocados pelo atributo
+ *    data-tema do <html> (public/tema.js o define antes da primeira pintura,
+ *    pela escolha salva ou pelo sistema; o botão do topo o troca). Os nomes
+ *    seguem o DESIGN.md do produto.
  * 2. Escalas: espaço, tipografia, raio, sombra, movimento, camadas.
  * 3. Medidas de componente: altura de controle, largura da barra lateral e
  *    afins, montadas a partir das escalas.
@@ -81,7 +83,9 @@
   --of-saida: #b94a44;
   --of-rosa-suave: #feeae9;
   --of-sobre-rosa: #963a35;
-  --of-fruto: #e3bb5f; /* moedas da árvore completa */
+  --of-fruto: #e3bb5f; /* selo da meta completa */
+  --of-maca: #d0554b; /* maçãs da árvore completa */
+  --of-maca-funda: #9e3a33;
   --of-terra: #9d6020;
   --of-monograma-escuro: #1f5746;
   --of-monograma-claro: #459b72;
@@ -225,6 +229,11 @@
   --tamanho-data-miniatura: 44px; /* dia no "A vencer" */
 
   --largura-lateral: 248px;
+  /* Teto da coluna de conteúdo da área logada. Numa tela larga, ou com o zoom
+     do navegador em 50% a 80%, o conteúdo fica centrado nesta largura em vez
+     de esticar (valor e descrição a milhares de pixels um do outro). Numa
+     tela de 1920px em 100%, a coluna (1920 - 248) cabe inteira. */
+  --largura-maxima-da-area: 1680px;
   --largura-coluna-lateral: 320px;
   --largura-formulario-acesso: 400px;
   --largura-amostra: 360px; /* extrato em miniatura da vitrine */
@@ -249,67 +258,70 @@
 
   --cor-da-rolagem: var(--linha-forte);
 
-  color-scheme: light dark;
+  /* Campos, rolagem e calendário nativos acompanham o tema escolhido. */
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* ---------------------------------------------------- Cores: tema escuro */
-    /* Fundo verde-grafite, em vez de preto: a marca continua ali e o
-       contraste não chega ao máximo. */
-    --fundo: #0c1311;
-    --lateral: #111916;
-    --superficie: #131c18;
-    --linha: #222f29;
-    --linha-forte: #33443d;
-    --texto: #e1ebe6;
-    --suave: #9caca4;
+:root[data-tema='escuro'] {
+  color-scheme: dark;
 
-    --marca: #78c89e;
-    --marca-forte: #93dab3;
-    --marca-suave: #1b3a2d;
-    --sobre-marca: #071a13;
-    --vitrine: #12352a;
-    --sobre-vitrine: #dcebe4;
+  /* ---------------------------------------------------- Cores: tema escuro */
+  /* Fundo verde-grafite, em vez de preto: a marca continua ali e o
+     contraste não chega ao máximo. */
+  --fundo: #0c1311;
+  --lateral: #111916;
+  --superficie: #131c18;
+  --linha: #222f29;
+  --linha-forte: #33443d;
+  --texto: #e1ebe6;
+  --suave: #9caca4;
 
-    --positivo: #78c89e;
-    --erro: #e88e89;
-    --sobre-erro: #1a0907;
-    --aviso: #e1b671;
-    --info: #8ac0dd;
-    --veu: rgb(0 0 0 / 0.6);
+  --marca: #78c89e;
+  --marca-forte: #93dab3;
+  --marca-suave: #1b3a2d;
+  --sobre-marca: #071a13;
+  --vitrine: #12352a;
+  --sobre-vitrine: #dcebe4;
 
-    --cat-moradia: #85a6d7;
-    --cat-mercado: #7fc39b;
-    --cat-transporte: #e6b374;
-    --cat-casa: #7bbdcb;
-    --cat-saude: #da93aa;
-    --cat-lazer: #a89ad7;
-    --cat-entrada: #7fc39b;
-    --cat-neutro: #8d9993;
+  --positivo: #78c89e;
+  --erro: #e88e89;
+  --sobre-erro: #1a0907;
+  --aviso: #e1b671;
+  --info: #8ac0dd;
+  --veu: rgb(0 0 0 / 0.6);
 
-    --sombra: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 6px 14px -10px rgb(0 0 0 / 0.7);
-    --sombra-elevada: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 12px 24px -14px rgb(0 0 0 / 0.8);
-    --sombra-flutuante: 0 16px 34px -18px rgb(0 0 0 / 0.85), 0 0 0 1px var(--linha);
+  --cat-moradia: #85a6d7;
+  --cat-mercado: #7fc39b;
+  --cat-transporte: #e6b374;
+  --cat-casa: #7bbdcb;
+  --cat-saude: #da93aa;
+  --cat-lazer: #a89ad7;
+  --cat-entrada: #7fc39b;
+  --cat-neutro: #8d9993;
 
-    --of-verde: #68b88f;
-    --of-verde-vivo: #84d2a5;
-    --of-lima: #b7d98f;
-    --of-esmeralda: #194034;
-    --of-esmeralda-funda: #0d2720;
-    --of-menta: #1b3a2d;
-    --of-menta-clara: #15261f;
-    --of-sobre-menta: #a3e2bf;
-    --of-saida: #e88e89;
-    --of-rosa-suave: #422423;
-    --of-sobre-rosa: #f5b9b6;
-    --of-fruto: #e4bf6d;
-    --of-monograma-escuro: #459b72;
-    --of-monograma-claro: #84d2a5;
-    --of-tronco: #a3866d;
-    --of-chao: #322d22;
-    --of-folha-funda: #459b72;
-    --of-agua: #79bcd9;
-    --cor-da-rolagem: #33443d;
-  }
+  --sombra: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 6px 14px -10px rgb(0 0 0 / 0.7);
+  --sombra-elevada: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 12px 24px -14px rgb(0 0 0 / 0.8);
+  --sombra-flutuante: 0 16px 34px -18px rgb(0 0 0 / 0.85), 0 0 0 1px var(--linha);
+
+  --of-verde: #68b88f;
+  --of-verde-vivo: #84d2a5;
+  --of-lima: #b7d98f;
+  --of-esmeralda: #194034;
+  --of-esmeralda-funda: #0d2720;
+  --of-menta: #1b3a2d;
+  --of-menta-clara: #15261f;
+  --of-sobre-menta: #a3e2bf;
+  --of-saida: #e88e89;
+  --of-rosa-suave: #422423;
+  --of-sobre-rosa: #f5b9b6;
+  --of-fruto: #e4bf6d;
+  --of-maca: #e0766b;
+  --of-maca-funda: #b54a41;
+  --of-monograma-escuro: #459b72;
+  --of-monograma-claro: #84d2a5;
+  --of-tronco: #a3866d;
+  --of-chao: #322d22;
+  --of-folha-funda: #459b72;
+  --of-agua: #79bcd9;
+  --cor-da-rolagem: #33443d;
 }

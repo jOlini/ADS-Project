@@ -13,8 +13,9 @@ import TopoDoAcesso from '../olifine/componentes/TopoDoAcesso';
 
 const FORMULARIO_VAZIO = { email: '', senha: '', nome: '', sobrenome: '', dataNascimento: '' };
 
-// Página 1: cria o usuário no Firebase Authentication (e-mail/senha) e grava
-// nome, sobrenome, data de nascimento e uid no Firestore.
+// Página 1: cria o usuário no Firebase Authentication (e-mail/senha), grava
+// nome, sobrenome, data de nascimento e uid no Firestore e manda o link de
+// confirmação do e-mail.
 export default function Cadastro() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -22,6 +23,11 @@ export default function Cadastro() {
   const [erros, setErros] = useState({});
   const [mensagem, setMensagem] = useState('');
   const [enviando, setEnviando] = useState(false);
+
+  function concluir() {
+    toast.sucesso('Abra o link que enviamos para o seu e-mail e depois entre.', { titulo: 'Confirme o seu e-mail' });
+    navigate('/login', { state: { emailParaConfirmar: dados.email.trim() } });
+  }
 
   function alterar(evento) {
     const { name, value } = evento.target;
@@ -44,11 +50,16 @@ export default function Cadastro() {
     setEnviando(true);
     try {
       await cadastrar(dados);
-      toast.sucesso('Entre com seu e-mail e senha para acessar a página principal.', {
-        titulo: 'Cadastro concluído',
-      });
-      navigate('/login');
+      concluir();
     } catch (erro) {
+      // E-mail que já tem conta segue o mesmo caminho do cadastro novo, com a
+      // mesma mensagem: dizer "este e-mail já está cadastrado" revelaria quem
+      // tem conta (enumeração de usuários). Quem é dono do e-mail entra com a
+      // própria senha.
+      if (erro.code === 'auth/email-already-in-use') {
+        concluir();
+        return;
+      }
       const texto = mensagemDeErro(erro.code);
       setMensagem(texto);
       toast.erro(texto, { titulo: 'Cadastro não concluído' });

@@ -5,7 +5,8 @@ ao código da rota. No FastAPI, esses "middlewares de rota" são dependências
 (Depends), declaradas em cada endpoint de rotas.py:
 
 1. usuario_autenticado: lê "Authorization: Bearer <jwt>", confere assinatura,
-   validade e emissor e carrega o usuário do banco. Falhou: 401.
+   validade e emissor, recusa o token revogado no logout (revogacao.py) e
+   carrega o usuário do banco. Falhou: 401.
 2. exigir_perfis(...) / equipe_ou_proprio_cadastro: compara o perfil com a
    tabela de RBAC. Sem permissão: 403.
 
@@ -14,6 +15,9 @@ token. Assim, um usuário excluído perde o acesso na hora e um perfil
 rebaixado vale na requisição seguinte, sem esperar o token expirar.
 """
 
+from dataclasses import dataclass
+from datetime import UTC, datetime
+
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -21,6 +25,7 @@ from app.config import Configuracoes
 from app.erros import ErroNaoAutenticado, ErroPermissao
 from app.modelos import Perfil, Usuario
 from app.repositorio import RepositorioUsuarios
+from app.revogacao import ListaDeRevogacao
 from app.tokens import TokenInvalido, validar_token
 
 # auto_error=False: sem cabeçalho, a dependência recebe None e devolve o 401
@@ -42,11 +47,25 @@ def obter_repositorio(requisicao: Request) -> RepositorioUsuarios:
     return requisicao.app.state.repositorio
 
 
-def usuario_autenticado(
+def obter_revogacao(requisicao: Request) -> ListaDeRevogacao:
+    return requisicao.app.state.revogacao
+
+
+@dataclass(frozen=True)
+class Sessao:
+    """Quem chamou e qual token usou: o logout precisa do jti e do exp."""
+
+    usuario: Usuario
+    jti: str
+    expira_em: datetime
+
+
+def sessao_autenticada(
     credenciais: HTTPAuthorizationCredentials | None = Depends(esquema_bearer),
     config: Configuracoes = Depends(obter_config),
     repositorio: RepositorioUsuarios = Depends(obter_repositorio),
-) -> Usuario:
+    revogacao: ListaDeRevogacao = Depends(obter_revogacao),
+) -> Sessao:
     if credenciais is None:
         raise ErroNaoAutenticado(
             "Autenticação necessária: envie o cabeçalho Authorization: Bearer <token>.", DESAFIO_SEM_TOKEN
@@ -57,10 +76,19 @@ def usuario_autenticado(
     except TokenInvalido:
         raise ErroNaoAutenticado("Token inválido ou expirado. Faça login novamente.", DESAFIO_TOKEN_INVALIDO)
 
+    # Token encerrado no logout: a assinatura e o exp ainda conferem, mas a
+    # sessão acabou. Sem esta consulta, uma cópia vazada seguiria valendo.
+    if revogacao.revogado(payload["jti"]):
+        raise ErroNaoAutenticado("Sessão encerrada. Faça login novamente.", DESAFIO_TOKEN_INVALIDO)
+
     usuario = repositorio.buscar_por_id(payload["sub"])
     if usuario is None:
         raise ErroNaoAutenticado("O usuário deste token não existe mais.", DESAFIO_TOKEN_INVALIDO)
-    return usuario
+    return Sessao(usuario, payload["jti"], datetime.fromtimestamp(payload["exp"], UTC))
+
+
+def usuario_autenticado(sessao: Sessao = Depends(sessao_autenticada)) -> Usuario:
+    return sessao.usuario
 
 
 def exigir_perfis(*perfis: Perfil):
@@ -105,11 +133,10 @@ class CabecalhosDeSeguranca:
       cabeçalho seria ignorado de qualquer jeito (RFC 6797).
     - no-store nas respostas da API: dados de usuário e token não ficam em cache.
 
-    A documentação interativa (/docs) carrega arquivos de CDN, por isso fica
-    sem a CSP restritiva.
+    Uma rota que já manda a própria CSP fica com ela: é o caso do /docs, que
+    libera só a versão fixa do Swagger UI na CDN (documentacao.py).
     """
 
-    ROTAS_DA_DOCUMENTACAO = ("/docs", "/redoc", "/openapi.json")
     ROTAS_DE_DADOS = ("/auth", "/usuarios", "/espacos")
     CSP = b"default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
     PERMISSOES = b"camera=(), microphone=(), geolocation=(), payment=()"
@@ -138,7 +165,7 @@ class CabecalhosDeSeguranca:
                 ]
                 if por_https:
                     cabecalhos.append((b"strict-transport-security", self.HSTS))
-                if not caminho.startswith(self.ROTAS_DA_DOCUMENTACAO):
+                if not any(nome.lower() == b"content-security-policy" for nome, _ in cabecalhos):
                     cabecalhos.append((b"content-security-policy", self.CSP))
                 if caminho.startswith(self.ROTAS_DE_DADOS):
                     cabecalhos.append((b"cache-control", b"no-store"))

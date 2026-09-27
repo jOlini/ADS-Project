@@ -437,7 +437,7 @@ export default function VisaoGeral() {
                 </span>
                 <p>
                   Faltam <b>{formatarBRL(pertoDeCrescer.proxima.faltam)}</b> para {pertoDeCrescer.meta.nome} virar{' '}
-                  {pertoDeCrescer.proxima.fase.id === 'frutos' ? 'árvore com frutos' : pertoDeCrescer.proxima.fase.nome.toLowerCase()}.
+                  {pertoDeCrescer.proxima.fase.id === 'frutos' ? 'árvore com maçãs' : pertoDeCrescer.proxima.fase.nome.toLowerCase()}.
                 </p>
                 <Link className="of-regar-convite-link" to={`/metas#${pertoDeCrescer.meta.id}`}>
                   Regar

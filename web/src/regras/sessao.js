@@ -6,16 +6,30 @@
 //   null      -> não há sessão;
 //   objeto    -> há sessão (conta do Firebase Authentication).
 
+// A conta só entra na área logada com o e-mail confirmado pelo link que o
+// cadastro manda. "true" estrito: ausente conta como não confirmado.
+export function emailConfirmado(usuario) {
+  return usuario?.emailVerified === true;
+}
+
 // Área logada (barra lateral + páginas do cliente). A barra lateral só é
-// montada em "liberada": com a sessão confirmada e o perfil já lido no
-// Firestore. A leitura do perfil é a primeira ida ao servidor com o token da
-// sessão restaurada; antes dela, nada da área logada aparece.
-export function situacaoDaArea({ firebaseConfigurado, usuario, pessoa }) {
+// montada em "liberada": com a sessão confirmada, o e-mail confirmado e o
+// perfil já lido no Firestore. A leitura do perfil é a primeira ida ao
+// servidor com o token da sessão restaurada; antes dela, nada da área logada
+// aparece. Sem o e-mail confirmado ("sem-confirmacao"), a área nem busca o
+// perfil: mostra só a tela que pede a confirmação.
+export function situacaoDaArea({ firebaseConfigurado, usuario, confirmado, pessoa }) {
   if (!firebaseConfigurado) {
     return 'sem-firebase';
   }
-  if (usuario === undefined || (usuario && pessoa?.carregando)) {
+  if (usuario === undefined) {
     return 'verificando';
   }
-  return usuario ? 'liberada' : 'sem-sessao';
+  if (!usuario) {
+    return 'sem-sessao';
+  }
+  if (!confirmado) {
+    return 'sem-confirmacao';
+  }
+  return pessoa?.carregando ? 'verificando' : 'liberada';
 }

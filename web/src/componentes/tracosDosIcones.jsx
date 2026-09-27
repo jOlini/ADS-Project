@@ -291,6 +291,24 @@ export const TRACOS = {
     </>
   ),
 
+  // ------------------------------------------------------------------ Tema
+  // Sol (modo claro): o disco com seiva e oito raios curtos, soltos dele.
+  sol: (
+    <>
+      <circle className="seiva" cx="12" cy="12" r="4.2" />
+      <circle cx="12" cy="12" r="4.2" />
+      <path d="M12 2.8v2M12 19.2v2M2.8 12h2M19.2 12h2M5.5 5.5l1.4 1.4M17.1 17.1l1.4 1.4M5.5 18.5l1.4-1.4M17.1 6.9l1.4-1.4" />
+    </>
+  ),
+  // Lua (modo escuro): a crescente com seiva e uma estrela em ponto.
+  lua: (
+    <>
+      <path className="seiva" d="M19.5 14.6A8 8 0 1 1 9.4 4.5a6.3 6.3 0 0 0 10.1 10.1Z" />
+      <path d="M19.5 14.6A8 8 0 1 1 9.4 4.5a6.3 6.3 0 0 0 10.1 10.1Z" />
+      <circle className="ponto" cx="17.6" cy="5.8" r="1" />
+    </>
+  ),
+
   // --------------------------------------------- Grupos de categoria (cor)
   casa: (
     <>

@@ -20,11 +20,9 @@
   --rel-sobra: var(--texto);
 }
 
-@media (prefers-color-scheme: dark) {
-  .rel {
-    --rel-receita: #12724b;
-    --rel-despesa: #d67553;
-  }
+:root[data-tema='escuro'] .rel {
+  --rel-receita: #12724b;
+  --rel-despesa: #d67553;
 }
 
 /* ------------------------------------------------------------ Filtros */
