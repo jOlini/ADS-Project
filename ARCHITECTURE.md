@@ -151,6 +151,9 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
 - **Endereço da API:** `VITE_API_URL` no build. Aberto pela rede local, a página chama a API no IP de onde veio;
   pelo túnel da Cloudflare, no proxy do Vite, só em `/espacos` (`servicos/enderecoDaApi.js`, `vite.config.js`).
 - **Sem API** (GitHub Pages): as telas do livro-caixa ficam desligadas e a Visão geral oferece dados de exemplo.
+- **Caminho da publicação:** `VITE_BASE` no build (`/ADS-Project/` no Pages, `/` num domínio próprio). O React
+  Router, os arquivos de `public/` e os links usam o `BASE_URL` gravado pelo Vite; nenhum caminho fica escrito à
+  mão (`regras/enderecoDoApp.js`).
 - **Sessão do cliente:** cadastro manda o link de confirmação; sem ele, a área logada mostra só a tela
   ConfirmarEmail (reenviar com espera de 60 s, "Já confirmei", sair). Login conta as senhas erradas no navegador
   (5 em 15 minutos por e-mail, guardado como resumo FNV-1a, sem o e-mail em texto) e avisa quantas restam; o
@@ -204,8 +207,9 @@ Ao mudar o código, mantenha estas regras:
 | API com e-mails de teste | `uvicorn` local com `EMAIL_PROVEDOR=pasta` | Cada e-mail vira um `.html` em `api/emails-enviados/`, com o link para `/auth/...` |
 | Produção (API) | Imagem da API com `AMBIENTE=producao` atrás de um proxy reverso com TLS | Segredos em `/run/secrets`, `FORWARDED_ALLOW_IPS` com o IP do proxy, Swagger fora do ar |
 | Demonstração externa | `python subir-app.py tunnel start` | Quick Tunnel da Cloudflare para o Vite; a API passa só em `/espacos`, pelo proxy |
-| Container do front-end | `docker build --secret id=env,src=web/.env -t pessoal-finance-web web` | nginx alpine com os cabeçalhos de segurança; build com `--base=/` |
+| Container do front-end | `docker build --secret id=env,src=web/.env -t pessoal-finance-web web` | nginx alpine com os cabeçalhos de segurança; build com `VITE_BASE=/` (raiz) |
 | Publicado | Push na `main` (workflow `cd.yml`) | GitHub Pages em `https://jolini.github.io/ADS-Project/`, sem API |
+| Domínio próprio | Build com `VITE_BASE=/` (e `VITE_API_URL`, se houver API) | Mesmo código na raiz do domínio; link antigo com `/ADS-Project/...` vira `/...` no navegador, com o `#oobCode=` intacto (`regras/enderecoDoApp.js`); `APP_URL` da API no domínio novo para os e-mails |
 
 ---
 

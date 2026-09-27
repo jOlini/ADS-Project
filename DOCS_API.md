@@ -1001,6 +1001,13 @@ minuto para o mesmo e-mail do mesmo endereço, 5 por hora por e-mail e 10 a cada
 | `smtp` | Qualquer servidor SMTP com senha: SSL na 465, STARTTLS nas outras (nunca texto puro) | `SMTP_HOST`, `SMTP_PORTA`, `SMTP_USUARIO`, `SMTP_SENHA` |
 | `pasta` | Não manda: grava `.html` e `.txt` em `EMAIL_PASTA` (desenvolvimento; recusado em produção) | — |
 
+**Modelo:** tabelas com estilo inline (Gmail, Outlook e Apple Mail), faixa `#065F46` com o monograma OF e o slogan
+"Finanças que fazem sentido", filete `#16A34A`, botão `#065F46` (com VML para o Outlook do Windows), modo escuro
+por `prefers-color-scheme` e texto puro junto. O monograma é o PNG de `web/public/email/` (192 px, 4x), servido
+com o app em `<APP_URL>/email/olifine-monograma.png`: SVG não aparece no Gmail nem no Outlook. Com as imagens
+bloqueadas, o quadrado mostra "OF" em texto. O rodapé traz o endereço oficial (o `APP_URL` sem `https://`), para
+quem recebe conferir o domínio antes de digitar a senha.
+
 Todos precisam de `EMAIL_REMETENTE`, `APP_URL` e `FIREBASE_CONTA_DE_SERVICO` (chave JSON de uma conta de
 serviço do mesmo projeto do `FIREBASE_PROJECT_ID`; a API não sobe com projeto diferente). O token de acesso da
 conta de serviço é pedido ao Google com um JWT RS256 (OAuth 2.0, RFC 7523), sem SDK a mais, e reaproveitado até
@@ -1030,8 +1037,10 @@ variável de ambiente, `api/.env`, arquivo.
 
 - **Automatizados:** `api/tests/test_emails.py` (modelos, provedores, código do Firebase com o Google simulado),
   `test_emails_rotas.py` (rotas, limites, resposta igual com e sem conta) e `test_producao.py`.
-- **Modelos:** `.venv\Scripts\python -m app.emails.previa <pasta>` em `api/` grava os três modelos
-  (confirmação, senha nova e key de acesso) com dados fictícios.
+- **Modelos:** `.venv\Scripts\python -m app.emails.previa <pasta> [endereço do app]` em `api/` grava os três
+  modelos (confirmação, senha nova e key de acesso) com dados fictícios. O monograma vem de
+  `<endereço do app>/email/olifine-monograma.png` (padrão `http://localhost:5173/ADS-Project`, com o `npm run dev`
+  no ar).
 - **Fluxo completo sem provedor:** `EMAIL_PROVEDOR=pasta` e a API fora do Docker (opção C do README): cada e-mail
   vira um `.html` em `api/emails-enviados/`; abra e clique no link.
 

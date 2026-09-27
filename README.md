@@ -1,6 +1,6 @@
 # OliFine
 
-**Tecnologia a favor do seu dinheiro.** OliFine é uma plataforma de controle financeiro pessoal: quanto entra,
+**Finanças que fazem sentido.** OliFine é uma plataforma de controle financeiro pessoal: quanto entra,
 quanto sai, para onde vai e quanto sobra, num lugar só, com metas que crescem como árvores. Este repositório
 (projeto **Pessoal Finance**) reúne a área do cliente em React, a API REST segura e a infraestrutura de build,
 teste e entrega.
@@ -231,7 +231,9 @@ Só para rodar o React na própria máquina. Para apenas usar a área do cliente
 `FIREBASE_CONTA_DE_SERVICO` (caminho da chave JSON de uma conta de serviço do projeto, guardada fora do
 repositório). Com `EMAIL_PROVEDOR=pasta`, nenhum e-mail sai: cada um vira um `.html` em `api/emails-enviados/`,
 para abrir e clicar no link (só com a API rodando fora do Docker, opção C). Para ver os modelos sem configurar
-nada: `.venv\Scripts\python -m app.emails.previa <pasta>` em `api/`.
+nada: `.venv\Scripts\python -m app.emails.previa <pasta>` em `api/`. O monograma dos e-mails é uma imagem do próprio
+app (`<APP_URL>/email/olifine-monograma.png`): com o `APP_URL` num endereço público, ele aparece em qualquer leitor
+de e-mail; com as imagens bloqueadas, o quadrado mostra "OF" em texto.
 
 Sem projeto Firebase, dá para usar os emuladores locais: `VITE_FIREBASE_EMULADOR=true` no `web/.env` e
 `npx firebase-tools emulators:start --project demo-pessoal-finance` em `web/` (exige Java 11+; o link de
@@ -380,7 +382,8 @@ versão dele.
 | `EMAIL_PASTA` | api | Pasta dos e-mails gravados com `EMAIL_PROVEDOR=pasta` (padrão `emails-enviados`) |
 | `VITE_FIREBASE_*` | web | Configuração pública do app Web do Firebase |
 | `VITE_FIREBASE_EMULADOR` | web | `true` para usar os emuladores locais do Firebase |
-| `VITE_API_URL` | web | Endereço da API (ex.: `http://localhost:8081`). Vazio: telas do livro-caixa desligadas, como no GitHub Pages |
+| `VITE_API_URL` | web | Endereço da API (ex.: `http://localhost:8081`; `/api` com a API atrás do mesmo domínio). Vazio: telas do livro-caixa desligadas, como no GitHub Pages |
+| `VITE_BASE` | web | Caminho onde o build é publicado. Vazio: `/ADS-Project/` (GitHub Pages); `/` num domínio próprio (o Dockerfile já usa `/`). Só no build e no `npm run preview` |
 
 ---
 
@@ -576,7 +579,9 @@ comentário ao lado: uma tag movida no repositório da action não troca o códi
 
 Secrets do repositório: `DISCORD_WEBHOOK` (alertas) e `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`,
 `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID` e
-`VITE_FIREBASE_APP_ID` (build do Pages).
+`VITE_FIREBASE_APP_ID` (build do Pages). Variáveis do repositório (Settings › Secrets and variables › Actions ›
+Variables), opcionais: `VITE_BASE` (`/` quando o Pages passar a um domínio próprio) e `VITE_API_URL` (API
+hospedada). Vazias, o build é o de hoje: `/ADS-Project/` e sem API.
 
 ---
 
