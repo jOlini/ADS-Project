@@ -44,8 +44,8 @@ O cliente final e o back-office nunca compartilham credencial, por decisão de p
 | | Cliente final | Back-office |
 |---|---|---|
 | Quem emite | Firebase Authentication | A própria API (`POST /auth/login`) |
-| Token | ID token do Firebase, **RS256**, validado com as chaves públicas do Google (`aud` e `iss` do projeto) | JWT **HS256** assinado com `JWT_SECRET`, 30 minutos |
-| Onde fica no navegador | `sessionStorage` (sessão por aba: fechar o navegador sai da conta) | `sessionStorage` do painel |
+| Token | ID token do Firebase, **RS256**, validado com as chaves públicas do Google (`aud` e `iss` do projeto); o livro-caixa exige `email_verified` | JWT **HS256** assinado com `JWT_SECRET`, 15 minutos, revogado no logout pelo `jti` |
+| Onde fica no navegador | `sessionStorage` (sessão por aba: fechar o navegador sai da conta); o logout apaga também os dados do app no `localStorage` | `sessionStorage` do painel |
 | O que abre | `/espacos/**` (livro-caixa e relatórios) | `/usuarios/**` |
 | Código | [`api/app/firebase.py`](api/app/firebase.py), [`api/app/financeiro/acesso.py`](api/app/financeiro/acesso.py) | [`api/app/tokens.py`](api/app/tokens.py), [`api/app/seguranca.py`](api/app/seguranca.py) |
 
@@ -62,7 +62,10 @@ Camadas, de fora para dentro. Cada camada só conhece a de baixo:
 main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas e /painel
   │
   ├─ seguranca.py   CabecalhosDeSeguranca (CSP, nosniff, X-Frame-Options, Permissions-Policy, HSTS em HTTPS)
-  ├─ limites.py     LimiteDoCorpo (413) e LimiteDeTentativas do login (429)
+  ├─ limites.py     LimiteDoCorpo (413) e LimiteDeTentativas do login (429), com o armazenamento das falhas
+  │                 atrás do contrato ArmazenamentoDeFalhas (memória hoje; Redis ou MongoDB com réplicas)
+  ├─ revogacao.py   tokens do back-office encerrados no logout (jti), no MongoDB com índice TTL
+  ├─ documentacao.py  /docs com Swagger UI de versão fixa (SRI) e CSP própria, sem script inline
   ├─ erros.py       tudo sai em Problem Details (RFC 9457), sem stack trace
   │
   ├─ rotas.py / financeiro/rotas*.py      contrato HTTP: método, caminho, corpo e código de resposta
@@ -73,8 +76,9 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
   └─ repositorio.py / financeiro/repositorio.py   MongoDB (Protocol + implementação; os testes usam memória)
 ```
 
-- **Fábrica e injeção:** `criar_app(config, repositorio, livro_caixa, verificador)` recebe as dependências; os
-  testes passam repositórios em memória e um verificador com chave RSA própria. Nada de estado global.
+- **Fábrica e injeção:** `criar_app(config, repositorio, livro_caixa, verificador, revogacao)` recebe as
+  dependências; os testes passam repositórios em memória, uma lista de revogação em memória e um verificador com
+  chave RSA própria. Nada de estado global.
 - **Configuração:** [`config.py`](api/app/config.py) lê o ambiente (`api/.env`). Nenhum segredo tem valor padrão;
   `JWT_SECRET` com menos de 32 bytes derruba a subida.
 - **Livro-caixa:** partidas dobradas (a soma das partidas de um lançamento é zero), dinheiro em **centavos
@@ -90,6 +94,7 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
 | Coleção | Conteúdo | Índices relevantes |
 |---|---|---|
 | `usuarios` | Back-office: nome, e-mail, hash BCrypt, perfil | `email` único |
+| `tokens_revogados` | `jti` dos tokens do back-office encerrados no logout, com a hora em que venceriam | TTL em `expira_em` (a entrada some sozinha depois do vencimento) |
 | `espacos` | Espaço pessoal (PF) de cada `uid`, com os membros | um espaço pessoal por `uid` (único), `membros.uid` |
 | `contas` | Contas e cartões (limite, fechamento, vencimento) | `espaco_id` + data de criação |
 | `categorias` | Categorias de receita e despesa, com cor | `espaco_id` + tipo + nome |
@@ -100,7 +105,7 @@ Toda consulta do livro-caixa filtra por `espaco_id`, inclusive a busca por id: u
 
 Fora do MongoDB: o perfil do cliente fica no Firestore (`usuarios/{uid}`, regras em
 [`web/firestore.rules`](web/firestore.rules)); as **metas** ficam no `localStorage` do navegador, por `uid`, até
-existir a API de metas.
+existir a API de metas, e saem dele no logout (junto com a contagem de tentativas de login).
 
 ---
 
@@ -109,17 +114,23 @@ existir a API de metas.
 ```text
 main.jsx            BrowserRouter, avisos (toasts); recusa desenhar dentro de moldura de outro site no build
 routes.jsx          todas as rotas; LimiteDeErro (Error Boundary) em volta de tudo
-firebase.js         inicialização do Firebase; sessão por aba (browserSessionPersistence)
+firebase.js         inicialização do Firebase; sessão por aba (browserSessionPersistence); e-mails em pt-BR
 componentes/
-  AreaDoCliente     guarda da área logada: só monta a casca com a sessão e o perfil confirmados
+  AreaDoCliente     guarda da área logada: sem e-mail confirmado, mostra a ConfirmarEmail; só monta a casca
+                    com a sessão, o e-mail e o perfil confirmados
+  AlternadorDeTema  botão de modo claro/escuro (topo da área logada, landing e telas de acesso)
   LimiteDeErro      Error Boundary: um erro de render mostra o aviso no lugar da tela, sem derrubar o app
   useCarga          busca assíncrona com erro no estado (nada de promessa solta)
   ...               componentes próprios: seletor, calendário, modal, menu, campos, gráficos
-paginas/            Cadastro, Login, Lançamentos, Contas & Cartões, Cartão, Categorias, Relatórios
+paginas/            Cadastro, Login, ConfirmarEmail, Lançamentos, Contas & Cartões, Cartão, Categorias, Relatórios
 olifine/            identidade OliFine: casca, Visão geral (/principal), Metas, landing, regras próprias
 regras/             funções puras e testadas: validação, dinheiro, datas, extrato, importação, relatórios
-servicos/           contas.js (Firebase), livroCaixa.js (API com o ID token), enderecoDaApi.js
-estilos/            design tokens (tokens.css), componentes, movimento e o CSS de cada tela
+servicos/           contas.js (Firebase: cadastro com link de confirmação, logout que limpa o navegador),
+                    livroCaixa.js (API com o ID token), enderecoDaApi.js, dadosLocais.js (o que sai no logout),
+                    tentativasDeLogin.js (contagem de senhas erradas), tema.js (data-tema e a escolha salva)
+estilos/            design tokens (tokens.css, com o tema escuro em [data-tema='escuro']), componentes,
+                    movimento e o CSS de cada tela
+public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pintura, sem piscar
 ```
 
 - **Regra de negócio fora da interface:** tudo o que decide (validação, cálculo, texto de erro) mora em
@@ -130,6 +141,14 @@ estilos/            design tokens (tokens.css), componentes, movimento e o CSS d
 - **Endereço da API:** `VITE_API_URL` no build. Aberto pela rede local, a página chama a API no IP de onde veio;
   pelo túnel da Cloudflare, no proxy do Vite, só em `/espacos` (`servicos/enderecoDaApi.js`, `vite.config.js`).
 - **Sem API** (GitHub Pages): as telas do livro-caixa ficam desligadas e a Visão geral oferece dados de exemplo.
+- **Sessão do cliente:** cadastro manda o link de confirmação; sem ele, a área logada mostra só a tela
+  ConfirmarEmail (reenviar com espera de 60 s, "Já confirmei", sair). Login conta as senhas erradas no navegador
+  (5 em 15 minutos por e-mail, guardado como resumo FNV-1a, sem o e-mail em texto) e avisa quantas restam; o
+  Firebase continua freando do lado dele. Cadastro com e-mail que já tem conta segue o mesmo caminho do novo
+  (sem revelar quem tem cadastro). O logout apaga as chaves `olifine:*` do navegador, menos a preferência de tema.
+- **Tema e zoom:** tokens de cor trocados por `data-tema` no `<html>`; a transição de cor dura 400 ms e some com
+  "reduzir movimento". A coluna de conteúdo da área logada para em 1680 px (zoom de 50% a 80% não estica o extrato);
+  de 125% a 200% o layout passa pelas mesmas quebras do celular, sem rolagem lateral.
 
 ---
 
@@ -138,21 +157,25 @@ estilos/            design tokens (tokens.css), componentes, movimento e o CSS d
 | Camada | Controle | Onde |
 |---|---|---|
 | Borda do front-end | CSP em `<meta>` no build (`script-src 'self' https://apis.google.com`, `object-src 'none'`, `base-uri 'self'`); recusa de moldura (clickjacking) no Pages; no container, `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` e `server_tokens off` | `web/vite.config.js`, `web/src/main.jsx`, `web/nginx.conf` |
-| Borda da API | CSP `default-src 'self'` no painel, `X-Frame-Options: DENY`, `nosniff`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, HSTS em HTTPS, `no-store` nos dados; CORS por lista explícita, sem cookie | `seguranca.py`, `main.py` |
-| Abuso | Corpo acima de 2 MB → `413`; 5 senhas erradas por e-mail + endereço (ou 20 por endereço) em 15 min → `429` | `limites.py` |
-| Autenticação | JWT HS256 com algoritmo, emissor e expiração obrigatórios; ID token RS256 do Firebase com `aud`, `iss` e datas; mesma resposta e mesmo tempo para e-mail inexistente e senha errada | `tokens.py`, `firebase.py`, `servicos.py` |
+| Borda da API | CSP `default-src 'self'` no painel, `X-Frame-Options: DENY`, `nosniff`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, HSTS em HTTPS, `no-store` nos dados; CORS por lista explícita, sem cookie; `/docs` com CSP própria (`default-src 'none'`, script só da API e da versão fixa do Swagger na CDN, com SRI) e ReDoc desligado | `seguranca.py`, `main.py`, `documentacao.py` |
+| Abuso | Corpo acima de 2 MB → `413`; 5 senhas erradas por e-mail + endereço (ou 20 por endereço) em 15 min → `429`, e cada `401` diz quantas restam; na área do cliente, a mesma regra no navegador, por e-mail | `limites.py`, `web/src/regras/tentativas.js` |
+| Autenticação | JWT HS256 com algoritmo, emissor, expiração (15 min) e `jti` obrigatórios, revogado no logout; ID token RS256 do Firebase com `aud`, `iss`, datas e `email_verified`; mesma resposta e mesmo tempo para e-mail inexistente e senha errada; cadastro com e-mail já usado responde como um novo | `tokens.py`, `revogacao.py`, `firebase.py`, `servicos.py`, `Cadastro.jsx` |
+| Sessão no navegador | Sessão por aba; logout apaga metas, tentativas e a sessão do Firebase (menos o tema); área logada só com e-mail confirmado | `servicos/contas.js`, `regras/dadosLocais.js`, `regras/sessao.js` |
 | Autorização | RBAC por dependência em cada rota; perfil lido do banco a cada requisição; livro-caixa isolado por espaço (id alheio = `404`) | `seguranca.py`, `financeiro/acesso.py`, repositórios |
 | Entrada | Pydantic com `extra="forbid"`, tamanhos e faixas; texto do CSV sem controle e sem começo de fórmula (CSV injection) | `modelos.py`, `financeiro/modelos.py`, `financeiro/importacao.py` |
 | Saída | Problem Details com mensagens próprias; `500` genérico; React e `textContent` escapam todo texto (nenhum `innerHTML` nem `dangerouslySetInnerHTML`) | `erros.py`, `painel.js` |
 | Dados | Senha só como hash BCrypt (custo 12); valores em centavos inteiros; regras do Firestore com dono, campos fixos, tipos e tamanhos | `senhas.py`, `web/firestore.rules` |
 | Segredos | `.env` fora do Git; `JWT_SECRET`, `MONGODB_URI` e o webhook do Discord só no ambiente e nos secrets do GitHub; chave da conta de serviço do Firebase fora de qualquer repositório | `.gitignore`, `api/.env.example`, `web/.env.example` |
-| CI/CD | `permissions` mínimas por workflow; valores de PR entram no JSON pelo `jq --arg` e o Discord recebe `allowed_mentions` vazio (sem `@everyone` injetado) | `.github/workflows/` |
+| CI/CD | `permissions` mínimas por workflow; actions fixadas pelo SHA do commit (tag movida não troca o código que roda); checkout sem guardar o token (`persist-credentials: false`); valores de PR entram no JSON pelo `jq --arg` e o Discord recebe `allowed_mentions` vazio (sem `@everyone` injetado) | `.github/workflows/` |
 
 Ao mudar o código, mantenha estas regras:
 
 - **Exportar CSV** (quando existir): escapar a célula que começa com `=`, `+`, `-`, `@`, tab ou retorno de carro.
 - **Nova rota que devolve dados** entra em `ROTAS_DE_DADOS` (`no-store`) e declara a dependência de acesso.
-- **Mais de uma instância da API:** o contador do login precisa de armazenamento comum (ex.: MongoDB com TTL).
+- **Mais de uma instância da API:** passe ao `LimiteDeTentativas` um `ArmazenamentoDeFalhas` comum (Redis ou
+  MongoDB com TTL; receita no docstring de `limites.py`). A revogação de tokens já fica no MongoDB.
+- **Nova action no CI:** entra pelo SHA do commit, com a versão num comentário ao lado.
+- **Novo dado no navegador:** chave com o prefixo `olifine:`, para o logout apagá-la.
 - **Novo script externo no front-end:** entra na CSP do `vite.config.js` com a justificativa no comentário.
 
 ---
@@ -176,6 +199,9 @@ Ao mudar o código, mantenha estas regras:
 | [`ci-tests.yml`](.github/workflows/ci-tests.yml) | Cada commit de PR e push na `main` | oxlint, Vitest, build; pytest; alerta no Discord com o resultado |
 | [`cd.yml`](.github/workflows/cd.yml) | PR (só build) e push na `main` (build + deploy) | Build com os `VITE_FIREBASE_*` dos secrets, `404.html` para as rotas da SPA, deploy no Pages |
 | [`alertas.yml`](.github/workflows/alertas.yml) | Push na `main` | Aviso de merge no Discord |
+
+As actions ficam presas ao SHA do commit, com a versão num comentário (`@11d5960… # v4.4.0`). Para atualizar:
+`git ls-remote --tags https://github.com/actions/<action> "v4*"` e trocar o SHA e o comentário juntos.
 
 ---
 
