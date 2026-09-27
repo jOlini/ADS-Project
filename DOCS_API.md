@@ -3,7 +3,7 @@
 API REST do Pessoal Finance. Partes 1 a 5: gestão de usuários do back-office, com autenticação por JWT e
 controle de acesso por perfil (RBAC). Parte 6: livro-caixa do cliente final (contas, categorias e lançamentos),
 acessado com o ID token do Firebase. Parte 7: relatórios do livro-caixa (Dashboard). Parte 8: e-mails da conta
-do cliente (confirmação e senha nova) e o modo de produção.
+do cliente (confirmação e senha nova) e o modo de produção. Parte 9: monitoramento, alertas e telemetria.
 
 | Item | Valor |
 |---|---|
@@ -1041,13 +1041,53 @@ variável de ambiente, `api/.env`, arquivo.
   modelos (confirmação, senha nova e key de acesso) com dados fictícios. O monograma vem de
   `<endereço do app>/email/olifine-monograma.png` (padrão `http://localhost:5173/ADS-Project`, com o `npm run dev`
   no ar).
-- **Fluxo completo sem provedor:** `EMAIL_PROVEDOR=pasta` com o `python subir-app.py up` (ele monta a pasta no
+- **Fluxo completo sem provedor:** `EMAIL_PROVEDOR=pasta` com o `python subir-app.py dev` (ele monta a pasta no
   container) ou com a API fora do Docker (opção C do README): cada e-mail vira um `.html` em `api/emails-enviados/`;
   abra e clique no link.
 - **Console do Firebase:** `.venv\Scripts\python -m app.emails.console` em `api/` lê, com a conta de serviço, a URL
   de ação personalizada e os domínios autorizados e aponta o que não bate com o `APP_URL` (só leitura; o
   `python subir-app.py verificar` usa). A URL de ação só muda pelo Console: a API de administração recusa a troca em
   projeto sem Identity Platform (`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`).
+
+---
+
+## Parte 9 – Monitoramento, alertas e telemetria
+
+Um ataque que ninguém vê não é contido: registrar e avisar é um controle de segurança (OWASP Top 10, A09 —
+*Security Logging and Monitoring Failures*). A API manda alertas para o Discord em três canais, cada um com o
+próprio webhook ([`api/app/monitoramento.py`](api/app/monitoramento.py)).
+
+| Canal (variável) | Canal no Discord | O que chega |
+|---|---|---|
+| Sistema (`DISCORD_WEBHOOK_SISTEMA`) | `#alertas-sistema` | Erro não tratado (`500`): método e rota como modelo (`GET /espacos/{espaco_id}`), tipo da exceção e arquivo e linha do código; e-mail da conta que não saiu (tipo e falha); API no ar (só com `AMBIENTE=producao`) |
+| Segurança (`DISCORD_WEBHOOK_SEGURANCA`) | `#logs-seguranca` | Todo `429`: login do back-office travado por força bruta, limite dos e-mails da conta estourado; 10 ou mais `401` do mesmo endereço em 5 minutos (senha, JWT ou ID token do Firebase testados em série). Com o grupo da rota e o IP |
+| Telemetria (`DISCORD_WEBHOOK_TELEMETRIA`) | `#telemetria-custos` | Resumo a cada `TELEMETRIA_INTERVALO_HORAS` (padrão 24) e no desligamento: pedidos por grupo de rota, respostas `4xx` e `5xx`, e-mails enviados e com falha; aviso quando os e-mails das últimas 24 horas chegam a 80% e a 100% de `EMAIL_COTA_DIARIA` |
+
+**Regras:**
+
+- **Sem dado pessoal nem segredo:** nenhum e-mail, token, corpo, cabeçalho, mensagem de exceção ou stack trace.
+  A rota vai como modelo, nunca com o caminho digitado por quem chamou. O IP vai só para o canal de segurança, onde
+  é o dado que permite bloquear quem ataca.
+- **A API nunca espera o Discord:** o alerta entra numa fila e sai por uma thread própria. Discord fora do ar,
+  webhook apagado ou fila cheia viram uma linha de log (sem o endereço do webhook) e a resposta segue igual.
+- **Sem avalanche:** o mesmo alerta (mesma chave: canal, tipo, rota, endereço) sai no máximo uma vez a cada 15
+  minutos; o envio seguinte traz a contagem das repetições. Caminhos desconhecidos contam como `outros` na
+  telemetria, para um robô que varre endereços não criar uma linha por tentativa.
+- **Sem menção injetada:** toda mensagem vai com `allowed_mentions` vazio.
+- **Configuração conferida na subida:** webhook fora de `https://discord.com/api/webhooks/...` derruba a API (um
+  endereço qualquer receberia os IPs de quem ataca), e o valor recusado não aparece na mensagem de erro. Webhook
+  vazio desliga o canal; sem nenhum, nenhuma thread sobe. Num servidor, os webhooks vêm de
+  `/run/secrets/discord_webhook_sistema` (e `_seguranca`, `_telemetria`).
+
+**Como testar:**
+
+- **Automatizados:** `api/tests/test_monitoramento.py` (canal certo, repetição, `allowed_mentions`, falha do
+  Discord, força bruta, rajada de `401`, `500` sem a mensagem da exceção, e-mail que falha, cota, resumo e
+  configuração).
+- **De ponta a ponta:** com os três webhooks no `api/.env`, `python subir-app.py alertas` manda uma mensagem de
+  teste para cada canal, e `python subir-app.py verificar` confere se cada webhook existe (sem mandar mensagem).
+  Depois, com o `python subir-app.py dev` no ar, 6 logins errados seguidos no painel geram o alerta de força bruta
+  em `#logs-seguranca`.
 
 ---
 
