@@ -1,16 +1,45 @@
-"""Configuração da API, lida das variáveis de ambiente ou do arquivo api/.env.
+"""Configuração da API, lida das variáveis de ambiente, do arquivo api/.env ou
+de arquivos de segredo (/run/secrets).
 
 Nenhum segredo tem valor padrão no código: o repositório é público.
 """
 
-from pydantic import Field, field_validator
+from pathlib import Path
+from typing import Literal
+from urllib.parse import urlsplit
+
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Segredos em arquivo (Docker secrets, ou o Secret Manager montado como
+# volume): cada um é um arquivo com o nome do campo, como
+# /run/secrets/jwt_secret. Assim o segredo não aparece no "docker inspect",
+# no /proc/<pid>/environ nem num log que despeje as variáveis de ambiente.
+# A pasta só entra na leitura se existir: fora do container ela não existe, e
+# o pydantic avisaria a cada subida.
+PASTA_DE_SEGREDOS = Path("/run/secrets")
+
+# Valores de exemplo do api/.env.example. Em produção, qualquer um deles ainda
+# no lugar derruba a subida: é o .env copiado sem trocar.
+SEGREDO_DE_EXEMPLO = "troque-por-uma-chave-aleatoria-de-pelo-menos-32-bytes"
+SENHA_DE_EXEMPLO = "troque-esta-senha"
 
 
 class Configuracoes(BaseSettings):
     # Os nomes batem com as variáveis sem diferenciar maiúsculas:
     # MONGODB_URI -> mongodb_uri, JWT_SECRET -> jwt_secret e assim por diante.
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # Ordem de prioridade: variável de ambiente, api/.env, arquivo de segredo.
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        secrets_dir=PASTA_DE_SEGREDOS if PASTA_DE_SEGREDOS.is_dir() else None,
+    )
+
+    # "producao" liga as travas de um endereço público (conferir_producao):
+    # a API recusa subir com configuração de desenvolvimento, e o Swagger e o
+    # /openapi.json saem do ar (main.py).
+    ambiente: Literal["desenvolvimento", "producao"] = "desenvolvimento"
 
     mongodb_uri: str = "mongodb://localhost:27017/pessoal-finance"
 
@@ -49,6 +78,38 @@ class Configuracoes(BaseSettings):
         if len(segredo.encode("utf-8")) < 32:
             raise ValueError("JWT_SECRET curto: use pelo menos 32 bytes (256 bits) para o HS256.")
         return segredo
+
+    @model_validator(mode="after")
+    def conferir_producao(self) -> "Configuracoes":
+        """Em produção, recusa subir com o que só serve na máquina de quem
+        desenvolve. Todos os problemas saem numa mensagem só, para a correção
+        não virar um vai e volta de subidas."""
+        if self.ambiente != "producao":
+            return self
+        problemas = self.problemas_de_producao()
+        if problemas:
+            raise ValueError("AMBIENTE=producao com configuração insegura: " + " ".join(problemas))
+        return self
+
+    def problemas_de_producao(self) -> list[str]:
+        problemas = []
+        if self.jwt_secret == SEGREDO_DE_EXEMPLO:
+            problemas.append("JWT_SECRET ainda é o valor de exemplo.")
+        if self.admin_senha == SENHA_DE_EXEMPLO:
+            problemas.append("ADMIN_SENHA ainda é o valor de exemplo.")
+        # Um curinga ou uma origem http:// deixaria outro site (ou uma rede
+        # Wi-Fi no meio do caminho) chamar a API pelo navegador de quem usa.
+        origens = self.lista_cors
+        if any(origem == "*" or urlsplit(origem).scheme != "https" for origem in origens):
+            problemas.append("CORS_ORIGENS aceita só origens https:// escritas por extenso (sem *).")
+        if self.cors_origens_rede:
+            problemas.append("CORS_ORIGENS_REDE é da rede local de desenvolvimento; deixe vazio.")
+        # Banco sem senha só é aceitável na rede interna da máquina de quem
+        # desenvolve. Num servidor, um erro de firewall o deixaria aberto.
+        endereco_do_banco = urlsplit(self.mongodb_uri)
+        if endereco_do_banco.scheme not in ("mongodb", "mongodb+srv") or not endereco_do_banco.password:
+            problemas.append("MONGODB_URI precisa de usuário e senha (mongodb://usuario:senha@host/banco).")
+        return problemas
 
     @property
     def lista_cors(self) -> list[str]:

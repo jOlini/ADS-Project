@@ -173,9 +173,14 @@ def obter_limite_de_login(requisicao: Request) -> LimiteDeTentativas:
 
 
 def endereco_de(requisicao: Request) -> str:
-    """IP de quem conectou. O X-Forwarded-For fica de fora de propósito: é
+    """IP de quem conectou. O X-Forwarded-For não é lido aqui de propósito: é
     um cabeçalho que o próprio cliente escreve, e trocá-lo a cada palpite
-    furaria o limite."""
+    furaria o limite.
+
+    Atrás de um proxy reverso (produção), quem troca o socket pelo IP real é
+    o uvicorn, e só quando a conexão vem de um endereço listado em
+    FORWARDED_ALLOW_IPS (o do proxy). Sem essa variável, todo mundo pareceria
+    vir do proxy e dividiria o mesmo limite."""
     return requisicao.client.host if requisicao.client else "desconhecido"
 
 

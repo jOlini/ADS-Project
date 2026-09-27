@@ -7,6 +7,7 @@ verificador do Firebase próprios).
 
 import logging
 import mimetypes
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -48,6 +49,7 @@ def criar_app(
     revogacao: ListaDeRevogacao | None = None,
 ) -> FastAPI:
     config = config or Configuracoes()
+    producao = config.ambiente == "producao"
 
     @asynccontextmanager
     async def ciclo_de_vida(app: FastAPI):
@@ -61,6 +63,13 @@ def criar_app(
         app.state.revogacao = revogacao or (RevogacaoMongo(banco) if banco is not None else RevogacaoEmMemoria())
         if not app.state.verificador.projeto:
             log.warning("FIREBASE_PROJECT_ID ausente: as rotas /espacos (livro-caixa do cliente) respondem 503.")
+        # Atrás de um proxy reverso (Caddy, nginx), o socket da API é o do
+        # proxy. Sem confiar nele, o IP de quem chama seria sempre o do proxy,
+        # e o limite de tentativas por endereço (limites.py) somaria o mundo
+        # inteiro numa chave só: 20 senhas erradas de qualquer pessoa
+        # travariam o login de todas. O uvicorn lê esta variável sozinho.
+        if producao and not os.environ.get("FORWARDED_ALLOW_IPS"):
+            log.warning("AMBIENTE=producao sem FORWARDED_ALLOW_IPS: o IP de quem chama será o do proxy reverso.")
 
         # Gera já o hash usado no login de e-mail inexistente. Sem isso, a
         # primeira tentativa com e-mail inexistente demoraria o dobro e o
@@ -87,6 +96,10 @@ def criar_app(
         # (documentacao.py) tem CSP própria. O ReDoc não é usado.
         docs_url=None,
         redoc_url=None,
+        # Em produção, o mapa de todas as rotas não fica aberto a quem passa:
+        # sem /openapi.json e sem Swagger. A documentação continua no
+        # DOCS_API.md e no ambiente de desenvolvimento.
+        openapi_url=None if producao else "/openapi.json",
     )
 
     registrar_tratadores(app)
@@ -114,12 +127,20 @@ def criar_app(
     app.include_router(rotas_usuarios)
     app.include_router(rotas_livro_caixa)
     app.include_router(rotas_relatorios)
-    app.include_router(rotas_documentacao)
+    if not producao:
+        app.include_router(rotas_documentacao)
 
     app.mount("/painel", StaticFiles(directory=PASTA_DO_PAINEL, html=True), name="painel")
 
     @app.get("/", include_in_schema=False)
     def inicio():
         return RedirectResponse("/painel/")
+
+    # Para o healthcheck do container e o monitor de disponibilidade. Não
+    # consulta o banco nem conta nada da configuração: só diz que o processo
+    # responde.
+    @app.get("/saude", include_in_schema=False)
+    def saude():
+        return {"status": "ok"}
 
     return app
