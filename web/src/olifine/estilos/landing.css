@@ -890,6 +890,250 @@
   width: 96px;
 }
 
+/* ------------------------------------------------------------ Simulador */
+
+.lp-simulacao {
+  display: grid;
+  gap: var(--espaco-16);
+  padding-top: var(--espaco-12);
+}
+
+.lp-simulacao-texto {
+  max-width: 44rem;
+}
+
+.lp-simulador {
+  --lp-fixos: var(--cat-moradia);
+  --lp-variaveis: var(--cat-transporte);
+  --lp-sobra: var(--of-verde);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--espaco-12);
+  align-items: start;
+}
+
+.lp-simulador-controles,
+.lp-simulador-resultado {
+  display: grid;
+  gap: var(--espaco-12);
+  padding: var(--espaco-14);
+  border: var(--borda);
+  border-radius: var(--raio-grande);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.lp-controle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--espaco-4) var(--espaco-6);
+  align-items: baseline;
+}
+
+.lp-controle label {
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+}
+
+.lp-controle output {
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Trilho do controle: a parte percorrida em verde (--p vem do componente). */
+.lp-controle input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+}
+
+.lp-controle input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--raio-pilula);
+  background: linear-gradient(to right, var(--of-verde) var(--p), var(--linha) var(--p));
+}
+
+.lp-controle input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: var(--raio-pilula);
+  background: linear-gradient(to right, var(--of-verde) var(--p), var(--linha) var(--p));
+}
+
+.lp-controle input[type='range']::-webkit-slider-thumb {
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border: 3px solid var(--superficie);
+  border-radius: 50%;
+  background: var(--marca);
+  box-shadow: var(--sombra-elevada);
+  appearance: none;
+}
+
+.lp-controle input[type='range']::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 3px solid var(--superficie);
+  border-radius: 50%;
+  background: var(--marca);
+}
+
+.lp-controle input[type='range']:focus-visible {
+  outline: var(--espessura-do-foco) solid var(--of-verde);
+  outline-offset: var(--afastamento-do-foco);
+  border-radius: var(--raio-mini);
+}
+
+button.lp-simulador-refazer {
+  justify-self: start;
+  min-height: 0;
+  padding: 0;
+  color: var(--marca);
+  background: none;
+  border: 0;
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+button.lp-simulador-refazer:hover:not(:disabled) {
+  color: var(--marca-forte);
+  background: none;
+}
+
+.lp-simulador-resultado {
+  gap: var(--espaco-8);
+}
+
+.lp-simulador-rotulo {
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+}
+
+.lp-simulador-sobra {
+  margin-top: calc(var(--espaco-6) * -1);
+  font-size: var(--fonte-display);
+  font-weight: var(--peso-forte);
+  letter-spacing: var(--letra-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--positivo);
+}
+
+.lp-simulador-resultado.no-vermelho .lp-simulador-sobra {
+  color: var(--erro);
+}
+
+.lp-simulador-barra {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  overflow: hidden;
+  border-radius: var(--raio-pilula);
+  background: var(--linha);
+}
+
+.lp-simulador-barra i {
+  transition: width var(--tempo-medio) var(--curva);
+}
+
+.lp-simulador-barra .fixos,
+.lp-simulador-legenda .fixos::before {
+  background: var(--lp-fixos);
+}
+
+.lp-simulador-barra .variaveis,
+.lp-simulador-legenda .variaveis::before {
+  background: var(--lp-variaveis);
+}
+
+.lp-simulador-barra .sobra,
+.lp-simulador-legenda .sobra::before {
+  background: var(--lp-sobra);
+}
+
+.lp-simulador-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-3) var(--espaco-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fonte-apoio);
+  color: var(--suave);
+}
+
+.lp-simulador-legenda li {
+  display: inline-flex;
+  gap: var(--espaco-3);
+  align-items: center;
+}
+
+.lp-simulador-legenda li::before {
+  content: '';
+  width: var(--tamanho-ponto);
+  height: var(--tamanho-ponto);
+  border-radius: 50%;
+}
+
+.lp-simulador-legenda b {
+  color: var(--texto);
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-simulador-leitura {
+  padding: var(--espaco-6) var(--espaco-8);
+  border-radius: var(--raio);
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+  font-weight: var(--peso-medio);
+}
+
+.lp-simulador-resultado.apertado .lp-simulador-leitura {
+  background: color-mix(in srgb, var(--aviso) 14%, var(--superficie));
+  color: var(--texto);
+}
+
+.lp-simulador-resultado.no-vermelho .lp-simulador-leitura {
+  background: var(--of-rosa-suave);
+  color: var(--of-sobre-rosa);
+}
+
+.lp-simulador-numeros {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espaco-8);
+  margin: 0;
+}
+
+.lp-simulador-numeros dt {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.lp-simulador-numeros dd {
+  margin: var(--espaco-2) 0 0;
+  font-size: var(--fonte-numero);
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-simulador-numeros dd.lp-simulador-nota {
+  margin-top: var(--espaco-1);
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-regular);
+}
+
+.lp-ficticio-claro {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
 /* ----------------------------------------------------------- Segurança */
 
 .lp-seguranca {
@@ -1177,7 +1421,8 @@
   }
 
   .lp-seguranca-grade,
-  .lp-planos-grade {
+  .lp-planos-grade,
+  .lp-simulador {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1187,8 +1432,14 @@
 }
 
 @media (max-width: 560px) {
-  .lp-beneficios-grade {
+  .lp-beneficios-grade,
+  .lp-simulador-numeros {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lp-simulador-controles,
+  .lp-simulador-resultado {
+    padding: var(--espaco-10);
   }
 
   /* Hero mais enxuto: o celular entra na primeira tela. */
