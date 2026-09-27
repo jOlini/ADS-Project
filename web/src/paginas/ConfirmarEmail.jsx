@@ -1,13 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../componentes/toast/useToast';
+import { ESPERA_ENTRE_ENVIOS_EM_S, precisaDeLinkNovo, segundosParaReenviar } from '../regras/confirmacao';
 import { mensagemDeErro } from '../regras/erros';
-import { reenviarConfirmacao } from '../servicos/contas';
+import { reenviarConfirmacao, ultimoEnvioDoLink } from '../servicos/contas';
 import TopoDoAcesso from '../olifine/componentes/TopoDoAcesso';
-
-// Espera entre dois reenvios do link. O Firebase também limita do lado dele
-// (auth/too-many-requests); a espera na tela evita chegar lá por clique
-// repetido.
-const ESPERA_ENTRE_ENVIOS = 60;
 
 // Tela da conta logada que ainda não confirmou o e-mail (AreaDoCliente,
 // situação "sem-confirmacao"). Nada da área logada é buscado antes da
@@ -17,7 +13,25 @@ export default function ConfirmarEmail({ usuario, aoConferir, aoSair }) {
   const toast = useToast();
   const [conferindo, setConferindo] = useState(false);
   const [mensagem, setMensagem] = useState('');
-  const [espera, setEspera] = useState(0);
+  // Login logo depois do cadastro: a contagem continua a do link já mandado.
+  const [espera, setEspera] = useState(() => segundosParaReenviar(ultimoEnvioDoLink(usuario.uid), Date.now()));
+  // O StrictMode roda o efeito duas vezes no desenvolvimento: um envio só.
+  const envioAutomatico = useRef(false);
+
+  // Conta que chega aqui sem link recente deste navegador recebe um sem
+  // precisar pedir (regras/confirmacao.js explica quem são).
+  useEffect(() => {
+    if (envioAutomatico.current || !precisaDeLinkNovo(ultimoEnvioDoLink(usuario.uid), Date.now())) {
+      return;
+    }
+    envioAutomatico.current = true;
+    reenviarConfirmacao()
+      .then(() => {
+        setEspera(ESPERA_ENTRE_ENVIOS_EM_S);
+        toast.info('Confira a caixa de entrada e o spam.', { titulo: 'Link enviado' });
+      })
+      .catch((erro) => setMensagem(mensagemDeErro(erro.code)));
+  }, [usuario.uid, toast]);
 
   // Contagem regressiva do "Reenviar".
   useEffect(() => {
@@ -48,7 +62,7 @@ export default function ConfirmarEmail({ usuario, aoConferir, aoSair }) {
     setMensagem('');
     try {
       await reenviarConfirmacao();
-      setEspera(ESPERA_ENTRE_ENVIOS);
+      setEspera(ESPERA_ENTRE_ENVIOS_EM_S);
       toast.info('Confira a caixa de entrada e o spam.', { titulo: 'Link reenviado' });
     } catch (erro) {
       setMensagem(mensagemDeErro(erro.code));

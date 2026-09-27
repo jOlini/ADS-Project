@@ -11,11 +11,25 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { limparDadosLocais } from './dadosLocais';
+import { PREFIXO_DO_APP } from '../regras/dadosLocais';
+import { gravarJson, lerJson, limparDadosLocais } from './dadosLocais';
 
 // Um documento por usuário, com o id igual ao uid do Authentication.
 // As regras do Firestore usam essa igualdade para liberar só o dono.
 const COLECAO = 'usuarios';
+
+// Instante do último link de confirmação mandado deste navegador para a conta
+// (regras/confirmacao.js). O logout apaga junto com o resto do app.
+const chaveDoEnvio = (uid) => `${PREFIXO_DO_APP}confirmacao:${uid}`;
+
+async function enviarLink(usuario) {
+  await sendEmailVerification(usuario);
+  gravarJson(chaveDoEnvio(usuario.uid), Date.now());
+}
+
+export function ultimoEnvioDoLink(uid) {
+  return lerJson(chaveDoEnvio(uid));
+}
 
 export async function cadastrar({ email, senha, nome, sobrenome, dataNascimento }) {
   // 1. Cria a conta no Firebase Authentication (provedor e-mail/senha).
@@ -44,9 +58,10 @@ export async function cadastrar({ email, senha, nome, sobrenome, dataNascimento 
 
   // 3. Manda o link de confirmação. A área logada só abre com o e-mail
   // confirmado: prova que quem se cadastrou é dono do endereço. Se o envio
-  // falhar, a tela de confirmação (depois do login) tem o "Reenviar".
+  // falhar, nada fica registrado e a tela de confirmação (depois do login)
+  // manda o link sozinha.
   try {
-    await sendEmailVerification(user);
+    await enviarLink(user);
   } catch {
     // Segue: o cadastro já está completo.
   }
@@ -72,7 +87,7 @@ export async function sair() {
 
 // Novo link de confirmação para a conta logada (ainda sem confirmar).
 export function reenviarConfirmacao() {
-  return sendEmailVerification(auth.currentUser);
+  return enviarLink(auth.currentUser);
 }
 
 // Depois do clique no link (em outra aba ou no celular), a sessão aberta aqui
