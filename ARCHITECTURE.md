@@ -62,8 +62,8 @@ Camadas, de fora para dentro. Cada camada só conhece a de baixo:
 main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas e /painel
   │
   ├─ seguranca.py   CabecalhosDeSeguranca (CSP, nosniff, X-Frame-Options, Permissions-Policy, HSTS em HTTPS)
-  ├─ limites.py     LimiteDoCorpo (413) e LimiteDeTentativas do login (429), com o armazenamento das falhas
-  │                 atrás do contrato ArmazenamentoDeFalhas (memória hoje; Redis ou MongoDB com réplicas)
+  ├─ limites.py     LimiteDoCorpo (413), LimiteDeTentativas do login e LimiteDePedidos dos e-mails (429), com o
+  │                 armazenamento atrás do contrato ArmazenamentoDeFalhas (memória hoje; Redis ou MongoDB)
   ├─ revogacao.py   tokens do back-office encerrados no logout (jti), no MongoDB com índice TTL
   ├─ documentacao.py  /docs com Swagger UI de versão fixa (SRI) e CSP própria, sem script inline
   ├─ erros.py       tudo sai em Problem Details (RFC 9457), sem stack trace
@@ -71,16 +71,24 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
   ├─ rotas.py / financeiro/rotas*.py      contrato HTTP: método, caminho, corpo e código de resposta
   │     └─ dependências (Depends): usuario_autenticado + exigir_perfis (RBAC) no back-office;
   │        cliente_autenticado + espaco_do_cliente (membro do espaço) no livro-caixa
+  ├─ emails/        e-mails da conta do cliente: rotas.py (/conta), correio.py (junta as peças),
+  │                 links.py (código do Firebase pela conta de serviço), mensagens.py + modelo.html (marca
+  │                 OliFine) e envio.py (Resend, SMTP ou pasta, atrás do contrato EnviadorDeEmail)
   ├─ servicos.py / financeiro/servicos.py regras de negócio, sem nada de HTTP
   ├─ financeiro/regras.py, importacao.py, cartoes.py, relatorios.py   funções puras, testadas sem banco
   └─ repositorio.py / financeiro/repositorio.py   MongoDB (Protocol + implementação; os testes usam memória)
 ```
 
-- **Fábrica e injeção:** `criar_app(config, repositorio, livro_caixa, verificador, revogacao)` recebe as
-  dependências; os testes passam repositórios em memória, uma lista de revogação em memória e um verificador com
-  chave RSA própria. Nada de estado global.
-- **Configuração:** [`config.py`](api/app/config.py) lê o ambiente (`api/.env`). Nenhum segredo tem valor padrão;
-  `JWT_SECRET` com menos de 32 bytes derruba a subida.
+- **Fábrica e injeção:** `criar_app(config, repositorio, livro_caixa, verificador, revogacao, correio)` recebe as
+  dependências; os testes passam repositórios em memória, uma lista de revogação em memória, um verificador com
+  chave RSA própria e um correio com envio em memória. Nada de estado global.
+- **Configuração:** [`config.py`](api/app/config.py) lê o ambiente (`api/.env`) e os arquivos de `/run/secrets`.
+  Nenhum segredo tem valor padrão; `JWT_SECRET` com menos de 32 bytes derruba a subida, e `AMBIENTE=producao`
+  recusa a configuração de desenvolvimento (exemplos, CORS sem HTTPS, banco sem senha).
+- **E-mails da conta:** a API pede ao Firebase só o código do link (`accounts:sendOobCode` com `returnOobLink`,
+  autenticada como conta de serviço), monta o e-mail com o modelo da OliFine e manda pelo provedor configurado,
+  depois de responder `202`. O link leva a `/auth/...` na área do cliente, com o código depois do `#`. Sem
+  provedor, `/conta` responde `503` e a área do cliente usa o envio do Firebase.
 - **Livro-caixa:** partidas dobradas (a soma das partidas de um lançamento é zero), dinheiro em **centavos
   inteiros**, correção por estorno (histórico fica) ou exclusão (erro de digitação). Cartão de crédito é uma conta
   de dívida com fatura por mês de vencimento. Tudo pertence a um **espaço** (`/espacos/{id}`), e o espaço
@@ -122,10 +130,12 @@ componentes/
   LimiteDeErro      Error Boundary: um erro de render mostra o aviso no lugar da tela, sem derrubar o app
   useCarga          busca assíncrona com erro no estado (nada de promessa solta)
   ...               componentes próprios: seletor, calendário, modal, menu, campos, gráficos
-paginas/            Cadastro, Login, ConfirmarEmail, Lançamentos, Contas & Cartões, Cartão, Categorias, Relatórios
+paginas/            Cadastro, Login, ConfirmarEmail, Lançamentos, Contas & Cartões, Cartão, Categorias, Relatórios;
+                    links dos e-mails: VerificarEmail, RedefinirSenha, EsqueciASenha e AcaoDaConta (/auth/...)
 olifine/            identidade OliFine: casca, Visão geral (/principal), Metas, landing, regras próprias
 regras/             funções puras e testadas: validação, dinheiro, datas, extrato, importação, relatórios
-servicos/           contas.js (Firebase: cadastro com link de confirmação, logout que limpa o navegador),
+servicos/           contas.js (Firebase: cadastro com link de confirmação, senha nova, logout que limpa o navegador),
+                    emailsDaConta.js (pede os e-mails à API; sem ela, o Firebase manda),
                     livroCaixa.js (API com o ID token), enderecoDaApi.js, dadosLocais.js (o que sai no logout),
                     tentativasDeLogin.js (contagem de senhas erradas), tema.js (data-tema e a escolha salva)
 estilos/            design tokens (tokens.css, com o tema escuro em [data-tema='escuro']), componentes,
@@ -160,12 +170,13 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
 | Borda da API | CSP `default-src 'self'` no painel, `X-Frame-Options: DENY`, `nosniff`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, HSTS em HTTPS, `no-store` nos dados; CORS por lista explícita, sem cookie; `/docs` com CSP própria (`default-src 'none'`, script só da API e da versão fixa do Swagger na CDN, com SRI) e ReDoc desligado | `seguranca.py`, `main.py`, `documentacao.py` |
 | Abuso | Corpo acima de 2 MB → `413`; 5 senhas erradas por e-mail + endereço (ou 20 por endereço) em 15 min → `429`, e cada `401` diz quantas restam; na área do cliente, a mesma regra no navegador, por e-mail | `limites.py`, `web/src/regras/tentativas.js` |
 | Autenticação | JWT HS256 com algoritmo, emissor, expiração (15 min) e `jti` obrigatórios, revogado no logout; ID token RS256 do Firebase com `aud`, `iss`, datas e `email_verified`; mesma resposta e mesmo tempo para e-mail inexistente e senha errada; cadastro com e-mail já usado responde como um novo | `tokens.py`, `revogacao.py`, `firebase.py`, `servicos.py`, `Cadastro.jsx` |
+| E-mails da conta | Resposta igual com e sem conta no "Esqueci minha senha", envio depois da resposta (tempo igual), limite por conta, e-mail e endereço, texto fixo (nada escrito por quem pede), código do link no fragmento, SMTP só com TLS, chave do provedor e da conta de serviço fora do código e dos logs | `emails/`, `limites.py`, `web/src/paginas/VerificarEmail.jsx`, `RedefinirSenha.jsx` |
 | Sessão no navegador | Sessão por aba; logout apaga metas, tentativas e a sessão do Firebase (menos o tema); área logada só com e-mail confirmado | `servicos/contas.js`, `regras/dadosLocais.js`, `regras/sessao.js` |
 | Autorização | RBAC por dependência em cada rota; perfil lido do banco a cada requisição; livro-caixa isolado por espaço (id alheio = `404`) | `seguranca.py`, `financeiro/acesso.py`, repositórios |
 | Entrada | Pydantic com `extra="forbid"`, tamanhos e faixas; texto do CSV sem controle e sem começo de fórmula (CSV injection) | `modelos.py`, `financeiro/modelos.py`, `financeiro/importacao.py` |
 | Saída | Problem Details com mensagens próprias; `500` genérico; React e `textContent` escapam todo texto (nenhum `innerHTML` nem `dangerouslySetInnerHTML`) | `erros.py`, `painel.js` |
 | Dados | Senha só como hash BCrypt (custo 12); valores em centavos inteiros; regras do Firestore com dono, campos fixos, tipos e tamanhos | `senhas.py`, `web/firestore.rules` |
-| Segredos | `.env` fora do Git; `JWT_SECRET`, `MONGODB_URI` e o webhook do Discord só no ambiente e nos secrets do GitHub; chave da conta de serviço do Firebase fora de qualquer repositório | `.gitignore`, `api/.env.example`, `web/.env.example` |
+| Segredos | `.env` fora do Git; `JWT_SECRET`, `MONGODB_URI`, chaves de e-mail e o webhook do Discord só no ambiente, em `/run/secrets` ou nos secrets do GitHub; chave da conta de serviço do Firebase fora de qualquer repositório; `AMBIENTE=producao` recusa os valores de exemplo | `.gitignore`, `config.py`, `api/.env.example`, `web/.env.example` |
 | CI/CD | `permissions` mínimas por workflow; actions fixadas pelo SHA do commit (tag movida não troca o código que roda); checkout sem guardar o token (`persist-credentials: false`); valores de PR entram no JSON pelo `jq --arg` e o Discord recebe `allowed_mentions` vazio (sem `@everyone` injetado) | `.github/workflows/` |
 
 Ao mudar o código, mantenha estas regras:
@@ -176,6 +187,10 @@ Ao mudar o código, mantenha estas regras:
   MongoDB com TTL; receita no docstring de `limites.py`). A revogação de tokens já fica no MongoDB.
 - **Nova action no CI:** entra pelo SHA do commit, com a versão num comentário ao lado.
 - **Novo dado no navegador:** chave com o prefixo `olifine:`, para o logout apagá-la.
+- **Novo e-mail:** texto fixo em `emails/mensagens.py` (nenhum campo livre de quem pede), rota com
+  `LimiteDePedidos` e envio depois da resposta quando a resposta não pode revelar quem tem conta.
+- **Atrás de um proxy reverso:** `FORWARDED_ALLOW_IPS` com o IP do proxy, senão o limite por endereço junta todo
+  mundo numa chave só.
 - **Novo script externo no front-end:** entra na CSP do `vite.config.js` com a justificativa no comentário.
 
 ---
@@ -185,7 +200,9 @@ Ao mudar o código, mantenha estas regras:
 | Ambiente | Como sobe | Observações |
 |---|---|---|
 | Local completo | `python subir-app.py up` | `api/.env` e `api/.venv` automáticos, MongoDB + API no Docker, Vite em segundo plano, links impressos; acesso pela rede local |
-| Só a API | `docker compose up --build` | API em `http://localhost:8081`, painel em `/painel/`, Swagger em `/docs` |
+| Só a API | `docker compose up --build` | API em `http://localhost:8081`, painel em `/painel/`, Swagger em `/docs`, `/saude` para healthcheck |
+| API com e-mails de teste | `uvicorn` local com `EMAIL_PROVEDOR=pasta` | Cada e-mail vira um `.html` em `api/emails-enviados/`, com o link para `/auth/...` |
+| Produção (API) | Imagem da API com `AMBIENTE=producao` atrás de um proxy reverso com TLS | Segredos em `/run/secrets`, `FORWARDED_ALLOW_IPS` com o IP do proxy, Swagger fora do ar |
 | Demonstração externa | `python subir-app.py tunnel start` | Quick Tunnel da Cloudflare para o Vite; a API passa só em `/espacos`, pelo proxy |
 | Container do front-end | `docker build --secret id=env,src=web/.env -t pessoal-finance-web web` | nginx alpine com os cabeçalhos de segurança; build com `--base=/` |
 | Publicado | Push na `main` (workflow `cd.yml`) | GitHub Pages em `https://jolini.github.io/ADS-Project/`, sem API |

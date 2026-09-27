@@ -14,7 +14,7 @@ from typing import Protocol
 from fastapi import Request
 from starlette.exceptions import HTTPException
 
-from app.erros import MENSAGEM_CORPO_GRANDE, ErroMuitasTentativas, problema
+from app.erros import MENSAGEM_CORPO_GRANDE, ErroMuitasTentativas, ErroMuitosPedidos, problema
 
 # Força bruta: 5 senhas erradas para o mesmo e-mail, vindas do mesmo endereço,
 # em 15 minutos, travam esse par até a falha mais antiga sair da janela. O
@@ -159,13 +159,49 @@ class LimiteDeTentativas:
         return max(0, min(por_email, por_endereco))
 
     def _espera(self, chave: str, maximo: int, agora: float) -> int:
-        """Segundos até a chave aceitar nova tentativa (0 = liberada)."""
-        falhas = self._armazenamento.recentes(chave, agora - self.janela)
-        if len(falhas) < maximo:
-            return 0
-        # Libera quando sobrarem menos que o máximo na janela, isto é, quando
-        # a falha de número "máximo", contando da mais nova, sair dela.
-        return max(1, ceil(falhas[-maximo] + self.janela - agora))
+        return _espera(self._armazenamento, chave, maximo, self.janela, agora)
+
+
+def _espera(armazenamento: ArmazenamentoDeFalhas, chave: str, maximo: int, janela: int, agora: float) -> int:
+    """Segundos até a chave aceitar nova tentativa (0 = liberada)."""
+    falhas = armazenamento.recentes(chave, agora - janela)
+    if len(falhas) < maximo:
+        return 0
+    # Libera quando sobrarem menos que o máximo na janela, isto é, quando
+    # a falha de número "máximo", contando da mais nova, sair dela.
+    return max(1, ceil(falhas[-maximo] + janela - agora))
+
+
+class LimiteDePedidos:
+    """Janela deslizante que conta todo pedido, e não só as falhas: serve às
+    rotas que mandam e-mail (/conta). Sem ela, um script mandaria centenas de
+    links para a caixa de alguém (e o provedor suspenderia o remetente por
+    spam).
+
+    Cada regra é (chave, máximo, janela em segundos). O pedido que estoura
+    qualquer regra recebe 429 e não conta; o que passa conta em todas. Guarda
+    no mesmo ArmazenamentoDeFalhas do login (em memória, por padrão)."""
+
+    def __init__(self, relogio=time.monotonic, armazenamento: ArmazenamentoDeFalhas | None = None):
+        self._relogio = relogio
+        self._armazenamento = armazenamento or FalhasEmMemoria()
+
+    def consumir(self, regras: list[tuple[str, int, int]]) -> None:
+        agora = self._relogio()
+        # A janela entra no nome: a mesma chave com duas janelas (1 por minuto
+        # e 5 por hora) fica em duas listas, e a limpeza da janela curta não
+        # apaga o que a longa ainda precisa contar.
+        chaves = [(f"{chave}|{janela}", maximo, janela) for chave, maximo, janela in regras]
+        esperas = [_espera(self._armazenamento, chave, maximo, janela, agora) for chave, maximo, janela in chaves]
+        espera = max(esperas, default=0)
+        if espera > 0:
+            raise ErroMuitosPedidos(espera)
+        for chave, _, janela in chaves:
+            self._armazenamento.registrar(chave, agora, janela)
+
+
+def obter_limite_de_emails(requisicao: Request) -> LimiteDePedidos:
+    return requisicao.app.state.limite_de_emails
 
 
 def obter_limite_de_login(requisicao: Request) -> LimiteDeTentativas:
@@ -173,9 +209,14 @@ def obter_limite_de_login(requisicao: Request) -> LimiteDeTentativas:
 
 
 def endereco_de(requisicao: Request) -> str:
-    """IP de quem conectou. O X-Forwarded-For fica de fora de propósito: é
+    """IP de quem conectou. O X-Forwarded-For não é lido aqui de propósito: é
     um cabeçalho que o próprio cliente escreve, e trocá-lo a cada palpite
-    furaria o limite."""
+    furaria o limite.
+
+    Atrás de um proxy reverso (produção), quem troca o socket pelo IP real é
+    o uvicorn, e só quando a conexão vem de um endereço listado em
+    FORWARDED_ALLOW_IPS (o do proxy). Sem essa variável, todo mundo pareceria
+    vir do proxy e dividiria o mesmo limite."""
     return requisicao.client.host if requisicao.client else "desconhecido"
 
 

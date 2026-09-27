@@ -85,13 +85,18 @@ API) e a **API REST** (FastAPI + MongoDB, em `api/`).
 
 ```
  Navegador ── área do cliente (React, OliFine) ──┬── Firebase Authentication + Cloud Firestore
-                                                 └── API REST (/espacos, ID token do Firebase)
+                                                 └── API REST (/espacos e /conta, ID token do Firebase)
  Navegador ── painel do back-office ───────────────── API REST (/auth, /usuarios, JWT próprio) ── MongoDB 7
+ API REST (/conta) ── Firebase (código do link) + provedor de e-mail (Resend ou SMTP) ── caixa de entrada
 ```
 
 São **duas fontes de identidade**, por decisão de produto: o cliente final entra pelo Firebase Authentication, e a
 API aceita o **ID token do Firebase** (com o e-mail confirmado) no livro-caixa; o back-office entra pela própria
 API, que emite um **JWT** e aplica o RBAC em `/usuarios`. Um token nunca abre a área do outro.
+
+Os e-mails da conta (confirmação e senha nova) saem da API, com a marca OliFine: ela pede ao Firebase só o código
+do link, sem que ele mande nada, e o link leva a páginas do próprio app (`/auth/...`). Sem provedor de e-mail
+configurado (como no GitHub Pages), o Firebase manda o e-mail padrão dele, e nada deixa de funcionar.
 
 Diagrama completo, camadas da API e do front-end, modelo de dados, segurança em camadas e ambientes:
 [`ARCHITECTURE.md`](ARCHITECTURE.md). Matriz de permissões:
@@ -123,6 +128,8 @@ Diagrama completo, camadas da API e do front-end, modelo de dados, segurança em
 | Camada | O que a aplicação faz |
 |---|---|
 | Conta do cliente | Link de confirmação no cadastro: a área logada (e a API do livro-caixa) só abre com o e-mail confirmado. Login e cadastro nunca revelam quem tem conta: a mesma mensagem para e-mail sem conta e senha errada, e o cadastro com e-mail já usado segue o mesmo caminho de um novo. Depois de cada senha errada, o login diz quantas tentativas restam; na quinta, o acesso com aquele e-mail fica bloqueado por 15 minutos |
+| E-mails da conta | Confirmação e senha nova pela API, com o código do link depois do `#` (não chega ao log do servidor) e páginas próprias (`/auth/verificar-email`, `/auth/redefinir-senha`). "Esqueci minha senha" responde igual com e sem conta, e o envio roda depois da resposta (o tempo também não revela). Limites: 1 link por minuto e 5 por hora por conta ou e-mail; `429` com `Retry-After`. Nenhum texto do e-mail vem de quem pediu |
+| Configuração de produção | `AMBIENTE=producao` recusa subir com os valores de exemplo, CORS em `http://` ou curinga, MongoDB sem senha e `APP_URL` sem HTTPS, e tira o Swagger e o `/openapi.json` do ar. Segredos lidos de arquivo (`/run/secrets`), fora das variáveis de ambiente |
 | Sessão no navegador | Sessão por aba (`sessionStorage`): fechar o navegador sai da conta. O logout apaga do navegador as metas, a contagem de tentativas e a sessão do Firebase; só a preferência de tema fica |
 | Login do back-office | Senha só como hash BCrypt; `401` com `tentativas_restantes`; `429` depois de 5 senhas erradas (por e-mail e endereço) ou 20 (por endereço) em 15 minutos; mesmo tempo de resposta com e sem conta |
 | Token do back-office | JWT HS256 de 15 minutos com `jti`; `POST /auth/logout` revoga o token na hora (lista no MongoDB com TTL); perfil lido do banco a cada requisição |
@@ -143,7 +150,8 @@ Nenhum segredo é versionado: o repositório é público.
 | `JWT_SECRET`, `ADMIN_SENHA`, `MONGODB_URI` | Só no `api/.env` (fora do Git) | Chave aleatória de 32 bytes ou mais (a API não sobe com menos); o `subir-app.py up` gera valores aleatórios. Vazou: troque a chave (todos os tokens caem) e a senha |
 | `VITE_FIREBASE_*` | `web/.env` local e secrets do GitHub (build do Pages) | Públicas por natureza (vão para o navegador); quem protege os dados são as regras do Firestore |
 | `DISCORD_WEBHOOK` | Só nos secrets do GitHub | Nunca em arquivo, log ou print |
-| Chave da conta de serviço do Firebase | Fora de qualquer repositório, na pasta do usuário | Vale como senha de administrador do projeto Firebase |
+| Chave da conta de serviço do Firebase | Fora de qualquer repositório, na pasta do usuário (`FIREBASE_CONTA_DE_SERVICO`) | Vale como senha de administrador do projeto Firebase. Para os e-mails, use uma conta de serviço só com o papel "Administrador do Firebase Authentication" |
+| `RESEND_API_KEY`, `SMTP_SENHA` | `api/.env` local; num servidor, `/run/secrets/<nome>` | Vazou: revogue a chave no provedor e gere outra |
 
 Antes de cada commit, confira o que vai entrar (`git diff --cached --name-only`) e adicione arquivo por arquivo,
 nunca `git add .`: o `.gitignore` barra os `.env`, `*.pem`, `*.key` e as chaves do Firebase, mas a conferência é a
@@ -207,14 +215,23 @@ Só para rodar o React na própria máquina. Para apenas usar a área do cliente
 
 1. Copie `web/.env.example` para `web/.env` e preencha com a configuração do app Web do projeto Firebase
    (Console do Firebase › Configurações do projeto › Seus apps). O projeto precisa ter Authentication (provedor
-   e-mail/senha) e Cloud Firestore habilitados. O e-mail de confirmação usa o modelo padrão do Firebase
-   (Authentication › Templates); a proteção contra enumeração de e-mail fica ligada (padrão em projetos novos).
+   e-mail/senha) e Cloud Firestore habilitados. Sem os e-mails pela API (abaixo), a confirmação e a senha nova
+   usam o modelo do Firebase (Authentication › Templates); em "Personalizar URL de ação", o endereço
+   `<endereço do app>/auth/acao` leva também esses links às páginas do app. A proteção contra enumeração de e-mail
+   fica ligada (padrão em projetos novos).
 2. Para as telas do livro-caixa, acrescente `VITE_API_URL=http://localhost:8081` ao `web/.env` e confira, no
    `api/.env`, o `FIREBASE_PROJECT_ID` (o mesmo `VITE_FIREBASE_PROJECT_ID`) e o `CORS_ORIGENS` com
    `http://localhost:5173`. Sem `VITE_API_URL`, o app funciona como a versão publicada.
 3. Publique as regras de [`web/firestore.rules`](web/firestore.rules) em Firestore Database › Regras (ou
    `npx firebase-tools deploy --only firestore:rules --project <id>` dentro de `web/`).
 4. Instale as dependências: `cd web` e `npm ci`.
+
+**E-mails com a marca OliFine (opcional).** No `api/.env`: `EMAIL_PROVEDOR` (`resend`, `smtp` ou `pasta`),
+`EMAIL_REMETENTE`, `APP_URL` (endereço da área do cliente, para onde os links levam) e
+`FIREBASE_CONTA_DE_SERVICO` (caminho da chave JSON de uma conta de serviço do projeto, guardada fora do
+repositório). Com `EMAIL_PROVEDOR=pasta`, nenhum e-mail sai: cada um vira um `.html` em `api/emails-enviados/`,
+para abrir e clicar no link (só com a API rodando fora do Docker, opção C). Para ver os modelos sem configurar
+nada: `.venv\Scripts\python -m app.emails.previa <pasta>` em `api/`.
 
 Sem projeto Firebase, dá para usar os emuladores locais: `VITE_FIREBASE_EMULADOR=true` no `web/.env` e
 `npx firebase-tools emulators:start --project demo-pessoal-finance` em `web/` (exige Java 11+; o link de
@@ -352,6 +369,15 @@ versão dele.
 | `CORS_ORIGENS_REDE` | api | Origem da área do cliente aberta pela rede local, somada ao `CORS_ORIGENS`. Não vai no `.env`: o `subir-app.py up` passa pelo Docker Compose a cada subida |
 | `FIREBASE_PROJECT_ID` | api | Projeto Firebase cujos ID tokens abrem o livro-caixa (o mesmo `VITE_FIREBASE_PROJECT_ID`). Vazio: `/espacos` responde `503` |
 | `ADMIN_NOME`, `ADMIN_EMAIL`, `ADMIN_SENHA` | api | Administrador criado na primeira subida, com o banco vazio |
+| `AMBIENTE` | api | `desenvolvimento` (padrão) ou `producao`: em produção, a API recusa configuração insegura e tira o Swagger do ar |
+| `FORWARDED_ALLOW_IPS` | api | Só atrás de um proxy reverso: o IP do proxy, para o limite de tentativas ver o IP real de quem chama |
+| `EMAIL_PROVEDOR` | api | E-mails da conta pela API: `resend`, `smtp` ou `pasta` (desenvolvimento). Vazio: `/conta` responde `503` e o Firebase manda |
+| `APP_URL` | api | Endereço da área do cliente usado nos links dos e-mails (em produção, `https://`) |
+| `EMAIL_REMETENTE`, `EMAIL_RESPONDER_PARA` | api | Remetente (`Nome <endereco>`, com o domínio verificado no provedor) e resposta |
+| `FIREBASE_CONTA_DE_SERVICO` | api | Chave JSON da conta de serviço (caminho ou conteúdo), só para gerar os códigos dos links |
+| `RESEND_API_KEY` | api | Chave do Resend (`EMAIL_PROVEDOR=resend`) |
+| `SMTP_HOST`, `SMTP_PORTA`, `SMTP_USUARIO`, `SMTP_SENHA` | api | Servidor SMTP (`EMAIL_PROVEDOR=smtp`): 465 com SSL ou 587 com STARTTLS |
+| `EMAIL_PASTA` | api | Pasta dos e-mails gravados com `EMAIL_PROVEDOR=pasta` (padrão `emails-enviados`) |
 | `VITE_FIREBASE_*` | web | Configuração pública do app Web do Firebase |
 | `VITE_FIREBASE_EMULADOR` | web | `true` para usar os emuladores locais do Firebase |
 | `VITE_API_URL` | web | Endereço da API (ex.: `http://localhost:8081`). Vazio: telas do livro-caixa desligadas, como no GitHub Pages |
@@ -374,7 +400,7 @@ pip install -r requirements-dev.txt
 pytest -v
 ```
 
-Resultado esperado: `327 passed`.
+Resultado esperado: `394 passed`.
 
 **Front-end (Vitest, lint e build):** em `web/`.
 
@@ -385,7 +411,7 @@ npm run lint
 npm run build
 ```
 
-Resultado esperado: `Test Files 32 passed (32)` e `Tests 310 passed (310)`. Sem o `--run`, o Vitest fica em modo
+Resultado esperado: `Test Files 35 passed (35)` e `Tests 348 passed (348)`. Sem o `--run`, o Vitest fica em modo
 observador.
 
 | Suíte | Arquivo | O que cobre |
@@ -396,10 +422,13 @@ observador.
 | API | `api/tests/test_api.py` | Respostas HTTP, matriz completa do RBAC, 401/403/404/409 e cabeçalhos de segurança |
 | API | `api/tests/test_limites.py` | Força bruta no login (`429` por e-mail e por endereço, sem revelar quem tem conta), corpo grande demais (`413`), `500` sem detalhe interno, CSP, `Permissions-Policy` e HSTS só em HTTPS |
 | API | `api/tests/test_firebase.py` | ID token do Firebase: assinatura, RS256, `aud`, `iss`, datas, `sub`, `email_verified` (`403` sem ele) e token do back-office recusado |
+| API | `api/tests/test_emails.py` e `test_emails_rotas.py` | E-mails da conta: modelos (link e key escapados), Resend, SMTP só com criptografia, pasta, conta de serviço e código do Firebase sem rede, rotas `/conta` com `202` igual com e sem conta, `429`, `503` sem provedor e log sem o endereço |
+| API | `api/tests/test_producao.py` | `AMBIENTE=producao`: recusa exemplo, CORS inseguro, MongoDB sem senha e `APP_URL` sem HTTPS; segredos em arquivo; Swagger fora do ar; `/saude` |
 | API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, rotas e isolamento entre clientes, importação de CSV de vários bancos, racha, exclusão, cartão de crédito (fatura, parcelas, pagamento) e relatórios |
 | Front-end | `web/src/regras/tentativas.test.js` | Tentativas de login: contagem por e-mail, bloqueio na quinta, janela de 15 minutos, o que conta como senha errada e a chave sem o e-mail em texto |
 | Front-end | `web/src/regras/dadosLocais.test.js` e `servicos/dadosLocais.test.js` | O que o logout apaga do navegador (metas, tentativas, sessão) e o que fica (tema e dados de outros sites) |
 | Front-end | `web/src/regras/sessao.test.js` e `servicos/contas.test.js` | Área logada só com sessão e e-mail confirmado; cadastro no Firebase com o link de confirmação, logout e "Já confirmei" com o SDK simulado |
+| Front-end | `web/src/regras/acaoDaConta.test.js` e `servicos/emailsDaConta.test.js` | Links dos e-mails: código no fragmento ou na consulta, modo do Firebase para cada página, senha nova repetida, e quando a API manda o e-mail ou o Firebase assume |
 | Front-end | `web/src/regras/tema.test.js` | Tema salvo ou do sistema e alternância |
 | Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, importação, racha, busca, calendário, seletor, cartões e relatórios |
 | Front-end | `web/src/servicos/livroCaixa.test.js` e `enderecoDaApi.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar, token que não renova e endereço pela rede local |
@@ -489,11 +518,15 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
 3. Entre com a conta antes de abrir o link: aparece **Confirme o seu e-mail**, com **Reenviar o link** (espera
    de 60 s entre envios). Abra o link e clique em **Já confirmei**: `/principal` mostra nome, sobrenome e data de
    nascimento lidos do Firestore (em "Seus dados", no fim da Visão geral).
-4. Crie uma meta em **Metas** e clique em **Sair**: abrir `/principal` direto volta para o login, e a meta saiu do
+4. Em `/login`, **Esqueci minha senha** pede o e-mail e responde igual com e sem conta. O link do e-mail abre
+   **Criar senha nova** no próprio app; um link já usado ou vencido mostra **Não deu para usar este link**, com o
+   atalho para pedir outro. O link de confirmação abre **E-mail confirmado** (com a API mandando os e-mails, ou
+   com a URL de ação do Firebase apontando para `/auth/acao`).
+5. Crie uma meta em **Metas** e clique em **Sair**: abrir `/principal` direto volta para o login, e a meta saiu do
    navegador (só a escolha de tema fica).
-5. O botão de lua ou sol no topo troca o tema com uma transição suave; recarregue a página e a escolha continua.
+6. O botão de lua ou sol no topo troca o tema com uma transição suave; recarregue a página e a escolha continua.
    Com o zoom do navegador entre 50% e 200% (`Ctrl` + `-` e `Ctrl` + `+`), nenhuma tela ganha rolagem lateral.
-6. Na página de apresentação, mova os controles do simulador: a sobra, a leitura (acima ou abaixo dos 20% de
+7. Na página de apresentação, mova os controles do simulador: a sobra, a leitura (acima ou abaixo dos 20% de
    referência) e o prazo da reserva mudam na hora. Complete uma meta em **Metas**: as maçãs caem da árvore.
 
 **Livro-caixa (só local, com a API no ar).** Com `VITE_API_URL=http://localhost:8081` no `web/.env`,
@@ -561,6 +594,9 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de seguran�
 | `POST` | `/usuarios` | Criar usuário | Administrador | `201 Created` |
 | `PUT` | `/usuarios/{id}` | Atualizar usuário | Administrador, Operador | `200 OK` |
 | `DELETE` | `/usuarios/{id}` | Excluir usuário | Administrador | `204 No Content` |
+| `POST` | `/conta/confirmacao` | Mandar o link de confirmação do e-mail (a única rota que aceita a conta ainda sem confirmação) | Cliente (ID token do Firebase) | `202 Accepted` |
+| `POST` | `/conta/nova-senha` | Mandar o link para criar uma senha nova (resposta igual com e sem conta) | Público | `202 Accepted` |
+| `GET` | `/saude` | Verificação de funcionamento (healthcheck) | Público | `200 OK` |
 | `GET` | `/espacos` | Listar os espaços do cliente (cria o pessoal no primeiro acesso) | Cliente com e-mail confirmado (ID token do Firebase) | `200 OK` |
 | `GET`, `POST`, `PUT` | `/espacos/{id}/contas` e `/espacos/{id}/categorias` | Contas (com saldo), cartões de crédito e categorias | Membro do espaço | `200 OK` / `201 Created` |
 | `GET` | `/espacos/{id}/cartoes`, `/cartoes/{id}` e `/cartoes/{id}/faturas/{AAAA-MM}` | Painel do cartão e extrato de uma fatura | Membro do espaço | `200 OK` |

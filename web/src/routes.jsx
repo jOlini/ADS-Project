@@ -6,12 +6,16 @@ import AreaDoCliente from './componentes/AreaDoCliente';
 import Esqueleto from './componentes/Esqueleto';
 import Layout from './componentes/Layout';
 import LimiteDeErro from './componentes/LimiteDeErro';
+import AcaoDaConta from './paginas/AcaoDaConta';
 import Cadastro from './paginas/Cadastro';
 import Cartao from './paginas/Cartao';
 import Categorias from './paginas/Categorias';
 import Contas from './paginas/Contas';
+import EsqueciASenha from './paginas/EsqueciASenha';
 import Lancamentos from './paginas/Lancamentos';
 import Login from './paginas/Login';
+import RedefinirSenha from './paginas/RedefinirSenha';
+import VerificarEmail from './paginas/VerificarEmail';
 
 // Páginas maiores, baixadas só quando abertas: a landing (quem entra logado
 // não precisa dela) e as telas com gráficos e a árvore das metas.
@@ -36,6 +40,12 @@ export default function AppRoutes() {
           <Route index element={sobDemanda(<Landing />, 'landing')} />
           <Route path="cadastro" element={<Cadastro />} />
           <Route path="login" element={<Login />} />
+          {/* Links dos e-mails da conta, no lugar das páginas genéricas do
+              Firebase. /auth/acao é a "URL de ação personalizada" do Console. */}
+          <Route path="auth/acao" element={<AcaoDaConta />} />
+          <Route path="auth/verificar-email" element={<VerificarEmail />} />
+          <Route path="auth/redefinir-senha" element={<RedefinirSenha />} />
+          <Route path="auth/esqueci-a-senha" element={<EsqueciASenha />} />
           {/* Área logada: só ela tem a barra lateral, montada depois de confirmar
               a sessão. Sem sessão, as páginas voltam para o login. */}
           <Route element={<AreaDoCliente />}>

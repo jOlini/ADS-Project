@@ -137,7 +137,7 @@ class CabecalhosDeSeguranca:
     libera só a versão fixa do Swagger UI na CDN (documentacao.py).
     """
 
-    ROTAS_DE_DADOS = ("/auth", "/usuarios", "/espacos")
+    ROTAS_DE_DADOS = ("/auth", "/usuarios", "/espacos", "/conta")
     CSP = b"default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
     PERMISSOES = b"camera=(), microphone=(), geolocation=(), payment=()"
     HSTS = b"max-age=31536000; includeSubDomains"

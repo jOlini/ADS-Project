@@ -20,6 +20,11 @@ const MENSAGENS = {
   'auth/weak-password': 'Senha fraca: use pelo menos 6 caracteres.',
   'auth/too-many-requests': 'Muitas tentativas seguidas. Por segurança, aguarde alguns minutos e tente de novo.',
   'auth/network-request-failed': 'Sem conexão com o Firebase. Verifique a internet.',
+  // Links dos e-mails (confirmação e senha nova) e limite de pedidos da API.
+  'auth/expired-action-code': 'Este link venceu. Peça outro.',
+  'auth/invalid-action-code': 'Este link não vale mais: ele já foi usado ou está incompleto.',
+  'auth/password-does-not-meet-requirements': 'A senha não atende às regras de segurança. Use uma senha mais forte.',
+  'olifine/muitos-pedidos': 'Muitos pedidos seguidos. Aguarde alguns minutos e tente de novo.',
   'permission-denied': 'O banco de dados recusou a operação (regras do Firestore).',
   unavailable: 'Banco de dados indisponível no momento. Tente de novo.',
 };

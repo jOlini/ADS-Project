@@ -45,13 +45,26 @@ def cliente_autenticado(
     credenciais: HTTPAuthorizationCredentials | None = Depends(esquema_firebase),
     verificador: VerificadorFirebase = Depends(obter_verificador),
 ) -> ClienteFirebase:
+    return _verificar(credenciais, verificador, exigir_email_verificado=True)
+
+
+def cliente_mesmo_sem_confirmacao(
+    credenciais: HTTPAuthorizationCredentials | None = Depends(esquema_firebase),
+    verificador: VerificadorFirebase = Depends(obter_verificador),
+) -> ClienteFirebase:
+    """Igual ao cliente_autenticado, mas aceita a conta que ainda não
+    confirmou o e-mail. Só para POST /conta/confirmacao (emails/rotas.py)."""
+    return _verificar(credenciais, verificador, exigir_email_verificado=False)
+
+
+def _verificar(credenciais, verificador: VerificadorFirebase, exigir_email_verificado: bool) -> ClienteFirebase:
     if credenciais is None:
         raise ErroNaoAutenticado(
             "Autenticação necessária: envie o cabeçalho Authorization: Bearer <ID token do Firebase>.",
             DESAFIO_SEM_TOKEN,
         )
     try:
-        return verificador.verificar(credenciais.credentials)
+        return verificador.verificar(credenciais.credentials, exigir_email_verificado)
     except TokenFirebaseInvalido:
         raise ErroNaoAutenticado("Sessão inválida ou expirada. Entre de novo.", DESAFIO_TOKEN_INVALIDO)
     except EmailNaoVerificado:

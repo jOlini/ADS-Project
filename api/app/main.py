@@ -7,6 +7,7 @@ verificador do Firebase próprios).
 
 import logging
 import mimetypes
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -17,12 +18,14 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import Configuracoes
 from app.documentacao import rotas_documentacao
+from app.emails.correio import CorreioDaConta, criar_correio
+from app.emails.rotas import rotas_da_conta
 from app.erros import registrar_tratadores
 from app.financeiro.repositorio import LivroCaixaMongo, RepositorioLivroCaixa
 from app.financeiro.rotas import rotas_livro_caixa
 from app.financeiro.rotas_relatorios import rotas_relatorios
 from app.firebase import VerificadorFirebase
-from app.limites import LimiteDeTentativas, LimiteDoCorpo
+from app.limites import LimiteDePedidos, LimiteDeTentativas, LimiteDoCorpo
 from app.repositorio import RepositorioMongo, RepositorioUsuarios, conectar_mongo
 from app.revogacao import ListaDeRevogacao, RevogacaoEmMemoria, RevogacaoMongo
 from app.rotas import rotas_autenticacao, rotas_usuarios
@@ -46,8 +49,10 @@ def criar_app(
     livro_caixa: RepositorioLivroCaixa | None = None,
     verificador: VerificadorFirebase | None = None,
     revogacao: ListaDeRevogacao | None = None,
+    correio: CorreioDaConta | None = None,
 ) -> FastAPI:
     config = config or Configuracoes()
+    producao = config.ambiente == "producao"
 
     @asynccontextmanager
     async def ciclo_de_vida(app: FastAPI):
@@ -61,6 +66,16 @@ def criar_app(
         app.state.revogacao = revogacao or (RevogacaoMongo(banco) if banco is not None else RevogacaoEmMemoria())
         if not app.state.verificador.projeto:
             log.warning("FIREBASE_PROJECT_ID ausente: as rotas /espacos (livro-caixa do cliente) respondem 503.")
+        # E-mails da conta (app/emails). None: /conta responde 503 e a área
+        # do cliente usa o envio do próprio Firebase.
+        app.state.correio = correio or criar_correio(config)
+        # Atrás de um proxy reverso (Caddy, nginx), o socket da API é o do
+        # proxy. Sem confiar nele, o IP de quem chama seria sempre o do proxy,
+        # e o limite de tentativas por endereço (limites.py) somaria o mundo
+        # inteiro numa chave só: 20 senhas erradas de qualquer pessoa
+        # travariam o login de todas. O uvicorn lê esta variável sozinho.
+        if producao and not os.environ.get("FORWARDED_ALLOW_IPS"):
+            log.warning("AMBIENTE=producao sem FORWARDED_ALLOW_IPS: o IP de quem chama será o do proxy reverso.")
 
         # Gera já o hash usado no login de e-mail inexistente. Sem isso, a
         # primeira tentativa com e-mail inexistente demoraria o dobro e o
@@ -80,13 +95,17 @@ def criar_app(
         description=(
             "API REST do Pessoal Finance. Back-office: gestão de usuários com JWT e controle de acesso por perfil "
             "(RBAC). Cliente final: livro-caixa em partidas dobradas (contas, categorias e lançamentos), "
-            "acessado com o ID token do Firebase."
+            "acessado com o ID token do Firebase, e os e-mails da conta (confirmação e nova senha)."
         ),
         lifespan=ciclo_de_vida,
         # O /docs padrão usa script inline e a CDN sem versão fixa; o nosso
         # (documentacao.py) tem CSP própria. O ReDoc não é usado.
         docs_url=None,
         redoc_url=None,
+        # Em produção, o mapa de todas as rotas não fica aberto a quem passa:
+        # sem /openapi.json e sem Swagger. A documentação continua no
+        # DOCS_API.md e no ambiente de desenvolvimento.
+        openapi_url=None if producao else "/openapi.json",
     )
 
     registrar_tratadores(app)
@@ -94,6 +113,8 @@ def criar_app(
     # Contador de senhas erradas do POST /auth/login (um por app: os testes
     # começam do zero).
     app.state.limite_de_login = LimiteDeTentativas()
+    # Pedidos de e-mail da conta (/conta), contados todos, não só as falhas.
+    app.state.limite_de_emails = LimiteDePedidos()
 
     # Adicionado primeiro, fica por dentro dos outros middlewares: o 413 também
     # sai com CORS e com os cabeçalhos de segurança.
@@ -114,12 +135,21 @@ def criar_app(
     app.include_router(rotas_usuarios)
     app.include_router(rotas_livro_caixa)
     app.include_router(rotas_relatorios)
-    app.include_router(rotas_documentacao)
+    app.include_router(rotas_da_conta)
+    if not producao:
+        app.include_router(rotas_documentacao)
 
     app.mount("/painel", StaticFiles(directory=PASTA_DO_PAINEL, html=True), name="painel")
 
     @app.get("/", include_in_schema=False)
     def inicio():
         return RedirectResponse("/painel/")
+
+    # Para o healthcheck do container e o monitor de disponibilidade. Não
+    # consulta o banco nem conta nada da configuração: só diz que o processo
+    # responde.
+    @app.get("/saude", include_in_schema=False)
+    def saude():
+        return {"status": "ok"}
 
     return app
