@@ -230,8 +230,9 @@ Só para rodar o React na própria máquina. Para apenas usar a área do cliente
 `EMAIL_REMETENTE`, `APP_URL` (endereço da área do cliente, para onde os links levam) e
 `FIREBASE_CONTA_DE_SERVICO` (caminho da chave JSON de uma conta de serviço do projeto, guardada fora do
 repositório). Com `EMAIL_PROVEDOR=pasta`, nenhum e-mail sai: cada um vira um `.html` em `api/emails-enviados/`,
-para abrir e clicar no link (só com a API rodando fora do Docker, opção C). Para ver os modelos sem configurar
-nada: `.venv\Scripts\python -m app.emails.previa <pasta>` em `api/`. O monograma dos e-mails é uma imagem do próprio
+para abrir e clicar no link (pelo `python subir-app.py up`, que monta a pasta no container, ou com a API fora do
+Docker, opção C). Para ver os modelos sem configurar nada: `.venv\Scripts\python -m app.emails.previa <pasta>` em
+`api/`. O monograma dos e-mails é uma imagem do próprio
 app (`<APP_URL>/email/olifine-monograma.png`): com o `APP_URL` num endereço público, ele aparece em qualquer leitor
 de e-mail; com as imagens bloqueadas, o quadrado mostra "OF" em texto.
 
@@ -251,17 +252,25 @@ python subir-app.py up --sem-web   # só API e MongoDB (dispensa o Node.js)
 ```
 
 O script usa só a biblioteca padrão do Python e faz, em ordem: cria o `api/.env` se ele faltar (com `JWT_SECRET`
-e `ADMIN_SENHA` aleatórios), copia o `FIREBASE_PROJECT_ID` do `web/.env` quando ele está vazio, instala as
+e `ADMIN_SENHA` aleatórios), copia o `FIREBASE_PROJECT_ID` do `web/.env` quando ele está vazio, confere o `api/.env`
+e o `web/.env` (e para antes do Docker quando algo impediria a API de subir ou exporia um segredo), instala as
 dependências da API no `api/.venv` (nunca no Python da máquina), roda o `npm ci` do front-end quando o
 `package-lock.json` muda, abre o Docker Desktop se estiver fechado, sobe MongoDB + API no Docker esperando os
-healthchecks, sobe o Vite em segundo plano e imprime os links. Rodar de novo com tudo no ar só confere o estado.
-Estado e log do Vite ficam em `.subir-app/` (fora do Git).
+healthchecks (e mostra o fim do log da API se ela não subir), sobe o Vite em segundo plano e imprime os links e as
+pendências. Rodar de novo com tudo no ar só confere o estado. Estado, log do Vite e o complemento do compose ficam em
+`.subir-app/` (fora do Git).
+
+Com os e-mails da conta ligados, o `FIREBASE_CONTA_DE_SERVICO` do `api/.env` guarda o caminho da chave nesta máquina,
+que não existe dentro do container. O `up` gera `.subir-app/compose.local.yml` e monta a chave como Docker secret
+(`/run/secrets/firebase_conta_de_servico`); com `EMAIL_PROVEDOR=pasta`, os e-mails gravados aparecem em
+`api/emails-enviados/`. Um `docker compose up` direto não faz isso: prefira o `subir-app`.
 
 | Comando | O que faz |
 |---|---|
 | `python subir-app.py up` | Sobe tudo e mostra os links |
-| `python subir-app.py status` | Mostra o que está no ar e os links, sem subir nada |
-| `python subir-app.py testes` | Roda o pytest da API, o lint e o Vitest do front-end, como o CI |
+| `python subir-app.py status` | Mostra o que está no ar, os links e as pendências de configuração, sem subir nada |
+| `python subir-app.py verificar` | Confere tudo e aponta o que falta: `api/.env`, e-mails, `web/.env`, segredos fora do Git, site publicado com o monograma, DNS do remetente (DKIM, SPF, DMARC) e Console do Firebase (URL de ação e domínios autorizados). Só lê; `--sem-rede` fica nas locais |
+| `python subir-app.py testes` | Roda o pytest da API e o lint, o Vitest e o build do front-end, como o CI |
 | `python subir-app.py down` | Para o túnel, o Vite e os containers (`--apagar-dados` também apaga o banco) |
 | `python subir-app.py tunnel start` | Abre um endereço público temporário para a área do cliente (ou `npm run tunnel:start` em `web/`) |
 | `python subir-app.py tunnel stop` | Fecha esse endereço: o app volta a ser só local (ou `npm run tunnel:stop`) |
