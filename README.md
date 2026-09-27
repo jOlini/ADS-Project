@@ -13,8 +13,9 @@ teste e entrega.
 | **Documentação da API** | [`DOCS_API.md`](DOCS_API.md): endpoints, códigos de resposta, perfis, JWT, OAuth 2.0 e análise de segurança |
 | **Licença** | Proprietária, todos os direitos reservados ([`LICENSE`](LICENSE)) |
 
-**Tudo no ar com um comando:** `python subir-app.py up` (API, MongoDB e área do cliente; detalhes em
-[Como executar](#como-executar)).
+**Tudo no ar com um comando:** `python subir-app.py dev` (API, MongoDB e área do cliente com recarga ao salvar)
+ou `python subir-app.py prod` (o build otimizado servido pelo nginx, como em produção); sem argumentos, o script
+abre um menu. Detalhes em [Como executar](#como-executar).
 **Avaliação rápida só da API (precisa só do Docker):** copie `api/.env.example` para `api/.env`, rode
 `docker compose up --build` e abra http://localhost:8081/painel/.
 
@@ -136,6 +137,7 @@ Diagrama completo, camadas da API e do front-end, modelo de dados, segurança em
 | Borda da API | CSP, `X-Frame-Options`, `nosniff`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, HSTS em HTTPS, `no-store` nos dados; corpo acima de 2 MB → `413`; erros sem stack trace; CSV importado sem fórmula de planilha |
 | Documentação (`/docs`) | Swagger UI de versão fixa com Subresource Integrity e CSP própria, sem script inline; ReDoc desligado |
 | Borda do front-end | CSP em `<meta>` no build (script só do próprio site e do login do Google), recusa de moldura (clickjacking); no container, cabeçalhos do nginx |
+| Monitoramento | Alertas no Discord em três canais, cada um com o próprio webhook: sistema (erro `500` com a rota e o tipo da exceção, e-mail que não saiu), segurança (login travado por força bruta, rajada de `401` do mesmo endereço, abuso dos e-mails) e telemetria (resumo de uso e cota diária de e-mails). Sem e-mail, token, corpo ou mensagem de exceção; o mesmo alerta sai no máximo a cada 15 minutos, com a contagem das repetições; uma falha do Discord nunca afeta a resposta |
 | CI/CD | `permissions` mínimas; actions fixadas pelo SHA do commit; checkout sem guardar o token; alertas do Discord sem menção injetada |
 
 Análise completa, com os riscos residuais: [`DOCS_API.md`, Parte 5](DOCS_API.md#parte-5--análise-de-segurança) e
@@ -147,9 +149,10 @@ Nenhum segredo é versionado: o repositório é público.
 
 | Credencial | Onde fica | Regra |
 |---|---|---|
-| `JWT_SECRET`, `ADMIN_SENHA`, `MONGODB_URI` | Só no `api/.env` (fora do Git) | Chave aleatória de 32 bytes ou mais (a API não sobe com menos); o `subir-app.py up` gera valores aleatórios. Vazou: troque a chave (todos os tokens caem) e a senha |
+| `JWT_SECRET`, `ADMIN_SENHA`, `MONGODB_URI` | Só no `api/.env` (fora do Git) | Chave aleatória de 32 bytes ou mais (a API não sobe com menos); o `subir-app.py dev` gera valores aleatórios. Vazou: troque a chave (todos os tokens caem) e a senha |
 | `VITE_FIREBASE_*` | `web/.env` local e secrets do GitHub (build do Pages) | Públicas por natureza (vão para o navegador); quem protege os dados são as regras do Firestore |
 | `DISCORD_WEBHOOK` | Só nos secrets do GitHub | Nunca em arquivo, log ou print |
+| `DISCORD_WEBHOOK_SISTEMA`, `_SEGURANCA`, `_TELEMETRIA` | `api/.env` local; num servidor, `/run/secrets/discord_webhook_<canal>` | Quem tem o endereço escreve no canal. A API só aceita endereços do Discord e nunca os escreve no log. Vazou: apague o webhook no canal e crie outro |
 | Chave da conta de serviço do Firebase | Fora de qualquer repositório, na pasta do usuário (`FIREBASE_CONTA_DE_SERVICO`) | Vale como senha de administrador do projeto Firebase. Para os e-mails, use uma conta de serviço só com o papel "Administrador do Firebase Authentication" |
 | `RESEND_API_KEY`, `SMTP_SENHA` | `api/.env` local; num servidor, `/run/secrets/<nome>` | Vazou: revogue a chave no provedor e gere outra |
 
@@ -157,6 +160,19 @@ Antes de cada commit, confira o que vai entrar (`git diff --cached --name-only`)
 nunca `git add .`: o `.gitignore` barra os `.env`, `*.pem`, `*.key` e as chaves do Firebase, mas a conferência é a
 última barreira. Nada de IP real, nome de rede ou endereço de túnel em arquivo versionado: exemplos com
 `<SEU_IP_LOCAL>` ou a faixa `192.0.2.0/24`.
+
+### Monitoramento (alertas no Discord)
+
+A API avisa em três canais, cada um com o próprio webhook (detalhes e regras na
+[`DOCS_API.md`, Parte 9](DOCS_API.md#parte-9--monitoramento-alertas-e-telemetria)). Para ligar:
+
+1. No servidor do Discord, crie os canais `#alertas-sistema`, `#logs-seguranca` e `#telemetria-custos`. Deixe o de
+   segurança privado: ele recebe IPs de quem ataca.
+2. Em cada canal: **Editar canal › Integrações › Webhooks › Novo webhook › Copiar URL do webhook**.
+3. Cole cada endereço no `api/.env`, em `DISCORD_WEBHOOK_SISTEMA`, `DISCORD_WEBHOOK_SEGURANCA` e
+   `DISCORD_WEBHOOK_TELEMETRIA` (canal sem webhook fica desligado).
+4. `python subir-app.py alertas` manda uma mensagem de teste para cada canal; `python subir-app.py dev` sobe a API
+   com os alertas ligados.
 
 ---
 
@@ -186,7 +202,7 @@ As portas **8081** (API) e **5173** (área do cliente) precisam estar livres.
 
 ### 2. Configurar a API (`api/.env`)
 
-O `python subir-app.py up` faz este passo sozinho, com valores aleatórios. À mão, na raiz do projeto:
+O `python subir-app.py dev` faz este passo sozinho, com valores aleatórios. À mão, na raiz do projeto:
 
 ```powershell
 Copy-Item api\.env.example api\.env      # Windows (PowerShell)
@@ -230,7 +246,7 @@ Só para rodar o React na própria máquina. Para apenas usar a área do cliente
 `EMAIL_REMETENTE`, `APP_URL` (endereço da área do cliente, para onde os links levam) e
 `FIREBASE_CONTA_DE_SERVICO` (caminho da chave JSON de uma conta de serviço do projeto, guardada fora do
 repositório). Com `EMAIL_PROVEDOR=pasta`, nenhum e-mail sai: cada um vira um `.html` em `api/emails-enviados/`,
-para abrir e clicar no link (pelo `python subir-app.py up`, que monta a pasta no container, ou com a API fora do
+para abrir e clicar no link (pelo `python subir-app.py dev`, que monta a pasta no container, ou com a API fora do
 Docker, opção C). Para ver os modelos sem configurar nada: `.venv\Scripts\python -m app.emails.previa <pasta>` em
 `api/`. O monograma dos e-mails é uma imagem do próprio
 app (`<APP_URL>/email/olifine-monograma.png`): com o `APP_URL` num endereço público, ele aparece em qualquer leitor
@@ -247,30 +263,50 @@ confirmação aparece no log do emulador).
 ### Opção A — tudo com um comando (`subir-app.py`)
 
 ```bash
-python subir-app.py up             # API, MongoDB e área do cliente
-python subir-app.py up --sem-web   # só API e MongoDB (dispensa o Node.js)
+python subir-app.py                # menu com todos os comandos
+python subir-app.py dev            # desenvolvimento: API, MongoDB e área do cliente com recarga ao salvar
+python subir-app.py dev --sem-web  # só API e MongoDB (dispensa o Node.js)
+python subir-app.py prod           # produção local: build otimizado servido pelo nginx, na porta 8080
 ```
+
+Os dois modos usam a mesma API e o mesmo banco; o que muda é quem serve a área do cliente e quanto o terminal mostra:
+
+| | `dev` | `prod` |
+|---|---|---|
+| Área do cliente | Vite na porta 5173, com HMR (a tela atualiza ao salvar) | Imagem do [`web/Dockerfile`](web/Dockerfile): build do Vite servido pelo nginx na porta 8080, na raiz |
+| API | Lê o código de `api/app` direto da pasta e reinicia sozinha a cada `.py` salvo (`uvicorn --reload`) | Roda como está na imagem, sem recarga |
+| Saída | Completa: cada comando (`docker`, `npm`) e a saída dele | Enxuta: uma linha por etapa; a saída de um comando só aparece se ele falhar |
+| Precisa de | Python, Node.js e Docker | Só Docker (tudo é construído nos containers) |
+
+O `prod` é o mesmo artefato que vai para um servidor, servido como em produção; as travas de `AMBIENTE=producao`
+(HTTPS, banco com senha) valem só no servidor. Trocar de modo encerra o outro: o `prod` para o Vite, e o `dev`
+remove o container do nginx. `up` continua valendo e é o mesmo que `dev`.
 
 O script usa só a biblioteca padrão do Python e faz, em ordem: cria o `api/.env` se ele faltar (com `JWT_SECRET`
 e `ADMIN_SENHA` aleatórios), copia o `FIREBASE_PROJECT_ID` do `web/.env` quando ele está vazio, confere o `api/.env`
 e o `web/.env` (e para antes do Docker quando algo impediria a API de subir ou exporia um segredo), instala as
 dependências da API no `api/.venv` (nunca no Python da máquina), roda o `npm ci` do front-end quando o
-`package-lock.json` muda, abre o Docker Desktop se estiver fechado, sobe MongoDB + API no Docker esperando os
-healthchecks (e mostra o fim do log da API se ela não subir), sobe o Vite em segundo plano e imprime os links e as
-pendências. Rodar de novo com tudo no ar só confere o estado. Estado, log do Vite e o complemento do compose ficam em
-`.subir-app/` (fora do Git).
+`package-lock.json` muda, abre o Docker Desktop se estiver fechado, sobe os containers esperando os healthchecks (e
+mostra o fim do log de quem não subiu), sobe o Vite em segundo plano (no `dev`) e mostra os endereços, os acessos e
+as pendências. Rodar de novo com tudo no ar só confere o estado. Estado, log do Vite e o complemento do compose ficam
+em `.subir-app/` (fora do Git). As cores seguem a paleta da OliFine; `NO_COLOR=1` desliga.
 
-Com os e-mails da conta ligados, o `FIREBASE_CONTA_DE_SERVICO` do `api/.env` guarda o caminho da chave nesta máquina,
-que não existe dentro do container. O `up` gera `.subir-app/compose.local.yml` e monta a chave como Docker secret
-(`/run/secrets/firebase_conta_de_servico`); com `EMAIL_PROVEDOR=pasta`, os e-mails gravados aparecem em
-`api/emails-enviados/`. Um `docker compose up` direto não faz isso: prefira o `subir-app`.
+O que só existe nesta máquina, ou muda entre os modos, entra pelo `.subir-app/compose.local.yml`, gerado a cada
+subida: a chave da conta de serviço dos e-mails vira o Docker secret `/run/secrets/firebase_conta_de_servico` (o
+caminho do Windows no `api/.env` não existe dentro do container); com `EMAIL_PROVEDOR=pasta`, os e-mails gravados
+aparecem em `api/emails-enviados/`; no `dev`, as pastas `api/app` e `api/painel` entram no container só para
+leitura; no `prod`, o serviço `web` recebe o `web/.env` como secret de build (fica fora das camadas da imagem). Um
+`docker compose up` direto não faz nada disso: prefira o `subir-app`.
 
 | Comando | O que faz |
 |---|---|
-| `python subir-app.py up` | Sobe tudo e mostra os links |
-| `python subir-app.py status` | Mostra o que está no ar, os links e as pendências de configuração, sem subir nada |
-| `python subir-app.py verificar` | Confere tudo e aponta o que falta: `api/.env`, e-mails, `web/.env`, segredos fora do Git, site publicado com o monograma, DNS do remetente (DKIM, SPF, DMARC) e Console do Firebase (URL de ação e domínios autorizados). Só lê; `--sem-rede` fica nas locais |
+| `python subir-app.py dev` | Sobe tudo em modo de desenvolvimento e mostra os endereços (`--sem-build` reaproveita a imagem da API) |
+| `python subir-app.py prod` | Sobe tudo em modo de produção local (`--sem-build` reaproveita as imagens) |
+| `python subir-app.py status` | Mostra o que está no ar, o modo, os endereços e as pendências de configuração, sem subir nada |
+| `python subir-app.py verificar` | Confere tudo e aponta o que falta: `api/.env`, e-mails, alertas, `web/.env`, segredos fora do Git, site publicado com o monograma, DNS do remetente (DKIM, SPF, DMARC), Console do Firebase (URL de ação e domínios autorizados) e webhooks do Discord (existem e aceitam o token, sem mandar mensagem). Só lê; `--sem-rede` fica nas locais |
 | `python subir-app.py testes` | Roda o pytest da API e o lint, o Vitest e o build do front-end, como o CI |
+| `python subir-app.py logs [serviço]` | Acompanha os logs: `api` (padrão), `web` (nginx do `prod`), `mongo`, `vite` ou `todos`. `Ctrl + C` sai e deixa tudo no ar |
+| `python subir-app.py alertas` | Manda uma mensagem de teste para cada canal do Discord configurado no `api/.env` |
 | `python subir-app.py down` | Para o túnel, o Vite e os containers (`--apagar-dados` também apaga o banco) |
 | `python subir-app.py tunnel start` | Abre um endereço público temporário para a área do cliente (ou `npm run tunnel:start` em `web/`) |
 | `python subir-app.py tunnel stop` | Fecha esse endereço: o app volta a ser só local (ou `npm run tunnel:stop`) |
@@ -281,17 +317,20 @@ usuário e, se nada disso der certo, explica como atualizar. Um `api/.venv` queb
 
 #### Rede local
 
-O Vite sobe com `--host 0.0.0.0`, e o fim do `up` mostra os endereços no formato do próprio Vite:
+O Vite sobe com `--host 0.0.0.0` (e o nginx do `prod` publica a 8080 em todas as interfaces), e o fim da subida
+mostra os endereços no formato do próprio Vite:
 
 ```text
-➜  Local:   http://localhost:5173/ADS-Project/
-➜  Network: http://<SEU_IP_LOCAL>:5173/ADS-Project/
+➜ Local    http://localhost:5173/ADS-Project/
+➜ Network  http://<SEU_IP_LOCAL>:5173/ADS-Project/
+➜ Túnel    fechado · python subir-app.py tunnel start
 ```
 
-Na mesma rede (Wi-Fi ou cabo), o endereço Network abre o app no celular ou em outro computador. A página aberta
-pela rede chama a API no IP de onde veio, e o script passa essa origem à API pelo `CORS_ORIGENS_REDE`, sem gravar
-nada no `api/.env` (o IP muda de rede em rede). Se não abrir, libere o Node.js no Firewall do Windows (rede
-privada); em rede de empresa, ele pode estar bloqueado.
+No `prod`, os endereços são `http://localhost:8080/` e `http://<SEU_IP_LOCAL>:8080/`. Na mesma rede (Wi-Fi ou
+cabo), o endereço Network abre o app no celular ou em outro computador. A página aberta pela rede chama a API no IP
+de onde veio, e o script passa essas origens (portas 5173 e 8080) à API pelo `CORS_ORIGENS_REDE`, sem gravar nada
+no `api/.env` (o IP muda de rede em rede). Se não abrir, libere o Node.js (ou o Docker, no `prod`) no Firewall do
+Windows (rede privada); em rede de empresa, ele pode estar bloqueado.
 
 #### Demonstração externa (Cloudflare Tunnel)
 
@@ -302,12 +341,14 @@ python subir-app.py tunnel start
 python subir-app.py tunnel stop
 ```
 
-O `start` abre um Quick Tunnel da Cloudflare (sem conta) para o Vite e mostra o endereço, no formato
-`https://<palavras-aleatorias>.trycloudflare.com/ADS-Project/`. O endereço muda a cada início e deixa de existir no
-`stop` (o `down` também fecha o túnel). Usa o `cloudflared` instalado ou baixa o oficial para `.subir-app/`.
+O `start` abre um Quick Tunnel da Cloudflare (sem conta) para o front-end que estiver no ar (o Vite do `dev` ou o
+nginx do `prod`) e mostra o endereço, no formato `https://<palavras-aleatorias>.trycloudflare.com/ADS-Project/`
+(no `prod`, na raiz). O endereço muda a cada início e deixa de existir no `stop` (o `down` também fecha o túnel).
+Usa o `cloudflared` instalado ou baixa o oficial para `.subir-app/`.
 
-- **O que fica público:** só a área do cliente. A API entra pelo proxy do Vite e só nas rotas do cliente
-  (`/espacos`, que exigem o login do Firebase); o painel, o login do back-office e o Swagger continuam só locais.
+- **O que fica público:** só a área do cliente. A API entra pelo proxy do front-end (o do Vite no `dev`, o do nginx
+  no `prod`) e só nas rotas do cliente (`/espacos`, que exigem o login do Firebase); o painel, o login do
+  back-office e o Swagger continuam só locais.
 - **Quem entra:** qualquer pessoa com o endereço chega ao login, e o cadastro está aberto. Mande o endereço só
   para quem vai ver a demonstração e feche o túnel ao terminar.
 - **Nada da sua rede aparece:** a pessoa só vê o endereço `trycloudflare.com`. Não publique o IP da máquina, o
@@ -367,7 +408,9 @@ docker run --rm -p 8080:80 pessoal-finance-web
 
 Abre em http://localhost:8080. O `--secret` entrega a configuração do Firebase só durante o build, sem gravá-la
 na imagem. O nginx do container ([`web/nginx.conf`](web/nginx.conf)) manda os cabeçalhos de segurança e esconde a
-versão dele.
+versão dele. Dentro do Docker Compose (o `python subir-app.py prod` monta assim), ele também repassa
+`/api/espacos...` ao serviço `api`, e só essas rotas; num `docker run` sozinho, essas rotas respondem `502` e o
+resto funciona normalmente.
 
 ### Variáveis de ambiente
 
@@ -377,7 +420,7 @@ versão dele.
 | `JWT_SECRET` | api | Chave de assinatura do token (mínimo 32 bytes) |
 | `JWT_EXPIRATION` | api | Validade do token, em minutos (padrão 15) |
 | `CORS_ORIGENS` | api | Origens de navegador autorizadas, separadas por vírgula (sem a variável: nenhuma; o `.env.example` libera a área do cliente local, portas 5173 e 8080) |
-| `CORS_ORIGENS_REDE` | api | Origem da área do cliente aberta pela rede local, somada ao `CORS_ORIGENS`. Não vai no `.env`: o `subir-app.py up` passa pelo Docker Compose a cada subida |
+| `CORS_ORIGENS_REDE` | api | Origens da área do cliente aberta pela rede local, somadas ao `CORS_ORIGENS`. Não vai no `.env`: o `subir-app.py` passa pelo Docker Compose a cada subida |
 | `FIREBASE_PROJECT_ID` | api | Projeto Firebase cujos ID tokens abrem o livro-caixa (o mesmo `VITE_FIREBASE_PROJECT_ID`). Vazio: `/espacos` responde `503` |
 | `ADMIN_NOME`, `ADMIN_EMAIL`, `ADMIN_SENHA` | api | Administrador criado na primeira subida, com o banco vazio |
 | `AMBIENTE` | api | `desenvolvimento` (padrão) ou `producao`: em produção, a API recusa configuração insegura e tira o Swagger do ar |
@@ -389,6 +432,9 @@ versão dele.
 | `RESEND_API_KEY` | api | Chave do Resend (`EMAIL_PROVEDOR=resend`) |
 | `SMTP_HOST`, `SMTP_PORTA`, `SMTP_USUARIO`, `SMTP_SENHA` | api | Servidor SMTP (`EMAIL_PROVEDOR=smtp`): 465 com SSL ou 587 com STARTTLS |
 | `EMAIL_PASTA` | api | Pasta dos e-mails gravados com `EMAIL_PROVEDOR=pasta` (padrão `emails-enviados`) |
+| `EMAIL_COTA_DIARIA` | api | Cota diária de e-mails do provedor (padrão 100, a do Resend grátis): a telemetria avisa em 80% e em 100%. `0` desliga o aviso |
+| `DISCORD_WEBHOOK_SISTEMA`, `DISCORD_WEBHOOK_SEGURANCA`, `DISCORD_WEBHOOK_TELEMETRIA` | api | Webhook de cada canal de alertas (`#alertas-sistema`, `#logs-seguranca`, `#telemetria-custos`). Vazio: canal desligado. Endereço fora do Discord: a API não sobe |
+| `TELEMETRIA_INTERVALO_HORAS` | api | A cada quantas horas o resumo de uso vai para a telemetria (padrão 24) |
 | `VITE_FIREBASE_*` | web | Configuração pública do app Web do Firebase |
 | `VITE_FIREBASE_EMULADOR` | web | `true` para usar os emuladores locais do Firebase |
 | `VITE_API_URL` | web | Endereço da API (ex.: `http://localhost:8081`; `/api` com a API atrás do mesmo domínio). Vazio: telas do livro-caixa desligadas, como no GitHub Pages |
@@ -412,7 +458,7 @@ pip install -r requirements-dev.txt
 pytest -v
 ```
 
-Resultado esperado: `394 passed`.
+Resultado esperado: `426 passed`.
 
 **Front-end (Vitest, lint e build):** em `web/`.
 
@@ -423,7 +469,7 @@ npm run lint
 npm run build
 ```
 
-Resultado esperado: `Test Files 35 passed (35)` e `Tests 348 passed (348)`. Sem o `--run`, o Vitest fica em modo
+Resultado esperado: `Test Files 36 passed (36)` e `Tests 354 passed (354)`. Sem o `--run`, o Vitest fica em modo
 observador.
 
 | Suíte | Arquivo | O que cobre |
@@ -436,6 +482,7 @@ observador.
 | API | `api/tests/test_firebase.py` | ID token do Firebase: assinatura, RS256, `aud`, `iss`, datas, `sub`, `email_verified` (`403` sem ele) e token do back-office recusado |
 | API | `api/tests/test_emails.py` e `test_emails_rotas.py` | E-mails da conta: modelos (link e key escapados), Resend, SMTP só com criptografia, pasta, conta de serviço e código do Firebase sem rede, rotas `/conta` com `202` igual com e sem conta, `429`, `503` sem provedor e log sem o endereço |
 | API | `api/tests/test_producao.py` | `AMBIENTE=producao`: recusa exemplo, CORS inseguro, MongoDB sem senha e `APP_URL` sem HTTPS; segredos em arquivo; Swagger fora do ar; `/saude` |
+| API | `api/tests/test_monitoramento.py` | Alertas no Discord: canal certo, repetição a cada 15 minutos, sem menção, falha do Discord que não afeta a API, força bruta e rajada de `401` sem o e-mail nem o token, `500` sem a mensagem da exceção, e-mail que não saiu, cota de e-mails, resumo por rota e webhook fora do Discord recusado sem aparecer no erro |
 | API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, rotas e isolamento entre clientes, importação de CSV de vários bancos, racha, exclusão, cartão de crédito (fatura, parcelas, pagamento) e relatórios |
 | Front-end | `web/src/regras/tentativas.test.js` | Tentativas de login: contagem por e-mail, bloqueio na quinta, janela de 15 minutos, o que conta como senha errada e a chave sem o e-mail em texto |
 | Front-end | `web/src/regras/dadosLocais.test.js` e `servicos/dadosLocais.test.js` | O que o logout apaga do navegador (metas, tentativas, sessão) e o que fica (tema e dados de outros sites) |

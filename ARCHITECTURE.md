@@ -66,7 +66,9 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
   │                 armazenamento atrás do contrato ArmazenamentoDeFalhas (memória hoje; Redis ou MongoDB)
   ├─ revogacao.py   tokens do back-office encerrados no logout (jti), no MongoDB com índice TTL
   ├─ documentacao.py  /docs com Swagger UI de versão fixa (SRI) e CSP própria, sem script inline
-  ├─ erros.py       tudo sai em Problem Details (RFC 9457), sem stack trace
+  ├─ monitoramento.py  ObservadorDeRespostas (status de toda resposta) e Monitor: alertas e telemetria no
+  │                 Discord, um webhook por canal (sistema, seguranca, telemetria), fila com thread própria
+  ├─ erros.py       tudo sai em Problem Details (RFC 9457), sem stack trace; o 500 avisa o canal de sistema
   │
   ├─ rotas.py / financeiro/rotas*.py      contrato HTTP: método, caminho, corpo e código de resposta
   │     └─ dependências (Depends): usuario_autenticado + exigir_perfis (RBAC) no back-office;
@@ -79,9 +81,14 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
   └─ repositorio.py / financeiro/repositorio.py   MongoDB (Protocol + implementação; os testes usam memória)
 ```
 
-- **Fábrica e injeção:** `criar_app(config, repositorio, livro_caixa, verificador, revogacao, correio)` recebe as
-  dependências; os testes passam repositórios em memória, uma lista de revogação em memória, um verificador com
-  chave RSA própria e um correio com envio em memória. Nada de estado global.
+- **Fábrica e injeção:** `criar_app(config, repositorio, livro_caixa, verificador, revogacao, correio, monitor)`
+  recebe as dependências; os testes passam repositórios em memória, uma lista de revogação em memória, um
+  verificador com chave RSA própria, um correio com envio em memória e um monitor com um Discord falso. Nada de
+  estado global.
+- **Monitoramento:** o `ObservadorDeRespostas` (middleware por fora de todos) passa o status de cada resposta ao
+  `Monitor`, e o tratador do `500` passa a rota como modelo e o tipo da exceção. O `Monitor` decide o canal e manda
+  pelo webhook dele numa thread própria (fila de 200; cheia, descarta com log), repetindo a mesma chave no máximo a
+  cada 15 minutos. Canal sem webhook fica desligado, e sem nenhum webhook nenhuma thread sobe.
 - **Configuração:** [`config.py`](api/app/config.py) lê o ambiente (`api/.env`) e os arquivos de `/run/secrets`.
   Nenhum segredo tem valor padrão; `JWT_SECRET` com menos de 32 bytes derruba a subida, e `AMBIENTE=producao`
   recusa a configuração de desenvolvimento (exemplos, CORS sem HTTPS, banco sem senha).
@@ -172,6 +179,7 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
 | Borda do front-end | CSP em `<meta>` no build (`script-src 'self' https://apis.google.com`, `object-src 'none'`, `base-uri 'self'`); recusa de moldura (clickjacking) no Pages; no container, `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` e `server_tokens off` | `web/vite.config.js`, `web/src/main.jsx`, `web/nginx.conf` |
 | Borda da API | CSP `default-src 'self'` no painel, `X-Frame-Options: DENY`, `nosniff`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, HSTS em HTTPS, `no-store` nos dados; CORS por lista explícita, sem cookie; `/docs` com CSP própria (`default-src 'none'`, script só da API e da versão fixa do Swagger na CDN, com SRI) e ReDoc desligado | `seguranca.py`, `main.py`, `documentacao.py` |
 | Abuso | Corpo acima de 2 MB → `413`; 5 senhas erradas por e-mail + endereço (ou 20 por endereço) em 15 min → `429`, e cada `401` diz quantas restam; na área do cliente, a mesma regra no navegador, por e-mail | `limites.py`, `web/src/regras/tentativas.js` |
+| Monitoramento | Canal de segurança no Discord: todo `429` (força bruta no login, abuso dos e-mails) e 10 ou mais `401` do mesmo endereço em 5 min; canal de sistema: `500` com a rota como modelo, o tipo da exceção e o arquivo e a linha, e-mail que não saiu; canal de telemetria: resumo de uso e cota de e-mails. Sem e-mail, token, corpo, cabeçalho ou mensagem de exceção; o IP só no canal de segurança; `allowed_mentions` vazio; webhook só do domínio do Discord; o valor recusado de uma configuração não aparece no erro da subida | `monitoramento.py`, `erros.py`, `config.py` |
 | Autenticação | JWT HS256 com algoritmo, emissor, expiração (15 min) e `jti` obrigatórios, revogado no logout; ID token RS256 do Firebase com `aud`, `iss`, datas e `email_verified`; mesma resposta e mesmo tempo para e-mail inexistente e senha errada; cadastro com e-mail já usado responde como um novo | `tokens.py`, `revogacao.py`, `firebase.py`, `servicos.py`, `Cadastro.jsx` |
 | E-mails da conta | Resposta igual com e sem conta no "Esqueci minha senha", envio depois da resposta (tempo igual), limite por conta, e-mail e endereço, texto fixo (nada escrito por quem pede), código do link no fragmento, SMTP só com TLS, chave do provedor e da conta de serviço fora do código e dos logs | `emails/`, `limites.py`, `web/src/paginas/VerificarEmail.jsx`, `RedefinirSenha.jsx` |
 | Sessão no navegador | Sessão por aba; logout apaga metas, tentativas e a sessão do Firebase (menos o tema); área logada só com e-mail confirmado | `servicos/contas.js`, `regras/dadosLocais.js`, `regras/sessao.js` |
@@ -179,7 +187,7 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
 | Entrada | Pydantic com `extra="forbid"`, tamanhos e faixas; texto do CSV sem controle e sem começo de fórmula (CSV injection) | `modelos.py`, `financeiro/modelos.py`, `financeiro/importacao.py` |
 | Saída | Problem Details com mensagens próprias; `500` genérico; React e `textContent` escapam todo texto (nenhum `innerHTML` nem `dangerouslySetInnerHTML`) | `erros.py`, `painel.js` |
 | Dados | Senha só como hash BCrypt (custo 12); valores em centavos inteiros; regras do Firestore com dono, campos fixos, tipos e tamanhos | `senhas.py`, `web/firestore.rules` |
-| Segredos | `.env` fora do Git; `JWT_SECRET`, `MONGODB_URI`, chaves de e-mail e o webhook do Discord só no ambiente, em `/run/secrets` ou nos secrets do GitHub; chave da conta de serviço do Firebase fora de qualquer repositório; `AMBIENTE=producao` recusa os valores de exemplo | `.gitignore`, `config.py`, `api/.env.example`, `web/.env.example` |
+| Segredos | `.env` fora do Git; `JWT_SECRET`, `MONGODB_URI`, chaves de e-mail e os webhooks do Discord só no ambiente, em `/run/secrets` ou nos secrets do GitHub; chave da conta de serviço do Firebase fora de qualquer repositório; `AMBIENTE=producao` recusa os valores de exemplo | `.gitignore`, `config.py`, `api/.env.example`, `web/.env.example` |
 | CI/CD | `permissions` mínimas por workflow; actions fixadas pelo SHA do commit (tag movida não troca o código que roda); checkout sem guardar o token (`persist-credentials: false`); valores de PR entram no JSON pelo `jq --arg` e o Discord recebe `allowed_mentions` vazio (sem `@everyone` injetado) | `.github/workflows/` |
 
 Ao mudar o código, mantenha estas regras:
@@ -202,12 +210,14 @@ Ao mudar o código, mantenha estas regras:
 
 | Ambiente | Como sobe | Observações |
 |---|---|---|
-| Local completo | `python subir-app.py up` | `api/.env` e `api/.venv` automáticos, MongoDB + API no Docker, Vite em segundo plano, links impressos; acesso pela rede local |
+| Local, desenvolvimento | `python subir-app.py dev` (ou `up`) | `api/.env` e `api/.venv` automáticos, MongoDB + API no Docker com recarga a cada `.py` salvo (`api/app` montado só para leitura, `uvicorn --reload`), Vite com HMR em segundo plano, saída completa dos comandos; acesso pela rede local |
+| Local, produção | `python subir-app.py prod` | Mesma API sem recarga e a imagem do `web/Dockerfile` (build do Vite no nginx) na 8080, com o `web/.env` como secret de build; saída enxuta (a de um comando só aparece se ele falhar); só precisa do Docker |
 | Só a API | `docker compose up --build` | API em `http://localhost:8081`, painel em `/painel/`, Swagger em `/docs`, `/saude` para healthcheck |
 | API com e-mails de teste | `uvicorn` local com `EMAIL_PROVEDOR=pasta` | Cada e-mail vira um `.html` em `api/emails-enviados/`, com o link para `/auth/...` |
 | Produção (API) | Imagem da API com `AMBIENTE=producao` atrás de um proxy reverso com TLS | Segredos em `/run/secrets`, `FORWARDED_ALLOW_IPS` com o IP do proxy, Swagger fora do ar |
-| Demonstração externa | `python subir-app.py tunnel start` | Quick Tunnel da Cloudflare para o Vite; a API passa só em `/espacos`, pelo proxy |
-| Container do front-end | `docker build --secret id=env,src=web/.env -t pessoal-finance-web web` | nginx alpine com os cabeçalhos de segurança; build com `VITE_BASE=/` (raiz) |
+| Demonstração externa | `python subir-app.py tunnel start` | Quick Tunnel da Cloudflare para o front-end no ar (Vite do `dev` ou nginx do `prod`); a API passa só em `/espacos`, pelo proxy dele |
+| Container do front-end | `docker build --secret id=env,src=web/.env -t pessoal-finance-web web` | nginx alpine com os cabeçalhos de segurança; build com `VITE_BASE=/` (raiz); no compose, repassa só `/api/espacos` ao serviço `api` |
+| Alertas | `DISCORD_WEBHOOK_SISTEMA`, `_SEGURANCA`, `_TELEMETRIA` no `api/.env` (ou em `/run/secrets`) | Canais `#alertas-sistema`, `#logs-seguranca` e `#telemetria-custos`; `python subir-app.py alertas` testa cada um |
 | Publicado | Push na `main` (workflow `cd.yml`) | GitHub Pages em `https://jolini.github.io/ADS-Project/`, sem API |
 | Domínio próprio | Build com `VITE_BASE=/` (e `VITE_API_URL`, se houver API) | Mesmo código na raiz do domínio; link antigo com `/ADS-Project/...` vira `/...` no navegador, com o `#oobCode=` intacto (`regras/enderecoDoApp.js`); `APP_URL` da API no domínio novo para os e-mails |
 
@@ -238,12 +248,13 @@ api/                  API REST (FastAPI)
 web/                  área do cliente (React + Firebase)
   src/                ver a seção 3
   firestore.rules     regras de segurança do Firestore
-  nginx.conf          servidor do container, com os cabeçalhos de segurança
+  nginx.conf          servidor do container, com os cabeçalhos de segurança e o proxy de /api/espacos
   .env.example        modelo da configuração do Firebase e da API
   iniciar.bat/.sh     atalhos que instalam as dependências e sobem o app (npm start)
 .github/workflows/    ci-tests.yml, cd.yml e alertas.yml
 docker-compose.yml    MongoDB + API
-subir-app.py          sobe tudo com um comando (venv, dependências, Docker, Vite, links e túnel) e verifica a configuração
+subir-app.py          sobe tudo com um comando, em modo dev ou prod (venv, dependências, Docker, Vite ou nginx,
+                      endereços e túnel), verifica a configuração, acompanha os logs e testa os alertas
 README.md             objetivo, tecnologias, instalação, execução e testes
 ARCHITECTURE.md       este documento
 DOCS_API.md           documentação técnica da API

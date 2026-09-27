@@ -1,8 +1,8 @@
 # Back-end completo para desenvolvimento e demonstração: MongoDB + API.
 # Antes: copiar api/.env.example para api/.env e trocar os valores
-# (o "python subir-app.py up" cria o api/.env sozinho na primeira vez).
+# (o "python subir-app.py dev" cria o api/.env sozinho na primeira vez).
 # Subir: docker compose up --build   ·   API em http://localhost:8081
-# Com os e-mails da conta ligados, prefira o "python subir-app.py up": ele
+# Com os e-mails da conta ligados, prefira o "python subir-app.py dev": ele
 # monta a chave da conta de serviço no container (.subir-app/compose.local.yml);
 # o caminho do Windows no api/.env não existe dentro dele.
 
@@ -28,7 +28,7 @@ services:
       # serviço "mongo", não o localhost.
       MONGODB_URI: mongodb://mongo:27017/pessoal-finance
       # Origem da área do cliente aberta pela rede local (http://<ip>:5173),
-      # somada ao CORS_ORIGENS. O "python subir-app.py up" preenche com o IP
+      # somada ao CORS_ORIGENS. O "python subir-app.py" preenche com o IP
       # desta máquina; num "docker compose up" direto, fica vazia.
       CORS_ORIGENS_REDE: ${CORS_ORIGENS_REDE:-}
     ports:
