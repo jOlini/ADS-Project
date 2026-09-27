@@ -19,6 +19,7 @@ from app.erros import ErroIndisponivel, ErroValidacao
 from app.financeiro.acesso import cliente_mesmo_sem_confirmacao
 from app.firebase import ClienteFirebase
 from app.limites import LimiteDePedidos, endereco_de, obter_limite_de_emails
+from app.monitoramento import Monitor
 from app.servicos import normalizar_email
 
 log = logging.getLogger("uvicorn.error")
@@ -59,12 +60,16 @@ def _identificador(email: str) -> str:
     return hashlib.sha256(email.encode("utf-8")).hexdigest()[:32]
 
 
-def _mandar(acao, email: str, assunto: str) -> None:
-    """Roda depois da resposta. Falha vai só para o log, sem o endereço."""
+def _mandar(acao, email: str, assunto: str, monitor: Monitor) -> None:
+    """Roda depois da resposta. Falha vai só para o log, sem o endereço, e
+    para o canal de sistema do Discord, só com o tipo da falha."""
     try:
-        acao(email)
+        enviado = acao(email)
     except (FalhaNoFirebase, FalhaNoEnvio) as falha:
         log.warning("E-mail de %s não saiu: %s", assunto, falha)
+        monitor.registrar_email(assunto, enviado=False, falha=falha)
+        return
+    monitor.registrar_email(assunto, enviado=bool(enviado))
 
 
 @rotas_da_conta.post(
@@ -95,7 +100,7 @@ def pedir_confirmacao(
             (f"confirmacao-endereco|{endereco_de(requisicao)}", 20, HORA),
         ]
     )
-    tarefas.add_task(_mandar, correio.confirmar_email, cliente.email, "confirmação")
+    tarefas.add_task(_mandar, correio.confirmar_email, cliente.email, "confirmação", requisicao.app.state.monitor)
     return ACEITO
 
 
@@ -125,5 +130,5 @@ def pedir_nova_senha(
             (f"nova-senha-endereco|{endereco}", 10, QUINZE_MINUTOS),
         ]
     )
-    tarefas.add_task(_mandar, correio.nova_senha, email, "nova senha")
+    tarefas.add_task(_mandar, correio.nova_senha, email, "nova senha", requisicao.app.state.monitor)
     return ACEITO

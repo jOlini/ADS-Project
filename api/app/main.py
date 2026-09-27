@@ -26,6 +26,7 @@ from app.financeiro.rotas import rotas_livro_caixa
 from app.financeiro.rotas_relatorios import rotas_relatorios
 from app.firebase import VerificadorFirebase
 from app.limites import LimiteDePedidos, LimiteDeTentativas, LimiteDoCorpo
+from app.monitoramento import Monitor, ObservadorDeRespostas
 from app.repositorio import RepositorioMongo, RepositorioUsuarios, conectar_mongo
 from app.revogacao import ListaDeRevogacao, RevogacaoEmMemoria, RevogacaoMongo
 from app.rotas import rotas_autenticacao, rotas_usuarios
@@ -50,9 +51,14 @@ def criar_app(
     verificador: VerificadorFirebase | None = None,
     revogacao: ListaDeRevogacao | None = None,
     correio: CorreioDaConta | None = None,
+    monitor: Monitor | None = None,
 ) -> FastAPI:
     config = config or Configuracoes()
     producao = config.ambiente == "producao"
+    # Alertas e telemetria no Discord (desligados sem DISCORD_WEBHOOK_*).
+    # Criado já aqui, e não no lifespan: o middleware e o tratador de erro
+    # o encontram mesmo num pedido que chegue antes do startup terminar.
+    monitor = monitor or Monitor.da_config(config)
 
     @asynccontextmanager
     async def ciclo_de_vida(app: FastAPI):
@@ -87,7 +93,9 @@ def criar_app(
             log.info("Administrador inicial criado para %s.", administrador.email)
         elif app.state.repositorio.contar() == 0:
             log.warning("Banco vazio e ADMIN_EMAIL/ADMIN_SENHA ausentes: nenhum administrador foi criado.")
+        monitor.iniciar(app.version)
         yield
+        monitor.encerrar()
 
     app = FastAPI(
         title="Pessoal Finance API",
@@ -108,6 +116,7 @@ def criar_app(
         openapi_url=None if producao else "/openapi.json",
     )
 
+    app.state.monitor = monitor
     registrar_tratadores(app)
 
     # Contador de senhas erradas do POST /auth/login (um por app: os testes
@@ -132,6 +141,9 @@ def criar_app(
         expose_headers=["Location"],
     )
     app.add_middleware(CabecalhosDeSeguranca)
+    # Por último, fica por fora de todos: vê o status final de cada resposta
+    # (inclusive o 413 do limite do corpo e o 500 de exceção não tratada).
+    app.add_middleware(ObservadorDeRespostas)
 
     app.include_router(rotas_autenticacao)
     app.include_router(rotas_usuarios)

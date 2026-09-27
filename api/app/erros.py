@@ -179,7 +179,13 @@ def registrar_tratadores(app: FastAPI) -> None:
         return problema(erro.status_code, detalhe, requisicao.url.path, erro.headers)
 
     # Falha não prevista: a resposta sai no mesmo formato e sem stack trace.
-    # O Starlette relança a exceção depois, e o detalhe vai só para o log.
+    # O Starlette relança a exceção depois, e o detalhe vai só para o log. O
+    # canal de sistema do Discord recebe a rota como modelo, o tipo da
+    # exceção e o arquivo e a linha (app/monitoramento.py).
     @app.exception_handler(Exception)
     async def erro_inesperado(requisicao: Request, erro: Exception):
+        monitor = getattr(requisicao.app.state, "monitor", None)
+        if monitor is not None:
+            rota = requisicao.scope.get("route")
+            monitor.registrar_erro(requisicao.method, getattr(rota, "path", "rota desconhecida"), erro)
         return problema(500, MENSAGEM_ERRO_INTERNO, requisicao.url.path)

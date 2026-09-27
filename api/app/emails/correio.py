@@ -25,21 +25,25 @@ class CorreioDaConta:
     def _link(self, pagina: str, codigo: str) -> str:
         return f"{self.endereco_do_app}{pagina}#oobCode={quote(codigo, safe='')}"
 
-    def confirmar_email(self, email: str) -> None:
+    # As duas devolvem se o e-mail saiu: a telemetria conta só os enviados
+    # (app/monitoramento.py), que são os que gastam a cota do provedor.
+    def confirmar_email(self, email: str) -> bool:
         codigo = self.links.codigo("VERIFY_EMAIL", email)
         if codigo is None:
-            return
+            return False
         link = self._link(PAGINA_DE_CONFIRMACAO, codigo)
         self.enviador.enviar(Email(email, mensagem_de_confirmacao(link, self.endereco_do_app)))
+        return True
 
-    def nova_senha(self, email: str) -> None:
+    def nova_senha(self, email: str) -> bool:
         # Sem conta com este e-mail, nada sai, e quem pediu não fica sabendo
         # (a rota responde igual antes de chegar aqui).
         codigo = self.links.codigo("PASSWORD_RESET", email)
         if codigo is None:
-            return
+            return False
         link = self._link(PAGINA_DE_NOVA_SENHA, codigo)
         self.enviador.enviar(Email(email, mensagem_de_nova_senha(link, self.endereco_do_app)))
+        return True
 
 
 def criar_correio(config) -> CorreioDaConta | None:

@@ -4,6 +4,7 @@ de arquivos de segredo (/run/secrets).
 Nenhum segredo tem valor padrão no código: o repositório é público.
 """
 
+import re
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -24,16 +25,23 @@ PASTA_DE_SEGREDOS = Path("/run/secrets")
 SEGREDO_DE_EXEMPLO = "troque-por-uma-chave-aleatoria-de-pelo-menos-32-bytes"
 SENHA_DE_EXEMPLO = "troque-esta-senha"
 
+# Webhook de canal do Discord. Só este formato: um endereço qualquer faria a
+# API mandar os alertas (com IPs de quem ataca) para fora do Discord.
+WEBHOOK_DO_DISCORD = re.compile(r"^https://(?:(?:ptb|canary)\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+$")
+
 
 class Configuracoes(BaseSettings):
     # Os nomes batem com as variáveis sem diferenciar maiúsculas:
     # MONGODB_URI -> mongodb_uri, JWT_SECRET -> jwt_secret e assim por diante.
     # Ordem de prioridade: variável de ambiente, api/.env, arquivo de segredo.
+    # hide_input_in_errors: o valor recusado não aparece na mensagem de erro
+    # da subida (seria o JWT_SECRET curto ou o token de um webhook no log).
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
         secrets_dir=PASTA_DE_SEGREDOS if PASTA_DE_SEGREDOS.is_dir() else None,
+        hide_input_in_errors=True,
     )
 
     # "producao" liga as travas de um endereço público (conferir_producao):
@@ -87,6 +95,18 @@ class Configuracoes(BaseSettings):
     # JSON, quando vem de /run/secrets/firebase_conta_de_servico). Só serve
     # para pedir ao Firebase os códigos dos links. Fica fora do repositório.
     firebase_conta_de_servico: str = ""
+    # Cota diária de e-mails do provedor (Resend grátis: 100 por dia). A
+    # telemetria avisa em 80% e em 100%. 0 = sem aviso.
+    email_cota_diaria: int = Field(default=100, ge=0)
+
+    # Alertas e telemetria no Discord (app/monitoramento.py): um webhook por
+    # canal, vazio = canal desligado. São segredos (quem tem o endereço
+    # escreve no canal): num servidor, em /run/secrets/discord_webhook_*.
+    discord_webhook_sistema: SecretStr = SecretStr("")
+    discord_webhook_seguranca: SecretStr = SecretStr("")
+    discord_webhook_telemetria: SecretStr = SecretStr("")
+    # A cada quantas horas o resumo de uso vai para o canal de telemetria.
+    telemetria_intervalo_horas: int = Field(default=24, gt=0)
 
     # Primeiro administrador, criado só quando o banco está vazio.
     admin_nome: str = "Administrador"
@@ -106,6 +126,14 @@ class Configuracoes(BaseSettings):
     @classmethod
     def tirar_barra_do_fim(cls, endereco: str) -> str:
         return endereco.strip().rstrip("/")
+
+    @field_validator("discord_webhook_sistema", "discord_webhook_seguranca", "discord_webhook_telemetria")
+    @classmethod
+    def exigir_webhook_do_discord(cls, webhook: SecretStr) -> SecretStr:
+        valor = webhook.get_secret_value().strip()
+        if valor and not WEBHOOK_DO_DISCORD.match(valor):
+            raise ValueError("Webhook do Discord inválido: use https://discord.com/api/webhooks/<id>/<token>.")
+        return SecretStr(valor)
 
     @model_validator(mode="after")
     def conferir_email(self) -> "Configuracoes":
