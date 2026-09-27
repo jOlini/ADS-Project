@@ -29,7 +29,8 @@ class CorreioDaConta:
         codigo = self.links.codigo("VERIFY_EMAIL", email)
         if codigo is None:
             return
-        self.enviador.enviar(Email(email, mensagem_de_confirmacao(self._link(PAGINA_DE_CONFIRMACAO, codigo))))
+        link = self._link(PAGINA_DE_CONFIRMACAO, codigo)
+        self.enviador.enviar(Email(email, mensagem_de_confirmacao(link, self.endereco_do_app)))
 
     def nova_senha(self, email: str) -> None:
         # Sem conta com este e-mail, nada sai, e quem pediu não fica sabendo
@@ -37,7 +38,8 @@ class CorreioDaConta:
         codigo = self.links.codigo("PASSWORD_RESET", email)
         if codigo is None:
             return
-        self.enviador.enviar(Email(email, mensagem_de_nova_senha(self._link(PAGINA_DE_NOVA_SENHA, codigo))))
+        link = self._link(PAGINA_DE_NOVA_SENHA, codigo)
+        self.enviador.enviar(Email(email, mensagem_de_nova_senha(link, self.endereco_do_app)))
 
 
 def criar_correio(config) -> CorreioDaConta | None:
