@@ -227,6 +227,11 @@
   --tamanho-data-miniatura: 44px; /* dia no "A vencer" */
 
   --largura-lateral: 248px;
+  /* Teto da coluna de conteúdo da área logada. Numa tela larga, ou com o zoom
+     do navegador em 50% a 80%, o conteúdo fica centrado nesta largura em vez
+     de esticar (valor e descrição a milhares de pixels um do outro). Numa
+     tela de 1920px em 100%, a coluna (1920 - 248) cabe inteira. */
+  --largura-maxima-da-area: 1680px;
   --largura-coluna-lateral: 320px;
   --largura-formulario-acesso: 400px;
   --largura-amostra: 360px; /* extrato em miniatura da vitrine */

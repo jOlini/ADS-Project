@@ -269,6 +269,15 @@ button.of-avatar-botao:hover:not(:disabled) {
   padding-top: var(--espaco-2);
 }
 
+/* Zoom afastado ou tela muito larga: topo e conteúdo param na largura máxima
+   e ficam centrados na coluna, alinhados entre si. */
+.of-topo,
+.of-area {
+  width: 100%;
+  max-width: var(--largura-maxima-da-area);
+  margin-inline: auto;
+}
+
 /* Lançamentos em tela cheia: a coluna vira a altura da janela e só a lista
    rola. */
 .of-app:has(.pagina-do-extrato) {
