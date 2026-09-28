@@ -530,9 +530,13 @@ def importar_extrato(
     `/importacoes/estrutura`). Cada linha vira uma receita ou despesa na conta
     escolhida. Linha já importada antes é pulada (`JA_IMPORTADA`), e linha ilegível
     volta com o motivo (`INVALIDA`), sem barrar as outras. Com `simular: true`, nada é
-    gravado e as linhas que entrariam voltam como `NOVA`."""
-    resultados = servico.importar(espaco, dados, cliente.uid)
-    return ImportacaoResposta.de(resultados, simulacao=dados.simular)
+    gravado e as linhas que entrariam voltam como `NOVA`.
+
+    Na fatura de um cartão, a compra com a parcela no fim da descrição ("LOJA 03/12")
+    gera as parcelas vincendas nas próximas faturas (`parcelas_futuras`), e a parcela
+    que já estava lá é só confirmada. Cada linha diz a `fatura` em que entra."""
+    resultados, parcelas_futuras = servico.importar(espaco, dados, cliente.uid)
+    return ImportacaoResposta.de(resultados, simulacao=dados.simular, parcelas_futuras=parcelas_futuras)
 
 
 @rotas_livro_caixa.post(

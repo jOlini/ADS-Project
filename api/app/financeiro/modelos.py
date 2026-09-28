@@ -217,6 +217,10 @@ class Lancamento:
     compra_id: str | None = None
     parcela: int | None = None
     parcelas: int | None = None
+    # Descrição normalizada da compra parcelada que veio da fatura do banco
+    # (sem o "3/12"): acha a parcela já lançada quando a fatura seguinte
+    # chega, mesmo depois de a pessoa renomear a compra.
+    chave_parcelamento: str | None = None
     meio: MeioDePagamento | None = None
     id: str | None = None
     # Calculado na leitura (id do estorno deste lançamento); não é gravado.
@@ -235,6 +239,10 @@ class ResultadoDaLinha:
     categoria_id: str | None = None
     lancamento_id: str | None = None
     erro: str | None = None
+    # Fatura em que a linha entra (só na importação da fatura de um cartão).
+    fatura: tuple[int, int] | None = None
+    # O que aconteceu além do básico (parcela lançada, parcelas geradas).
+    observacao: str | None = None
 
 
 # --- Entrada (corpo das requisições) -------------------------------------------
@@ -665,6 +673,10 @@ class LinhaImportadaResposta(BaseModel):
     categoria_id: str | None
     lancamento_id: str | None
     erro: str | None
+    # Fatura em que a linha entra (AAAA-MM), só na fatura de um cartão.
+    fatura: str | None
+    # Parcela reconhecida, parcelas geradas ou já lançadas.
+    observacao: str | None
 
 
 class ImportacaoResposta(BaseModel):
@@ -673,10 +685,13 @@ class ImportacaoResposta(BaseModel):
     importadas: int
     ja_importadas: int
     invalidas: int
+    # Parcelas das próximas faturas geradas a partir das compras parceladas
+    # da fatura (na simulação, as que seriam geradas).
+    parcelas_futuras: int
     linhas: list[LinhaImportadaResposta]
 
     @classmethod
-    def de(cls, resultados: list[ResultadoDaLinha], simulacao: bool) -> "ImportacaoResposta":
+    def de(cls, resultados: list[ResultadoDaLinha], simulacao: bool, parcelas_futuras: int = 0) -> "ImportacaoResposta":
         contagem = {situacao: 0 for situacao in SituacaoDaLinha}
         for resultado in resultados:
             contagem[resultado.situacao] += 1
@@ -686,6 +701,7 @@ class ImportacaoResposta(BaseModel):
             importadas=contagem[SituacaoDaLinha.IMPORTADA],
             ja_importadas=contagem[SituacaoDaLinha.JA_IMPORTADA],
             invalidas=contagem[SituacaoDaLinha.INVALIDA],
+            parcelas_futuras=parcelas_futuras,
             linhas=[
                 LinhaImportadaResposta(
                     linha=resultado.linha,
@@ -696,6 +712,8 @@ class ImportacaoResposta(BaseModel):
                     categoria_id=resultado.categoria_id,
                     lancamento_id=resultado.lancamento_id,
                     erro=resultado.erro,
+                    fatura=f"{resultado.fatura[0]:04d}-{resultado.fatura[1]:02d}" if resultado.fatura else None,
+                    observacao=resultado.observacao,
                 )
                 for resultado in resultados
             ],

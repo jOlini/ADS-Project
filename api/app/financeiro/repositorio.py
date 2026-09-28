@@ -289,6 +289,8 @@ class LivroCaixaMongo:
             documento["compra_id"] = lancamento.compra_id
             documento["parcela"] = lancamento.parcela
             documento["parcelas"] = lancamento.parcelas
+        if lancamento.chave_parcelamento:
+            documento["chave_parcelamento"] = lancamento.chave_parcelamento
         if lancamento.meio:
             documento["meio"] = lancamento.meio.value
         try:
@@ -517,6 +519,7 @@ def _para_lancamento(documento: dict) -> Lancamento:
         compra_id=documento.get("compra_id"),
         parcela=documento.get("parcela"),
         parcelas=documento.get("parcelas"),
+        chave_parcelamento=documento.get("chave_parcelamento"),
         meio=MeioDePagamento(documento["meio"]) if documento.get("meio") else None,
     )
 
