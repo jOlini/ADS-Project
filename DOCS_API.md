@@ -442,29 +442,36 @@ Todos exigem o ID token do Firebase. Tudo que é do cliente fica sob um **espaç
 | `GET` | `/espacos` | Listar meus espaços; no primeiro acesso, cria o espaço pessoal com as categorias iniciais | `200 OK` | `401`, `403` (e-mail não confirmado), `503` |
 | `GET` | `/espacos/{espaco_id}` | Consultar um espaço | `200 OK` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/contas` | Listar contas com o saldo de cada uma | `200 OK` | `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial) ou cartão de crédito (tipo `CARTAO_CREDITO`, com limite, fechamento e vencimento) | `201 Created` + `Location` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial) ou cartão de crédito (tipo `CARTAO_CREDITO`, com limite, fechamento, vencimento e cor) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/contas/{conta_id}` | Consultar conta e saldo | `200 OK` | `401`, `404` |
-| `PUT` | `/espacos/{espaco_id}/contas/{conta_id}` | Renomear, trocar o tipo, desativar ou reativar; no cartão, também limite e dias da fatura | `200 OK` | `400`, `401`, `404` |
+| `PUT` | `/espacos/{espaco_id}/contas/{conta_id}` | Renomear, trocar o tipo, desativar ou reativar; no cartão, também limite, dias da fatura e cor | `200 OK` | `400`, `401`, `404` |
+| `DELETE` | `/espacos/{espaco_id}/contas/{conta_id}` | Excluir conta ou cartão com todos os lançamentos dela (`excluidos` na resposta) | `200 OK` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/cartoes` | Listar cartões com limite total e disponível, fatura atual, a pagar e parcelamentos futuros | `200 OK` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/cartoes/{cartao_id}` | Consultar o painel de um cartão | `200 OK` | `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/cartoes/{cartao_id}/faturas` | Listar as faturas do cartão (as que têm lançamentos e a atual), com total, pagamentos e quantidade | `200 OK` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/cartoes/{cartao_id}/faturas/{AAAA-MM}` | Consultar uma fatura (mês do vencimento): compras, créditos e pagamentos do período | `200 OK` | `400`, `401`, `404` |
+| `DELETE` | `/espacos/{espaco_id}/cartoes/{cartao_id}/faturas/{AAAA-MM}` | Excluir as compras e os créditos da fatura (compra parcelada sai inteira; pagamentos ficam) | `200 OK` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/cartoes/{cartao_id}/compras` | Lançar compra no cartão, à vista ou parcelada (uma despesa por parcela) | `201 Created` (parcelas criadas) | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/cartoes/{cartao_id}/pagamentos` | Pagar a fatura: sai da conta indicada e libera o limite | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/categorias` | Listar categorias | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/categorias` | Criar categoria (nome, tipo, cor) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Consultar categoria | `200 OK` | `401`, `404` |
 | `PUT` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Renomear, recolorir, desativar ou reativar | `200 OK` | `400`, `401`, `404` |
+| `DELETE` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Excluir categoria sem lançamentos (com lançamentos: `409`, desative) | `204 No Content` | `401`, `404`, `409` |
 | `GET` | `/espacos/{espaco_id}/lancamentos?de=&ate=&limite=&conta_id=` | Listar lançamentos do mais recente ao mais antigo (período e conta opcionais, até 1000) | `200 OK` | `400`, `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência (com divisão entre pessoas, opcional) | `201 Created` + `Location` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência à vista nas contas (com meio e divisão entre pessoas, opcionais) | `201 Created` + `Location` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/lancamentos/exclusao-em-lote` | Excluir vários lançamentos de uma vez (`ids`), com as regras da exclusão de um | `200 OK` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Consultar lançamento | `200 OK` | `401`, `404` |
+| `PATCH` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Editar descrição, data, valor, categoria ou meio (só os campos enviados) | `200 OK` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}/estorno` | Estornar: cria o lançamento inverso, com a data de hoje (parcela de compra no cartão: `409`) | `201 Created` + `Location` | `401`, `404`, `409` |
 | `DELETE` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Excluir: apaga o lançamento de vez (e o estorno dele, se houver; numa parcela, a compra inteira) | `204 No Content` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/pessoas` | Listar os nomes já usados em divisões (para a tela sugerir) | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/importacoes/estrutura` | Mostrar o começo do CSV em células e sugerir as colunas (nada é gravado) | `200 OK` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/importacoes` | Importar o extrato do banco em CSV, ou só simular (`simular: true`) | `200 OK` (relatório por linha) | `400`, `401`, `404` |
 
-Lançamento não tem `PUT` (`405 Method Not Allowed`): valor, data e conta não se reescrevem. Há dois jeitos de
-desfazer, com efeitos diferentes:
+Lançamento não tem `PUT` (`405 Method Not Allowed`): a correção é pelo `PATCH` (seção "Edição, exclusão em lote
+e remoção de cadastros", abaixo), que muda só os campos enviados. Há dois jeitos de desfazer, com efeitos
+diferentes:
 
 | Ação | Quando usar | O que acontece |
 |---|---|---|
@@ -473,8 +480,51 @@ desfazer, com efeitos diferentes:
 
 Na exclusão, o estorno sai antes do original: se a operação parar no meio, sobra o original sem estorno, um
 estado válido. Uma linha de extrato importada e depois excluída volta se o mesmo arquivo for importado de novo
-(a chave dela sai junto com o lançamento). Conta e categoria não se excluem: desativadas, saem das escolhas de
-novos lançamentos e mantêm o histórico.
+(a chave dela sai junto com o lançamento). Desativar uma conta ou categoria tira ela das escolhas de novos
+lançamentos e mantém o histórico; excluir é outra coisa (seção seguinte).
+
+### Edição, exclusão em lote e remoção de cadastros
+
+**Editar um lançamento** (`PATCH /lancamentos/{id}`): só os campos enviados mudam, e as partidas são remontadas
+com o novo valor e a nova categoria (a soma continua zero). O tipo, a conta e a divisão não mudam: para isso,
+exclua e lance de novo.
+
+```http
+PATCH /espacos/<espaco_id>/lancamentos/<lancamento_id>
+Content-Type: application/json
+
+{ "descricao": "Mercado do bairro", "valor_centavos": 25000, "meio": "DEBITO" }
+```
+
+| Lançamento | O que muda |
+|---|---|
+| Receita e despesa das contas | Descrição, data, valor, categoria (do mesmo tipo) e meio (`null` tira o meio) |
+| Transferência (e pagamento de fatura) | Descrição, data, valor (as duas contas acompanham) e meio |
+| Estorno, ou lançamento estornado | Só descrição e meio: o estorno espelha o original |
+| Parcela de compra no cartão | Descrição e categoria, na **compra inteira** (todas as parcelas); data e valor não |
+| Compra no cartão | Sem meio (ela é o crédito) |
+
+**Excluir em lote** (`POST /lancamentos/exclusao-em-lote` com `{"ids": [...]}`, de 1 a 1000): cada id segue a regra
+da exclusão de um (o estorno sai junto; a parcela leva a compra inteira). Id que já saiu no meio do lote (outra
+parcela da mesma compra) ou que não é do espaço é ignorado. A resposta conta cada lançamento apagado, parcelas e
+estornos inclusive: `{"excluidos": 5}`.
+
+**Excluir conta ou cartão** (`DELETE /contas/{id}`): a conta sai com **todos** os lançamentos que mexem nela,
+inclusive transferências e pagamentos de fatura com outras contas, e o saldo das outras muda (excluir um cartão
+devolve os pagamentos ao saldo da conta de onde saíram). Os lançamentos saem antes da conta: se a operação parar
+no meio, a conta continua lá e excluir de novo termina. Para guardar o histórico, o caminho é desativar.
+
+**Excluir categoria** (`DELETE /categorias/{id}`): só categoria sem lançamentos. Com lançamentos, `409`
+(`"Mercado" está em 3 lançamentos. Desative a categoria para tirá-la das opções sem mexer no histórico.`):
+apagá-la deixaria o extrato sem o "para onde foi".
+
+| Situação | Campo | Mensagem |
+|---|---|---|
+| `PATCH` sem nenhum campo | `lancamento` | Informe o que mudar: descrição, data, valor, categoria ou meio. |
+| Valor, data ou categoria de um estornado (ou estorno) | o campo | Lançamento estornado (ou estorno) só muda a descrição e o meio: o estorno espelha o original. |
+| Valor ou data de uma parcela | o campo | Parcela de compra no cartão não muda data nem valor. Para isso, exclua a compra e lance de novo. |
+| Meio numa compra do cartão | `meio` | Compra no cartão não tem meio de pagamento: ela entra na fatura. |
+| Novo valor abaixo das partes do racha | `valor_centavos` | As partes da divisão somam mais que o novo valor. |
 
 ### Dinheiro em centavos e partidas dobradas
 
@@ -584,8 +634,18 @@ Content-Type: application/json
   reembolso) e os pagamentos do período; `total_centavos` é compras menos créditos, e `pagamentos_centavos` é o
   que entrou no período. O extrato de uma conta (`GET /lancamentos?conta_id=`) traz o pagamento como
   transferência para o cartão; as compras no crédito ficam só na fatura.
+- **Lançamentos é só à vista:** `POST /lancamentos` com receita ou despesa num cartão é `400` em `conta_id`
+  ("Compra no crédito entra na fatura do cartão (Nova compra), não no extrato das contas."). O campo opcional
+  `meio` diz como o dinheiro se moveu na conta: `PIX`, `DEBITO`, `DINHEIRO` ou `TRANSFERENCIA` (TED/DOC).
+- **Cor do cartão:** `cor` (`grafite`, `azul`, `roxo`, `verde`, `vinho`, `laranja`, `dourado` ou `prata`), só no
+  cartão (`400` nas outras contas). Sem cor na criação, `grafite`; sem cor no `PUT`, fica a que estava.
 - **Importar a fatura em CSV:** `POST /importacoes` com o `conta_id` do cartão. As saídas viram compras na
-  fatura e as entradas, créditos.
+  fatura e as entradas, créditos. A compra com a parcela no fim da descrição gera as parcelas vincendas (seção
+  "Parcelas na fatura importada", abaixo).
+- **Lista de faturas:** `GET .../faturas` devolve cada fatura com `referencia`, período, `situacao`,
+  `total_centavos`, `pagamentos_centavos` e `quantidade` (compras e créditos), da mais nova para a mais antiga.
+  `DELETE .../faturas/{AAAA-MM}` apaga as compras e os créditos dela; compra parcelada sai inteira, com as
+  parcelas das outras faturas, e os pagamentos ficam (saíram de uma conta).
 - **Transferência não sai do cartão:** `400` em `conta_id` ("Cartão de crédito não é origem de transferência.
   Para quitar a fatura, use Pagar fatura."). O pagamento (`POST .../pagamentos`) exige uma conta que não seja
   cartão.
@@ -606,6 +666,8 @@ Painel do cartão (`GET /cartoes/{cartao_id}`), todos os valores em centavos:
 | Cartão sem limite, fechamento ou vencimento | `limite_centavos` / `dia_fechamento` / `dia_vencimento` | Campo obrigatório. |
 | Vencimento no mesmo dia do fechamento | `dia_vencimento` | A fatura vence depois de fechar: use um dia diferente do fechamento. |
 | Conta comum com dados de cartão | `limite_centavos` (e os dias) | Só cartão de crédito tem limite, fechamento e vencimento. |
+| Conta comum com cor | `cor` | Só cartão de crédito tem cor. |
+| Receita ou despesa num cartão por `/lancamentos` | `conta_id` | Compra no crédito entra na fatura do cartão (Nova compra), não no extrato das contas. |
 | Conta virando cartão, ou cartão virando conta | `tipo` | Conta não vira cartão de crédito, nem cartão vira conta. Crie outro cadastro. |
 | Compra em cartão desativado | `cartao` | Cartão desativado: reative-o para lançar compras. |
 | Racha numa compra parcelada | `divisao` | A divisão entre pessoas vale só para compra à vista. |
@@ -721,11 +783,14 @@ Content-Type: application/json
   "importadas": 2,
   "ja_importadas": 0,
   "invalidas": 0,
+  "parcelas_futuras": 0,
   "linhas": [
     { "linha": 2, "situacao": "IMPORTADA", "data": "2026-09-05", "descricao": "Salário",
-      "valor_centavos": 680000, "categoria_id": "<Outras receitas>", "lancamento_id": "66f0...", "erro": null },
+      "valor_centavos": 680000, "categoria_id": "<Outras receitas>", "lancamento_id": "66f0...", "erro": null,
+      "fatura": null, "observacao": null },
     { "linha": 3, "situacao": "IMPORTADA", "data": "2026-09-05", "descricao": "Aluguel",
-      "valor_centavos": -185000, "categoria_id": "<Outras despesas>", "lancamento_id": "66f1...", "erro": null }
+      "valor_centavos": -185000, "categoria_id": "<Outras despesas>", "lancamento_id": "66f1...", "erro": null,
+      "fatura": null, "observacao": null }
   ]
 }
 ```
@@ -761,6 +826,34 @@ Content-Type: application/json
 lançamentos, mais de 1000 linhas), quando o `mapeamento` é incoerente ou quando o destino não vale (`conta_id`,
 `categoria_despesa_id`, `categoria_receita_id`: não encontrada, desativada ou do tipo errado). A conta de outra
 pessoa responde "Conta não encontrada.", como no lançamento.
+
+### Parcelas na fatura importada
+
+Na fatura de um cartão, a compra com o número da parcela no fim da descrição (`LOJA X 03/12`,
+`Loja X - Parcela 3/12`, `Loja (Parcela 3 de 12)`, `LOJA PARC 03/12`) vira a parcela 3 de 12 de uma compra
+(`compra_id`, `parcela`, `parcelas`), e as parcelas **vincendas** (4 a 12) entram já nas próximas faturas, com o
+mesmo valor e a descrição no mesmo formato (`LOJA X 04/12`), ocupando o limite como a compra lançada pela tela.
+As parcelas que já passaram não entram: o dinheiro delas já saiu, em faturas que o livro-caixa não conhece.
+Número maior que o total (`15/09`) é data no texto, não parcela; crédito (valor de entrada) nunca gera parcelas.
+
+- **A fatura seguinte não duplica:** a linha `LOJA X 04/12` acha a parcela que já estava lá (mesma descrição sem
+  o número, mesmo valor, mesmo total e a fatura certa), volta como `JA_IMPORTADA` com a `observacao` "Parcela 4 de
+  12 já estava na fatura, lançada pelo parcelamento." e, na importação de verdade, dá a chave da linha à parcela
+  (o mesmo arquivo de novo cai direto na chave). Uma fatura antiga importada depois completa a mesma compra, sem
+  gerar de novo o que já existe. A busca usa a descrição do banco guardada em `chave_parcelamento`, então
+  renomear a compra não quebra o reconhecimento.
+- **A data da parcela conforme o banco:** uns bancos datam a parcela com um dia do período da própria fatura;
+  outros repetem a data da compra original em todas as parcelas. A API usa o jeito que junta mais linhas do
+  arquivo numa mesma fatura (as compras à vista e as primeiras parcelas não mudam de lugar em nenhum dos dois):
+  com a data da compra, a parcela 3 entra duas faturas depois da data escrita.
+- **Resposta:** cada linha traz a `fatura` (`AAAA-MM`) em que entra e a `observacao` da parcela; `parcelas_futuras`
+  conta as vincendas geradas (na simulação, as que seriam geradas). A tela usa a `fatura` para abrir direto nela.
+
+```json
+{ "linha": 2, "situacao": "IMPORTADA", "data": "2026-10-06", "descricao": "LOJA X 01/03",
+  "valor_centavos": -9000, "fatura": "2026-11",
+  "observacao": "Parcela 1 de 3. As parcelas 2 e 3 entram nas próximas faturas." }
+```
 
 ### Validação do ID token do Firebase
 
