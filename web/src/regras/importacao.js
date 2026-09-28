@@ -182,8 +182,9 @@ export const ROTULO_DA_SITUACAO = {
 
 const contar = (quantidade, singular, plural) => `${quantidade} ${quantidade === 1 ? singular : plural}`;
 
-// "12 lançamentos novos · 3 já importados · 1 linha com erro".
-export function resumoDaImportacao({ simulacao, novas, importadas, ja_importadas: jaImportadas, invalidas }) {
+// "12 lançamentos novos · 3 já importados · 1 linha com erro · 11 parcelas
+// futuras" (as vincendas das compras parceladas da fatura de um cartão).
+export function resumoDaImportacao({ simulacao, novas, importadas, ja_importadas: jaImportadas, invalidas, parcelas_futuras: futuras }) {
   const partes = [
     simulacao
       ? contar(novas, 'lançamento novo', 'lançamentos novos')
@@ -195,13 +196,40 @@ export function resumoDaImportacao({ simulacao, novas, importadas, ja_importadas
   if (invalidas) {
     partes.push(contar(invalidas, 'linha com erro', 'linhas com erro'));
   }
+  if (futuras) {
+    partes.push(contar(futuras, 'parcela futura', 'parcelas futuras'));
+  }
   return partes.join(' · ');
 }
 
-// Data (ISO) do lançamento importado mais recente, para a tela abrir o mês
-// dele. null quando nada entrou.
-export function dataMaisRecente(linhas = []) {
+// Data (ISO) da linha mais recente numa situação (a importada, por padrão).
+// null quando não há nenhuma.
+export function dataMaisRecente(linhas = [], situacao = 'IMPORTADA') {
   return linhas
-    .filter((linha) => linha.situacao === 'IMPORTADA')
+    .filter((linha) => linha.situacao === situacao)
     .reduce((maior, linha) => (maior === null || linha.data > maior ? linha.data : maior), null);
+}
+
+// Onde o que foi importado está, como 'AAAA-MM', para a tela abrir lá e não
+// parecer que a importação falhou: na fatura de um cartão, a fatura com mais
+// linhas; no extrato de uma conta, o mês do lançamento mais recente. Vale o
+// que entrou; sem nada novo, o que já estava lá (o arquivo já importado).
+// null quando nenhuma linha tem destino (todas com erro).
+export function destinoDaImportacao(linhas = []) {
+  const situacao = linhas.some((linha) => linha.situacao === 'IMPORTADA') ? 'IMPORTADA' : 'JA_IMPORTADA';
+  const alvo = linhas.filter((linha) => linha.situacao === situacao);
+  if (alvo.length === 0) {
+    return null;
+  }
+  const faturas = new Map();
+  for (const { fatura } of alvo) {
+    if (fatura) {
+      faturas.set(fatura, (faturas.get(fatura) ?? 0) + 1);
+    }
+  }
+  if (faturas.size > 0) {
+    // A mais cheia; no empate, a mais recente.
+    return [...faturas].sort(([a, quantasA], [b, quantasB]) => quantasB - quantasA || b.localeCompare(a))[0][0];
+  }
+  return dataMaisRecente(alvo, situacao).slice(0, 7);
 }

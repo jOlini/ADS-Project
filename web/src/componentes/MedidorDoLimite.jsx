@@ -5,13 +5,13 @@ import { formatarBRL } from '../regras/dinheiro';
 // Quanto do limite do cartão está ocupado. A cor do preenchimento muda com a
 // situação (normal, quase no fim, esgotado), e o texto ao lado diz o mesmo:
 // a cor nunca aparece sozinha. O trilho é um tom claro da mesma cor.
-export default function MedidorDoLimite({ cartao, compacto = false }) {
+export default function MedidorDoLimite({ cartao }) {
   const uso = usoDoLimite(cartao);
   const situacao = situacaoDoLimite(cartao);
   const disponivel = cartao.disponivel_centavos;
 
   return (
-    <div className={`medidor-do-limite ${situacao.nivel}${compacto ? ' compacto' : ''}`}>
+    <div className={`medidor-do-limite ${situacao.nivel}`}>
       <div className="trilho" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uso}
         aria-label={`Limite usado: ${uso}%`}>
         <i style={{ '--uso': `${uso}%` }} />

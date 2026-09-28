@@ -50,6 +50,7 @@ describe('paraExtrato', () => {
     expect(linha).toEqual({
       id: 'l1', data: '2026-09-19', descricao: 'Supermercado', tipo: 'despesa', categoria: 'Mercado', cor: 'mercado',
       conta: 'Conta corrente', valor: -21437, pessoas: [], estorno: false, estornado: false, parcela: null, noCartao: false,
+      meio: '', original: expect.objectContaining({ id: 'l1' }),
     });
   });
 
@@ -158,9 +159,13 @@ describe('validarCartao e corpoDoCartao', () => {
   it('aceita o cartão completo e monta o corpo em centavos e números', () => {
     expect(validarCartao(completo)).toEqual({});
     expect(corpoDoCartao(completo)).toEqual({
-      nome: 'Cartão Roxo', tipo: 'CARTAO_CREDITO', limite_centavos: 500000, dia_fechamento: 3, dia_vencimento: 10,
+      nome: 'Cartão Roxo', tipo: 'CARTAO_CREDITO', limite_centavos: 500000, dia_fechamento: 3, dia_vencimento: 10, cor: 'grafite',
     });
     expect(corpoDoCartao(completo, { comAtiva: true }).ativa).toBe(true);
+  });
+
+  it('leva a cor escolhida para o plástico do cartão', () => {
+    expect(corpoDoCartao({ ...completo, cor: 'roxo' }).cor).toBe('roxo');
   });
 
   it('aponta limite, fechamento e vencimento que faltam', () => {
@@ -292,5 +297,28 @@ describe('errosDaApi', () => {
       'divisao.1.valor': 'Use um valor maior que 0.',
       'divisao.0.pessoa': 'Campo obrigatório.',
     });
+  });
+});
+
+describe('meio de pagamento', () => {
+  it('vai no corpo quando escolhido e some quando vazio', () => {
+    expect(corpoDoLancamento({ ...DESPESA_VALIDA, meio: 'PIX' }).meio).toBe('PIX');
+    expect(corpoDoLancamento({ ...DESPESA_VALIDA, meio: '' })).not.toHaveProperty('meio');
+  });
+
+  it('aparece com o rótulo na linha do extrato', () => {
+    const [linha] = paraExtrato(
+      [
+        lancamento({
+          id: 'l9', tipo: 'DESPESA', data: '2026-09-19', descricao: 'Feira', valor_centavos: 3000, conta_id: 'c1',
+          categoria_id: 'k1', meio: 'DEBITO',
+          partidas: [{ conta_id: 'c1', categoria_id: null, valor_centavos: -3000 }, { conta_id: null, categoria_id: 'k1', valor_centavos: 3000 }],
+        }),
+      ],
+      CONTAS,
+      CATEGORIAS,
+    );
+
+    expect(linha.meio).toBe('Débito');
   });
 });

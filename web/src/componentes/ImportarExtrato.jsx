@@ -6,6 +6,8 @@ import MapeamentoDeColunas from './MapeamentoDeColunas';
 import Seletor from './Seletor';
 import { useToast } from './toast/useToast';
 import { primeiroCampoComErro } from '../regras/cadastro';
+import { nomeDoMes } from '../regras/calendario';
+import { mesDaReferencia } from '../regras/cartoes';
 import { formatarData } from '../regras/datas';
 import { formatarComSinal } from '../regras/dinheiro';
 import {
@@ -13,6 +15,7 @@ import {
   categoriaSugerida,
   decodificarExtrato,
   descreverMapeamento,
+  destinoDaImportacao,
   errosDaImportacao,
   mapeamentoDosPapeis,
   nomesDasColunas,
@@ -49,8 +52,22 @@ const opcoesDoTipo = (categorias, tipo) =>
 //
 // Com contaFixa (a fatura de um cartão de crédito), o arquivo entra direto
 // naquele cartão e a escolha de conta some: saídas viram compras na fatura, e
-// entradas, créditos (estorno, reembolso).
-export default function ImportarExtrato({ espacoId, contas = [], contaFixa = null, categorias, aoImportar, aoCancelar, aoMudarOcupado }) {
+// entradas, créditos (estorno, reembolso). A compra com a parcela no fim da
+// descrição ("LOJA 03/12") gera as parcelas das próximas faturas; a
+// conferência diz em que fatura cada linha entra.
+//
+// Sem nada novo no arquivo (tudo já importado), aoVerImportados leva a tela
+// até o mês (ou a fatura) onde as linhas já estão.
+export default function ImportarExtrato({
+  espacoId,
+  contas = [],
+  contaFixa = null,
+  categorias,
+  aoImportar,
+  aoVerImportados,
+  aoCancelar,
+  aoMudarOcupado,
+}) {
   const toast = useToast();
   const idDoArquivo = useId();
   const [etapa, setEtapa] = useState('arquivo');
@@ -187,7 +204,7 @@ export default function ImportarExtrato({ espacoId, contas = [], contaFixa = nul
     setOcupado('importando');
     try {
       const resposta = await importarExtrato(espacoId, { ...destino, csv, mapeamento: previa.mapeamento, simular: false });
-      toast.sucesso(resumoDaImportacao(resposta), { titulo: 'Extrato importado' });
+      toast.sucesso(resumoDaImportacao(resposta), { titulo: contaFixa ? 'Fatura importada' : 'Extrato importado' });
       setOcupado(null);
       aoImportar(resposta);
     } catch (erro) {
@@ -347,8 +364,16 @@ export default function ImportarExtrato({ espacoId, contas = [], contaFixa = nul
                 </span>
                 <small>
                   {linha.erro ??
-                    [formatarData(linha.data), nomeDaCategoria.get(linha.categoria_id), ROTULO_DA_SITUACAO[linha.situacao]].filter(Boolean).join(' · ')}
+                    [
+                      formatarData(linha.data),
+                      linha.fatura && `fatura de ${nomeDoMes(mesDaReferencia(linha.fatura))}`,
+                      nomeDaCategoria.get(linha.categoria_id),
+                      ROTULO_DA_SITUACAO[linha.situacao],
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                 </small>
+                {linha.observacao && <small className="observacao-da-linha">{linha.observacao}</small>}
               </li>
             ))}
           </ul>
@@ -360,6 +385,11 @@ export default function ImportarExtrato({ espacoId, contas = [], contaFixa = nul
               <button type="button" onClick={importar} disabled={Boolean(ocupado)} aria-busy={ocupado === 'importando'}>
                 <Icone nome="importar" tamanho={16} />
                 {ocupado === 'importando' ? 'Importando…' : `Importar ${novas === 1 ? '1 lançamento' : `${novas} lançamentos`}`}
+              </button>
+            ) : aoVerImportados && destinoDaImportacao(previa.resposta.linhas) ? (
+              <button type="button" onClick={() => aoVerImportados(previa.resposta)}>
+                <Icone nome={contaFixa ? 'cartao' : 'lancamentos'} tamanho={16} />
+                {contaFixa ? 'Ver na fatura' : 'Ver no extrato'}
               </button>
             ) : (
               <button type="button" onClick={aoCancelar}>

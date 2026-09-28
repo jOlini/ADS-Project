@@ -4,12 +4,15 @@
 // - linhasDasContas: extrato só das contas (compras no crédito ficam na
 //   fatura). Dão o saldo de cada dia do gráfico.
 // - linhasDoMes: o que conta nos números do mês: compras no cartão na data
-//   da parcela, sem o pagamento da fatura (a compra já contou).
+//   da parcela, sem o pagamento da fatura (a compra já contou). As despesas
+//   saem separadas pela origem (somarPorOrigem): à vista, das contas, e no
+//   crédito, nas faturas; um crédito na fatura (estorno) desconta do crédito
+//   em vez de virar receita.
 // - linhasRecentes: candidatas às "Últimas transações".
 // - meses: relatório mensal da API (o último é o mês de hoje) ou null quando
 //   ele não veio; sem ele, não há comparação nem a visão por meses.
 
-import { gastoPorCategoria, somarMes } from '../../regras/resumo';
+import { gastoPorCategoria, somarPorOrigem } from '../../regras/resumo';
 import { serieDiaria, serieDosMeses } from './serie';
 import { variacaoPercentual } from './tendencia';
 
@@ -23,7 +26,8 @@ export const FAIXAS = [
 ];
 
 export function montarVisao({ linhasDasContas, linhasDoMes, linhasRecentes, saldo, meses, hoje }) {
-  const totais = somarMes(linhasDoMes);
+  const { entradas, aVista, noCredito, sobra } = somarPorOrigem(linhasDoMes);
+  const totais = { entradas, saidas: aVista + noCredito, sobra, aVista, noCredito };
   const anterior = meses && meses.length >= 2 ? meses[meses.length - 2] : null;
   const corPorCategoria = new Map(linhasDoMes.map((linha) => [linha.categoria, linha.cor ?? 'neutro']));
 

@@ -34,6 +34,35 @@ export const TIPOS_DE_LANCAMENTO = [
   { valor: 'TRANSFERENCIA', rotulo: 'Transferência' },
 ];
 
+// Como o dinheiro se moveu na conta. Lançamentos é só o que é à vista: a
+// compra no crédito não é um meio daqui, ela entra na fatura do cartão.
+export const MEIOS_DE_PAGAMENTO = [
+  { valor: 'PIX', rotulo: 'PIX' },
+  { valor: 'DEBITO', rotulo: 'Débito' },
+  { valor: 'DINHEIRO', rotulo: 'Dinheiro' },
+  { valor: 'TRANSFERENCIA', rotulo: 'TED/DOC', descricao: 'Transferência bancária' },
+];
+
+export const rotuloDoMeio = (meio) => MEIOS_DE_PAGAMENTO.find((item) => item.valor === meio)?.rotulo ?? '';
+
+// Cores do plástico do cartão na carteira (mesmos nomes da API e das
+// variáveis --cartao-* do CSS). O nome do cartão está sempre escrito nele.
+export const CORES_DO_CARTAO = [
+  { valor: 'grafite', rotulo: 'Grafite' },
+  { valor: 'azul', rotulo: 'Azul' },
+  { valor: 'roxo', rotulo: 'Roxo' },
+  { valor: 'verde', rotulo: 'Verde' },
+  { valor: 'vinho', rotulo: 'Vinho' },
+  { valor: 'laranja', rotulo: 'Laranja' },
+  { valor: 'dourado', rotulo: 'Dourado' },
+  { valor: 'prata', rotulo: 'Prata' },
+];
+
+export const TIPOS_DE_CATEGORIA = [
+  { valor: 'DESPESA', rotulo: 'Despesa', descricao: 'Dinheiro que sai' },
+  { valor: 'RECEITA', rotulo: 'Receita', descricao: 'Dinheiro que entra' },
+];
+
 // Mesmos nomes das variáveis --cat-* do CSS. O rótulo diz a cor, porque a
 // cor nunca aparece sozinha: sempre ao lado do nome da categoria.
 export const CORES_DE_CATEGORIA = [
@@ -58,7 +87,8 @@ export function rotuloDoTipoDeConta(tipo) {
 
 // Lançamentos da API viram linhas do extrato (o formato de resumo.js):
 // valor em centavos com o sinal do que aconteceu na conta, nome da categoria
-// e da conta no lugar dos ids e as pessoas do racha.
+// e da conta no lugar dos ids, o meio e as pessoas do racha. original é o
+// lançamento como a API devolveu (para a edição).
 //
 // pontoDeVista é a conta cujo extrato está na tela; sem ele, vale a conta de
 // origem de cada lançamento. Na fatura de um cartão, o pagamento (que sai de
@@ -105,6 +135,8 @@ export function paraExtrato(lancamentos, contas, categorias, { pontoDeVista } = 
       estornado: Boolean(lancamento.estornado_por),
       parcela: lancamento.compra_id ? { numero: lancamento.parcela, total: lancamento.parcelas } : null,
       noCartao: ehCartao(contaPorId.get(lancamento.conta_id)),
+      meio: rotuloDoMeio(lancamento.meio),
+      original: lancamento,
     };
   });
 }
@@ -152,7 +184,7 @@ export function estaNoMes(iso, { ano, mes }) {
 
 // ---------------------------------------------------------- Formulários
 
-export const ORDEM_DO_LANCAMENTO = ['descricao', 'valor', 'data', 'conta_id', 'categoria_id', 'conta_destino_id'];
+export const ORDEM_DO_LANCAMENTO = ['descricao', 'valor', 'data', 'conta_id', 'categoria_id', 'conta_destino_id', 'meio'];
 
 // Ordem dos campos do formulário de lançamento, com os da divisão no fim.
 export function ordemDoLancamento(formulario) {
@@ -234,6 +266,9 @@ export function corpoDoLancamento(formulario) {
   if (temDivisao(formulario)) {
     corpo.divisao = corpoDaDivisao(formulario.divisao);
   }
+  if (formulario.meio) {
+    corpo.meio = formulario.meio;
+  }
   return corpo;
 }
 
@@ -286,6 +321,7 @@ export function corpoDoCartao(formulario, { comAtiva = false } = {}) {
     limite_centavos: lerValor(formulario.limite),
     dia_fechamento: Number(formulario.diaFechamento),
     dia_vencimento: Number(formulario.diaVencimento),
+    cor: formulario.cor || 'grafite',
   };
   return comAtiva ? { ...corpo, ativa: formulario.ativa } : corpo;
 }

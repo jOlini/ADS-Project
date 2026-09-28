@@ -2,11 +2,12 @@
 
 Tudo fica sob /espacos/{espaco_id}: o espaço é o dono dos dados, e a
 dependência espaco_do_cliente barra quem não é membro antes de qualquer
-consulta. Lançamento não tem PUT: correção de valor é por estorno, que deixa
-o histórico; DELETE apaga de vez (erro de digitação, duplicata). O extrato do
-banco (CSV) entra por /importacoes, sem duplicar linha já importada. O cartão
-de crédito é uma conta de dívida: painel, faturas, compras e pagamento ficam
-em /cartoes.
+consulta. Lançamento não tem PUT: PATCH muda descrição, data, valor,
+categoria ou meio, e o estorno desfaz mantendo o histórico; DELETE apaga de
+vez (erro de digitação, duplicata), um por um ou em lote. O extrato do banco
+(CSV) entra por /importacoes, sem duplicar linha já importada. O cartão de
+crédito é uma conta de dívida: painel, faturas, compras e pagamento ficam em
+/cartoes.
 """
 
 from datetime import date
@@ -18,12 +19,15 @@ from app.financeiro.acesso import cliente_autenticado, espaco_do_cliente, obter_
 from app.financeiro.modelos import (
     AtualizacaoCategoria,
     AtualizacaoConta,
+    AtualizacaoLancamento,
     CartaoResposta,
     CategoriaResposta,
     ContaResposta,
     Espaco,
     EspacoResposta,
     EstruturaResposta,
+    ExclusaoEmLote,
+    ExclusaoResposta,
     FaturaResposta,
     ImportacaoResposta,
     LancamentoResposta,
@@ -37,6 +41,7 @@ from app.financeiro.modelos import (
     NovoPagamento,
     PedidoDeEstrutura,
     PeriodoDaFaturaResposta,
+    ResumoDaFaturaResposta,
 )
 from app.financeiro.repositorio import RepositorioLivroCaixa
 from app.financeiro.servicos import ServicoLivroCaixa
@@ -45,6 +50,7 @@ from app.firebase import ClienteFirebase
 ERRO_400 = {400: {"description": "Campo inválido ou incoerente (erro de cada campo em `campos`)"}}
 ERRO_404 = {404: {"description": "Espaço (ou recurso dentro dele) não encontrado, ou de outra pessoa"}}
 ERRO_409 = {409: {"description": "Lançamento já estornado, ou estorno de um estorno"}}
+REFERENCIA = Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="Ano e mês do vencimento (AAAA-MM)")
 
 rotas_livro_caixa = APIRouter(
     prefix="/espacos",
@@ -139,6 +145,22 @@ def atualizar_conta(
     return ContaResposta.de(*servico.conta_com_saldo(espaco, conta_id))
 
 
+@rotas_livro_caixa.delete(
+    "/{espaco_id}/contas/{conta_id}",
+    response_model=ExclusaoResposta,
+    summary="Excluir conta ou cartão, com todos os lançamentos dela",
+    responses=ERRO_404,
+)
+def excluir_conta(
+    conta_id: str, espaco: Espaco = Depends(espaco_do_cliente), servico: ServicoLivroCaixa = Depends(obter_servico)
+):
+    """Apaga de vez a conta e todo lançamento que mexe nela, inclusive as
+    transferências e os pagamentos de fatura com outras contas (o saldo delas
+    muda). Para guardar o histórico, desative a conta pelo PUT. `excluidos` diz
+    quantos lançamentos saíram."""
+    return ExclusaoResposta(excluidos=servico.excluir_conta(espaco, conta_id))
+
+
 # --- Cartões de crédito ---------------------------------------------------------
 # O cartão é uma conta do tipo CARTAO_CREDITO (criada e editada em /contas).
 # Aqui ficam o painel, as faturas, a compra (parcelada ou não) e o pagamento.
@@ -174,7 +196,7 @@ def buscar_cartao(
 )
 def buscar_fatura(
     cartao_id: str,
-    referencia: str = Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="Ano e mês do vencimento (AAAA-MM)"),
+    referencia: str = REFERENCIA,
     espaco: Espaco = Depends(espaco_do_cliente),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
@@ -190,6 +212,38 @@ def buscar_fatura(
         pagamentos_centavos=sum(cartoes.pagamento(lancamento, cartao.id) for lancamento in lancamentos),
         lancamentos=[LancamentoResposta.de(lancamento) for lancamento in lancamentos],
     )
+
+
+@rotas_livro_caixa.get(
+    "/{espaco_id}/cartoes/{cartao_id}/faturas",
+    response_model=list[ResumoDaFaturaResposta],
+    summary="Listar as faturas do cartão com o total de cada uma",
+    responses=ERRO_404,
+)
+def listar_faturas(
+    cartao_id: str, espaco: Espaco = Depends(espaco_do_cliente), servico: ServicoLivroCaixa = Depends(obter_servico)
+):
+    """As faturas que têm compras, créditos ou pagamentos, da mais nova para a
+    mais antiga. A fatura atual aparece sempre, mesmo vazia."""
+    return [ResumoDaFaturaResposta.de(resumo) for resumo in servico.faturas(espaco, cartao_id)]
+
+
+@rotas_livro_caixa.delete(
+    "/{espaco_id}/cartoes/{cartao_id}/faturas/{referencia}",
+    response_model=ExclusaoResposta,
+    summary="Excluir as compras e os créditos de uma fatura",
+    responses={**ERRO_400, **ERRO_404},
+)
+def excluir_fatura(
+    cartao_id: str,
+    referencia: str = REFERENCIA,
+    espaco: Espaco = Depends(espaco_do_cliente),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
+):
+    """Compra parcelada sai inteira, com as parcelas das outras faturas. Os
+    pagamentos da fatura ficam (saíram de uma conta)."""
+    ano, mes = map(int, referencia.split("-"))
+    return ExclusaoResposta(excluidos=servico.excluir_fatura(espaco, cartao_id, (ano, mes)))
 
 
 @rotas_livro_caixa.post(
@@ -297,6 +351,19 @@ def atualizar_categoria(
     return CategoriaResposta.de(servico.atualizar_categoria(espaco, categoria_id, dados))
 
 
+@rotas_livro_caixa.delete(
+    "/{espaco_id}/categorias/{categoria_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Excluir categoria sem lançamentos",
+    responses={**ERRO_404, 409: {"description": "Categoria usada em lançamentos (desative em vez de excluir)"}},
+)
+def excluir_categoria(
+    categoria_id: str, espaco: Espaco = Depends(espaco_do_cliente), servico: ServicoLivroCaixa = Depends(obter_servico)
+):
+    servico.excluir_categoria(espaco, categoria_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # --- Lançamentos ---------------------------------------------------------------
 
 
@@ -341,6 +408,23 @@ def lancar(
     return LancamentoResposta.de(lancamento)
 
 
+@rotas_livro_caixa.post(
+    "/{espaco_id}/lancamentos/exclusao-em-lote",
+    response_model=ExclusaoResposta,
+    summary="Excluir vários lançamentos de uma vez",
+    responses={**ERRO_400, **ERRO_404},
+)
+def excluir_lancamentos(
+    dados: ExclusaoEmLote,
+    espaco: Espaco = Depends(espaco_do_cliente),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
+):
+    """Mesmas regras da exclusão de um: o estorno sai junto, e a parcela leva a
+    compra inteira. Id que já saiu ou não é do espaço é ignorado. `excluidos`
+    conta cada lançamento apagado (parcelas e estornos inclusive)."""
+    return ExclusaoResposta(excluidos=servico.excluir_varios(espaco, dados.ids))
+
+
 @rotas_livro_caixa.get(
     "/{espaco_id}/lancamentos/{lancamento_id}",
     response_model=LancamentoResposta,
@@ -353,6 +437,25 @@ def buscar_lancamento(
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
     return LancamentoResposta.de(servico.lancamento(espaco, lancamento_id))
+
+
+@rotas_livro_caixa.patch(
+    "/{espaco_id}/lancamentos/{lancamento_id}",
+    response_model=LancamentoResposta,
+    summary="Editar descrição, data, valor, categoria ou meio de um lançamento",
+    responses={**ERRO_400, **ERRO_404},
+)
+def editar_lancamento(
+    lancamento_id: str,
+    dados: AtualizacaoLancamento,
+    espaco: Espaco = Depends(espaco_do_cliente),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
+):
+    """Só os campos enviados mudam, e as partidas acompanham o novo valor e a
+    nova categoria. Estorno e lançamento estornado só mudam a descrição e o
+    meio. Parcela de compra no cartão muda a descrição e a categoria da compra
+    inteira, não a data nem o valor."""
+    return LancamentoResposta.de(servico.editar(espaco, lancamento_id, dados))
 
 
 @rotas_livro_caixa.post(
@@ -427,9 +530,13 @@ def importar_extrato(
     `/importacoes/estrutura`). Cada linha vira uma receita ou despesa na conta
     escolhida. Linha já importada antes é pulada (`JA_IMPORTADA`), e linha ilegível
     volta com o motivo (`INVALIDA`), sem barrar as outras. Com `simular: true`, nada é
-    gravado e as linhas que entrariam voltam como `NOVA`."""
-    resultados = servico.importar(espaco, dados, cliente.uid)
-    return ImportacaoResposta.de(resultados, simulacao=dados.simular)
+    gravado e as linhas que entrariam voltam como `NOVA`.
+
+    Na fatura de um cartão, a compra com a parcela no fim da descrição ("LOJA 03/12")
+    gera as parcelas vincendas nas próximas faturas (`parcelas_futuras`), e a parcela
+    que já estava lá é só confirmada. Cada linha diz a `fatura` em que entra."""
+    resultados, parcelas_futuras = servico.importar(espaco, dados, cliente.uid)
+    return ImportacaoResposta.de(resultados, simulacao=dados.simular, parcelas_futuras=parcelas_futuras)
 
 
 @rotas_livro_caixa.post(

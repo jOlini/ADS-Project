@@ -4,18 +4,21 @@ Quem pode entrar em cada espaço é decidido antes, em acesso.py. Aqui chegam
 só o espaço já liberado e o uid de quem pede.
 """
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from app.erros import ErroConflito, ErroNaoEncontrado, ErroValidacao
-from app.financeiro import cartoes, importacao, regras, relatorios
-from app.financeiro.cartoes import PeriodoDaFatura, Referencia, ResumoDoCartao
+from app.financeiro import cartoes, importacao, parcelamento, regras, relatorios
+from app.financeiro.cartoes import PeriodoDaFatura, Referencia, ResumoDaFatura, ResumoDoCartao
 from app.financeiro.modelos import (
     AtualizacaoCategoria,
     AtualizacaoConta,
+    AtualizacaoLancamento,
     Categoria,
     Conta,
+    CorDoCartao,
     Espaco,
     Lancamento,
     Membro,
@@ -32,6 +35,7 @@ from app.financeiro.modelos import (
     SituacaoDaFatura,
     SituacaoDaLinha,
     TipoCategoria,
+    TipoConta,
     TipoEspaco,
     TipoLancamento,
 )
@@ -112,6 +116,7 @@ class ServicoLivroCaixa:
             limite_centavos=dados.limite_centavos,
             dia_fechamento=dados.dia_fechamento,
             dia_vencimento=dados.dia_vencimento,
+            cor=dados.cor or (CorDoCartao.GRAFITE if dados.tipo == TipoConta.CARTAO_CREDITO else None),
         )
         return self.repositorio.inserir_conta(conta)
 
@@ -125,7 +130,22 @@ class ServicoLivroCaixa:
         conta.limite_centavos = dados.limite_centavos
         conta.dia_fechamento = dados.dia_fechamento
         conta.dia_vencimento = dados.dia_vencimento
+        # Sem cor no corpo, o cartão fica com a que tinha.
+        if conta.cartao:
+            conta.cor = dados.cor or conta.cor
         return self.repositorio.atualizar_conta(conta)
+
+    def excluir_conta(self, espaco: Espaco, id: str) -> int:
+        """Apaga a conta (ou o cartão) e todos os lançamentos que mexem nela,
+        inclusive as transferências e os pagamentos de fatura com outras
+        contas (o saldo delas muda junto). Para guardar o histórico, o caminho
+        é desativar. Os lançamentos saem antes da conta: se a operação parar
+        no meio, a conta continua lá e excluir de novo termina. Devolve quantos
+        lançamentos saíram."""
+        conta = self._conta(espaco, id)
+        excluidos = self.repositorio.excluir_lancamentos_da_conta(espaco.id, conta.id)
+        self.repositorio.excluir_conta(espaco.id, conta.id)
+        return excluidos
 
     def _conta(self, espaco: Espaco, id: str) -> Conta:
         conta = self.repositorio.buscar_conta(espaco.id, id)
@@ -169,6 +189,25 @@ class ServicoLivroCaixa:
         )
         situacao = cartoes.situacao_da_fatura(referencia, atual)
         return cartao, periodo, situacao, self._marcar_estornados(espaco, lancamentos)
+
+    def faturas(self, espaco: Espaco, id: str) -> list[ResumoDaFatura]:
+        """As faturas do cartão que têm lançamentos (e a atual), da mais nova
+        para a mais antiga."""
+        cartao = self._cartao(espaco, id)
+        lancamentos = self.repositorio.listar_lancamentos(espaco.id, None, None, LIMITE_DO_CARTAO, cartao.id)
+        return cartoes.resumir_faturas(cartao, lancamentos, self.hoje(espaco))
+
+    def excluir_fatura(self, espaco: Espaco, id: str, referencia: Referencia) -> int:
+        """Apaga as compras e os créditos de uma fatura. Compra parcelada sai
+        inteira, com as parcelas das outras faturas, como na exclusão de uma
+        parcela. O pagamento fica: ele saiu de uma conta e aparece no extrato
+        dela (sai pela seleção na fatura ou no extrato)."""
+        cartao = self._cartao(espaco, id)
+        periodo = cartoes.periodo_da_fatura(cartao, referencia)
+        lancamentos = self.repositorio.listar_lancamentos(
+            espaco.id, periodo.inicio, periodo.ultimo_dia, LIMITE_DO_CARTAO, cartao.id
+        )
+        return self.excluir_varios(espaco, [l.id for l in lancamentos if not cartoes.eh_pagamento(l, cartao.id)])
 
     def comprar(self, espaco: Espaco, cartao_id: str, dados: NovaCompra, uid: str) -> list[Lancamento]:
         """Compra no cartão: uma despesa por parcela, cada uma na fatura
@@ -284,6 +323,18 @@ class ServicoLivroCaixa:
         categoria.ativa = dados.ativa
         return self.repositorio.atualizar_categoria(categoria)
 
+    def excluir_categoria(self, espaco: Espaco, id: str) -> None:
+        """Só categoria sem lançamentos. Com lançamentos, 409: apagá-la
+        deixaria o extrato sem o "para onde foi" deles. Desativar tira a
+        categoria das opções e mantém o histórico."""
+        categoria = self.categoria(espaco, id)
+        if usados := self.repositorio.contar_lancamentos_da_categoria(espaco.id, categoria.id):
+            quantos = "1 lançamento" if usados == 1 else f"{usados} lançamentos"
+            raise ErroConflito(
+                f'"{categoria.nome}" está em {quantos}. Desative a categoria para tirá-la das opções sem mexer no histórico.'
+            )
+        self.repositorio.excluir_categoria(espaco.id, categoria.id)
+
     # --- Lançamentos ---
 
     def lancamentos(
@@ -324,8 +375,27 @@ class ServicoLivroCaixa:
             criado_em=agora(),
             criado_por=uid,
             divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
+            meio=dados.meio,
         )
         return self._gravar(lancamento)
+
+    def editar(self, espaco: Espaco, id: str, dados: AtualizacaoLancamento) -> Lancamento:
+        """Muda descrição, data, valor, categoria ou meio, com as restrições de
+        regras.conferir_edicao. Na parcela de uma compra no cartão, a
+        descrição e a categoria mudam na compra inteira: as parcelas são uma
+        compra só."""
+        lancamento = self.lancamento(espaco, id)
+        conta = self.repositorio.buscar_conta(espaco.id, lancamento.conta_id)
+        categoria = self.repositorio.buscar_categoria(espaco.id, dados.categoria_id) if dados.categoria_id else None
+        if erros := regras.conferir_edicao(lancamento, dados, conta, categoria):
+            raise ErroValidacao(erros)
+        alvos = self.repositorio.listar_compra(espaco.id, lancamento.compra_id) if lancamento.compra_id else [lancamento]
+        for alvo in alvos:
+            editado = regras.aplicar_edicao(alvo, dados)
+            if not regras.soma_zero(editado.partidas):
+                raise AssertionError("Partidas do lançamento não somam zero.")
+            self.repositorio.atualizar_lancamento(editado)
+        return self.lancamento(espaco, id)
 
     def excluir(self, espaco: Espaco, id: str) -> None:
         """Apaga o lançamento de vez (erro de digitação, lançamento duplicado).
@@ -338,13 +408,26 @@ class ServicoLivroCaixa:
 
         Parcela de compra no cartão leva a compra inteira: uma parcela sozinha
         não existe, porque o limite foi ocupado pelo total."""
-        lancamento = self.lancamento(espaco, id)
+        self._excluir(espaco, self.lancamento(espaco, id))
+
+    def excluir_varios(self, espaco: Espaco, ids: list[str]) -> int:
+        """Exclusão em lote (seleção do extrato ou da fatura), com as mesmas
+        regras da exclusão de um. Id que já saiu (outra parcela da mesma
+        compra, estorno de outro da lista) ou que não é do espaço é pulado.
+        Devolve quantos lançamentos saíram do banco."""
+        excluidos = 0
+        for id in dict.fromkeys(ids):
+            lancamento = self.repositorio.buscar_lancamento(espaco.id, id)
+            if lancamento is not None:
+                excluidos += self._excluir(espaco, lancamento)
+        return excluidos
+
+    def _excluir(self, espaco: Espaco, lancamento: Lancamento) -> int:
         if lancamento.compra_id:
-            self.repositorio.excluir_compra(espaco.id, lancamento.compra_id)
-            return
-        self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
-        self.repositorio.excluir_lancamento(espaco.id, lancamento.id)
-        self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
+            return self.repositorio.excluir_compra(espaco.id, lancamento.compra_id)
+        excluidos = self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
+        excluidos += int(self.repositorio.excluir_lancamento(espaco.id, lancamento.id))
+        return excluidos + self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
 
     def pessoas(self, espaco: Espaco) -> list[str]:
         """Nomes já usados em divisões, para a tela sugerir. Nomes que só
@@ -393,7 +476,7 @@ class ServicoLivroCaixa:
         except importacao.ExtratoIlegivel as erro:
             raise ErroValidacao({"csv": str(erro)}) from erro
 
-    def importar(self, espaco: Espaco, dados: NovaImportacao, uid: str) -> list[ResultadoDaLinha]:
+    def importar(self, espaco: Espaco, dados: NovaImportacao, uid: str) -> tuple[list[ResultadoDaLinha], int]:
         """Lança cada linha do extrato na conta escolhida: valor negativo vira
         despesa, positivo vira receita. Linha já importada antes (mesma chave)
         é pulada, e linha ilegível volta com o motivo; as outras entram mesmo
@@ -402,6 +485,12 @@ class ServicoLivroCaixa:
         Sem dados.mapeamento, as colunas são reconhecidas pelo nome. Com a
         coluna de categoria, a linha vai para a categoria ativa de mesmo nome;
         sem nome conhecido, para a categoria padrão do tipo.
+
+        Na fatura de um cartão, a linha parcelada ("LOJA 03/12") vira a parcela
+        da compra e gera as parcelas vincendas nas próximas faturas; a parcela
+        que já estava lá (gerada por uma importação anterior) só é confirmada
+        (parcelamento.py). Devolve os resultados por linha e quantas parcelas
+        futuras entraram (ou entrariam, na simulação).
 
         Cada lançamento é gravado sozinho (atômico). Se a importação parar no
         meio, rodar de novo termina o que faltou, sem duplicar o que entrou.
@@ -425,14 +514,36 @@ class ServicoLivroCaixa:
         categorias = self.repositorio.listar_categorias(espaco.id)
         chaves = importacao.chaves_de_importacao(conta.id, lidas)
         ja_importadas = self.repositorio.chaves_importadas(espaco.id, chaves)
+        # Só a compra (saída) na fatura de um cartão tem parcelas a gerar.
+        parcelas = [
+            parcelamento.parcela_na_descricao(linha.descricao) if conta.cartao and linha.valor_centavos < 0 else None
+            for linha in lidas
+        ]
+        datas = [linha.data for linha in lidas]
+        parcelamentos = None
+        if conta.cartao:
+            datas = parcelamento.posicionar(conta, list(zip(datas, parcelas, strict=True)))
+            if any(parcelas):
+                no_cartao = self.repositorio.listar_lancamentos(espaco.id, None, None, LIMITE_DO_CARTAO, conta.id)
+                parcelamentos = parcelamento.Parcelamentos(conta, no_cartao)
+
         resultados = [ResultadoDaLinha(r.linha, SituacaoDaLinha.INVALIDA, erro=r.erro) for r in recusadas]
-        for linha, chave in zip(lidas, chaves, strict=True):
+        futuras = 0
+        for linha, chave, data, parcela in zip(lidas, chaves, datas, parcelas, strict=True):
             tipo = TipoCategoria.RECEITA if linha.valor_centavos > 0 else TipoCategoria.DESPESA
             padrao = receita if tipo == TipoCategoria.RECEITA else despesa
             categoria = regras.categoria_pelo_nome(categorias, linha.categoria, tipo) or padrao
-            situacao, lancamento_id = self._importar_linha(
-                espaco, linha, chave, chave in ja_importadas, categoria.id, dados, uid
-            )
+            item = _LinhaAImportar(linha, chave, data, categoria.id)
+            observacao = None
+            if chave in ja_importadas:
+                situacao, lancamento_id = SituacaoDaLinha.JA_IMPORTADA, None
+            elif parcela and parcelamentos:
+                situacao, lancamento_id, observacao, geradas = self._importar_parcela(
+                    espaco, item, parcela, parcelamentos, dados, uid
+                )
+                futuras += geradas
+            else:
+                situacao, lancamento_id = self._importar_linha(espaco, item, dados, uid)
             resultados.append(
                 ResultadoDaLinha(
                     linha.linha,
@@ -442,35 +553,34 @@ class ServicoLivroCaixa:
                     valor_centavos=linha.valor_centavos,
                     categoria_id=categoria.id,
                     lancamento_id=lancamento_id,
+                    fatura=cartoes.referencia_da_data(conta, data) if conta.cartao else None,
+                    observacao=observacao,
                 )
             )
-        return sorted(resultados, key=lambda resultado: resultado.linha)
+        return sorted(resultados, key=lambda resultado: resultado.linha), futuras
 
     def _importar_linha(
         self,
         espaco: Espaco,
-        linha: importacao.LinhaDoExtrato,
-        chave: str,
-        ja_importada: bool,
-        categoria_id: str,
+        item: "_LinhaAImportar",
         dados: NovaImportacao,
         uid: str,
+        plano: parcelamento.PlanoDaLinha | None = None,
     ) -> tuple[SituacaoDaLinha, str | None]:
-        if ja_importada:
-            return SituacaoDaLinha.JA_IMPORTADA, None
         if dados.simular:
             return SituacaoDaLinha.NOVA, None
 
+        linha = item.linha
         receita = linha.valor_centavos > 0
         # Validado como um lançamento digitado: o que vem do arquivo passa
         # pelos mesmos limites de descrição, data e valor.
         novo = NovoLancamento(
             tipo=TipoLancamento.RECEITA if receita else TipoLancamento.DESPESA,
             descricao=linha.descricao,
-            data=linha.data,
+            data=item.data,
             valor_centavos=abs(linha.valor_centavos),
             conta_id=dados.conta_id,
-            categoria_id=categoria_id,
+            categoria_id=item.categoria_id,
         )
         lancamento = Lancamento(
             espaco_id=espaco.id,
@@ -483,13 +593,100 @@ class ServicoLivroCaixa:
             partidas=regras.montar_partidas(novo),
             criado_em=agora(),
             criado_por=uid,
-            chave_importacao=chave,
+            chave_importacao=item.chave,
+            **_campos_da_parcela(plano, plano.numero if plano else None),
         )
         try:
             return SituacaoDaLinha.IMPORTADA, self._gravar(lancamento).id
         except LancamentoJaImportado:
             # Outra importação do mesmo arquivo gravou esta linha agora há pouco.
             return SituacaoDaLinha.JA_IMPORTADA, None
+
+    def _importar_parcela(
+        self,
+        espaco: Espaco,
+        item: "_LinhaAImportar",
+        parcela: parcelamento.ParcelaNaDescricao,
+        parcelamentos: parcelamento.Parcelamentos,
+        dados: NovaImportacao,
+        uid: str,
+    ) -> tuple[SituacaoDaLinha, str | None, str, int]:
+        """Linha parcelada da fatura: confirma a parcela que já estava no
+        cartão ou lança a parcela da compra, e lança as vincendas que faltam.
+        Devolve também a observação da linha e quantas parcelas futuras
+        entraram."""
+        plano = parcelamentos.planejar(parcela, item.data, -item.linha.valor_centavos)
+        texto = f"Parcela {plano.numero} de {plano.total}"
+        if plano.prevista:
+            situacao, lancamento_id = SituacaoDaLinha.JA_IMPORTADA, plano.prevista.lancamento_id
+            texto += " já estava na fatura, lançada pelo parcelamento"
+            if not dados.simular and lancamento_id:
+                self._confirmar_parcela(espaco, lancamento_id, item)
+        else:
+            situacao, lancamento_id = self._importar_linha(espaco, item, dados, uid, plano)
+            if situacao == SituacaoDaLinha.JA_IMPORTADA:
+                return situacao, None, None, 0
+
+        if plano.futuras:
+            primeira, ultima = plano.futuras[0][0], plano.futuras[-1][0]
+            if primeira == ultima:
+                texto += f". A parcela {primeira} entra na próxima fatura"
+            else:
+                faixa = f"{primeira} e {ultima}" if ultima == primeira + 1 else f"{primeira} a {ultima}"
+                texto += f". As parcelas {faixa} entram nas próximas faturas"
+        if not dados.simular:
+            for numero, data in plano.futuras:
+                gerada = self._gravar(self._parcela_gerada(espaco, item, parcela, plano, numero, data, dados.conta_id, uid))
+                parcelamentos.anotar(plano, numero, gerada.id)
+        return situacao, lancamento_id, f"{texto}.", len(plano.futuras)
+
+    def _confirmar_parcela(self, espaco: Espaco, lancamento_id: str, item: "_LinhaAImportar") -> None:
+        """A parcela gerada antes ganha a chave da linha que a confirmou (a
+        mesma fatura importada de novo já é reconhecida) e a data do banco."""
+        prevista = self.repositorio.buscar_lancamento(espaco.id, lancamento_id)
+        if prevista is None:
+            return
+        prevista.chave_importacao = item.chave
+        prevista.data = item.data
+        try:
+            self.repositorio.atualizar_lancamento(prevista)
+        except LancamentoJaImportado:
+            pass
+
+    def _parcela_gerada(
+        self,
+        espaco: Espaco,
+        item: "_LinhaAImportar",
+        parcela: parcelamento.ParcelaNaDescricao,
+        plano: parcelamento.PlanoDaLinha,
+        numero: int,
+        data: date,
+        conta_id: str,
+        uid: str,
+    ) -> Lancamento:
+        """Uma parcela vincenda da compra, com a descrição no formato do banco
+        ("LOJA X 04/12") e sem chave: ela espera a linha da fatura dela."""
+        despesa = NovoLancamento(
+            tipo=TipoLancamento.DESPESA,
+            descricao=parcelamento.descricao_da_parcela(item.linha.descricao, parcela, numero)[:TAMANHO_MAXIMO_DA_DESCRICAO],
+            data=data,
+            valor_centavos=-item.linha.valor_centavos,
+            conta_id=conta_id,
+            categoria_id=item.categoria_id,
+        )
+        return Lancamento(
+            espaco_id=espaco.id,
+            tipo=despesa.tipo,
+            descricao=despesa.descricao,
+            data=despesa.data,
+            valor_centavos=despesa.valor_centavos,
+            conta_id=despesa.conta_id,
+            categoria_id=despesa.categoria_id,
+            partidas=regras.montar_partidas(despesa),
+            criado_em=agora(),
+            criado_por=uid,
+            **_campos_da_parcela(plano, numero),
+        )
 
     def _gravar(self, lancamento: Lancamento) -> Lancamento:
         # Última barreira antes do banco: nenhum caminho grava lançamento
@@ -561,3 +758,22 @@ class ServicoLivroCaixa:
             resumo = cartoes.resumir(cartao, regras.saldo_da_conta(cartao, somas), lancamentos, hoje)
             resultado.append((cartao, resumo, relatorios.faturas_comprometidas(cartao, lancamentos, atual)))
         return resultado
+
+
+@dataclass(frozen=True)
+class _LinhaAImportar:
+    """Uma linha do extrato pronta para virar lançamento: a chave de
+    idempotência, a data com que entra (na fatura do cartão, a parcela pode
+    mudar de data, ver parcelamento.posicionar) e a categoria escolhida."""
+
+    linha: importacao.LinhaDoExtrato
+    chave: str
+    data: date
+    categoria_id: str
+
+
+def _campos_da_parcela(plano: parcelamento.PlanoDaLinha | None, numero: int | None) -> dict:
+    """Os campos que ligam o lançamento à compra parcelada do plano."""
+    if plano is None:
+        return {}
+    return {"compra_id": plano.compra_id, "parcela": numero, "parcelas": plano.total, "chave_parcelamento": plano.chave}

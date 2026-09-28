@@ -258,6 +258,8 @@ def test_simular_mostra_o_que_entraria_sem_gravar(ana):
         "categoria_id": ana.categorias["Outras receitas"],
         "lancamento_id": None,
         "erro": None,
+        "fatura": None,
+        "observacao": None,
     }
     assert ana.get("/lancamentos").json() == []
     assert ana.saldos() == {"Corrente": 10000}

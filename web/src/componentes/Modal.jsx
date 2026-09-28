@@ -8,6 +8,8 @@ import { TEMPO_DE_SAIDA } from './flutuante';
 // existe com a janela aberta (e durante a animação de saída, para a janela
 // não sumir vazia), e cada abertura começa do zero.
 // ocupado (salvando, importando) trava o Esc e o botão de fechar.
+// O foco vai para o campo marcado com data-foco-inicial (o nome, a
+// descrição); sem ele, fica o padrão do <dialog>: o primeiro controle.
 export default function Modal({ aberta, titulo, descricao, aoFechar, ocupado = false, largura = 'normal', children }) {
   const dialogo = useRef(null);
   const idDoTitulo = useId();
@@ -34,6 +36,7 @@ export default function Modal({ aberta, titulo, descricao, aoFechar, ocupado = f
     const elemento = dialogo.current;
     if (aberta && !elemento.open) {
       elemento.showModal();
+      elemento.querySelector('[data-foco-inicial]')?.focus();
     } else if (!aberta && elemento.open) {
       elemento.close();
     }

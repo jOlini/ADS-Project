@@ -19,8 +19,9 @@ const textoDoRacha = (pessoas) => pessoas.map((parte) => `${parte.pessoa} ${form
 
 // Os dias do extrato (agruparPorDia) com as linhas de cada um. mostrarSaldo
 // desliga o "Saldo do dia" quando um filtro ou a busca esconde linhas.
-// acoes(linha), se vier, desenha o menu de ações no fim da linha.
-export default function Extrato({ dias, mostrarSaldo = true, acoes }) {
+// acoes(linha), se vier, desenha o menu de ações no fim da linha. selecao
+// (useSelecao), se vier, põe a caixa de marcar no começo de cada linha.
+export default function Extrato({ dias, mostrarSaldo = true, acoes, selecao }) {
   return dias.map((dia) => (
     <div key={dia.data}>
       <p className="dia">
@@ -29,16 +30,33 @@ export default function Extrato({ dias, mostrarSaldo = true, acoes }) {
       </p>
       {dia.lancamentos.map((lancamento) => (
         <article
-          className={`lancamento${acoes ? ' com-acoes' : ''}${lancamento.estornado ? ' estornado' : ''}`}
+          className={[
+            'lancamento',
+            acoes ? 'com-acoes' : '',
+            selecao ? 'com-selecao' : '',
+            selecao?.marcado(lancamento.id) ? 'marcado' : '',
+            lancamento.estornado ? 'estornado' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
           key={lancamento.id ?? `${lancamento.data}-${lancamento.descricao}`}
         >
+          {selecao && (
+            <input
+              type="checkbox"
+              className="marcar-linha"
+              checked={selecao.marcado(lancamento.id)}
+              onChange={() => selecao.alternar(lancamento.id)}
+              aria-label={`Selecionar ${lancamento.descricao}`}
+            />
+          )}
           <span className="marca-da-categoria" style={{ '--cor-da-categoria': corDoLancamento(lancamento) }} aria-hidden="true">
             <Icone nome={iconeDaLinha(lancamento, lancamento.cor ?? COR_DA_CATEGORIA[lancamento.categoria])} tamanho={16} />
           </span>
           <span className="descricao">
             <b>{lancamento.descricao}</b>
             <small>
-              {[lancamento.categoria, lancamento.conta].filter(Boolean).join(' · ')}
+              {[lancamento.categoria, lancamento.conta, lancamento.meio].filter(Boolean).join(' · ')}
               {lancamento.estornado && <span className="etiqueta">Estornado</span>}
             </small>
             {lancamento.pessoas?.length > 0 && (

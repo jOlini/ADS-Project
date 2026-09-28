@@ -658,3 +658,231 @@ button.item-do-menu.perigo > .icone {
 .limite-de-erro .acoes-do-formulario {
   justify-content: flex-start;
 }
+
+/* -------------------------------------------------------- Seleção em lote */
+
+/* Faixa no topo de uma lista: a caixa "Selecionar todos", a contagem e as
+   ações. Fica discreta sem nada marcado e ganha o tom da marca com algo
+   marcado, para a pessoa ver que há uma seleção valendo. */
+.barra-de-selecao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-3) var(--espaco-6);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--espaco-3) var(--espaco-10);
+  border-bottom: var(--borda);
+  background: var(--fundo);
+  font-size: var(--fonte-apoio);
+  transition: background-color var(--transicao);
+}
+
+.barra-de-selecao.com-marcados {
+  background: var(--fundo-marcado);
+}
+
+.marcar-todos {
+  display: inline-flex;
+  gap: var(--espaco-5);
+  align-items: center;
+  min-height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-3);
+  margin-left: calc(var(--espaco-3) * -1);
+  border-radius: var(--raio-pequeno);
+  color: var(--suave);
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color var(--transicao), color var(--transicao);
+}
+
+.marcar-todos:hover {
+  color: var(--texto);
+  background: var(--fundo-ao-passar);
+}
+
+.com-marcados .marcar-todos {
+  color: var(--texto);
+}
+
+/* As ações andam juntas: numa coluna estreita, o grupo inteiro desce para
+   a linha de baixo, em vez de um botão por linha. */
+.acoes-da-selecao {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--espaco-2);
+  margin-left: auto;
+}
+
+.marcar-todos input,
+input.marcar-linha,
+input.marcar-cartao {
+  width: var(--tamanho-caixa-de-marcar);
+  height: var(--tamanho-caixa-de-marcar);
+  margin: 0;
+}
+
+/* Ação destrutiva que ainda pede confirmação: texto vermelho, fundo só sob
+   o ponteiro. O vermelho cheio fica para o botão do diálogo. */
+button.perigo-discreto {
+  min-height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-5);
+  color: var(--erro);
+  background: transparent;
+  border-color: transparent;
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-semi);
+  white-space: nowrap;
+}
+
+button.perigo-discreto:hover:not(:disabled) {
+  background: var(--perigo-suave);
+  border-color: color-mix(in srgb, var(--erro) 30%, transparent);
+}
+
+@media (max-width: 560px) {
+  .barra-de-selecao {
+    padding: var(--espaco-3) var(--espaco-6);
+  }
+
+  .acoes-da-selecao {
+    flex-shrink: 1;
+    flex-wrap: wrap;
+    margin-left: 0;
+  }
+}
+
+/* ------------------------------------------------ Menu com texto ("Novo") */
+
+button.botao-do-menu {
+  gap: var(--espaco-3);
+}
+
+button.botao-do-menu > .icone:last-child {
+  margin-left: var(--espaco-1);
+  transition: transform var(--transicao);
+}
+
+button.botao-do-menu[aria-expanded='true'] > .icone:last-child {
+  transform: rotate(180deg);
+}
+
+/* ------------------------------------------------------ Escolha de cor */
+
+/* Grupo de rádios com a amostra da cor e o nome ao lado. */
+.seletor-de-cor {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.seletor-de-cor legend {
+  margin-bottom: var(--espaco-4);
+  padding: 0;
+}
+
+.amostras-de-cor {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--espaco-3);
+}
+
+.amostra-de-cor {
+  --cor-da-amostra: var(--cartao-grafite);
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  min-width: 0;
+  min-height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-4);
+  border: var(--borda);
+  border-radius: var(--raio-pequeno);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-medio);
+  cursor: pointer;
+  transition: border-color var(--transicao), background-color var(--transicao);
+}
+
+.amostra-de-cor:hover {
+  border-color: var(--linha-forte);
+  background: var(--fundo-ao-passar);
+}
+
+.amostra-de-cor:has(input:checked) {
+  border-color: var(--marca);
+  background: var(--marca-suave);
+}
+
+.amostra-de-cor:has(input:focus-visible) {
+  outline: var(--espessura-do-foco) solid var(--marca);
+  outline-offset: var(--afastamento-do-foco);
+}
+
+/* O rádio fica invisível mas focável: a amostra inteira é o controle. */
+.amostra-de-cor input {
+  position: absolute;
+  opacity: 0;
+  width: var(--espessura);
+  height: var(--espessura);
+}
+
+.amostra-de-cor .pastilha {
+  flex: none;
+  width: var(--espaco-8);
+  height: var(--espaco-8);
+  border-radius: var(--raio-mini);
+  background: linear-gradient(135deg, var(--cor-da-amostra), color-mix(in srgb, var(--cor-da-amostra) 70%, #000));
+}
+
+.amostra-de-cor.cor-azul,
+.cor-azul {
+  --cor-da-amostra: var(--cartao-azul);
+}
+
+.amostra-de-cor.cor-roxo,
+.cor-roxo {
+  --cor-da-amostra: var(--cartao-roxo);
+}
+
+.amostra-de-cor.cor-verde,
+.cor-verde {
+  --cor-da-amostra: var(--cartao-verde);
+}
+
+.amostra-de-cor.cor-vinho,
+.cor-vinho {
+  --cor-da-amostra: var(--cartao-vinho);
+}
+
+.amostra-de-cor.cor-laranja,
+.cor-laranja {
+  --cor-da-amostra: var(--cartao-laranja);
+}
+
+.amostra-de-cor.cor-dourado,
+.cor-dourado {
+  --cor-da-amostra: var(--cartao-dourado);
+}
+
+.amostra-de-cor.cor-prata,
+.cor-prata {
+  --cor-da-amostra: var(--cartao-prata);
+}
+
+.cor-grafite {
+  --cor-da-amostra: var(--cartao-grafite);
+}
+
+@media (max-width: 560px) {
+  .amostras-de-cor {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Meio do lançamento: abas que quebram a linha no celular. */
+.abas.meios {
+  flex-wrap: wrap;
+}

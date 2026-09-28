@@ -1,6 +1,6 @@
 // Testes das contas do resumo: funções puras, sem Firebase e sem navegador.
 import { describe, expect, it } from 'vitest';
-import { agruparPorDia, filtrarDias, gastoPorCategoria, saldoAntesDe, somarMes, usoDaRenda } from './resumo';
+import { agruparPorDia, filtrarDias, gastoPorCategoria, saldoAntesDe, somarMes, somarPorOrigem, usoDaRenda } from './resumo';
 
 // Dados fictícios, em centavos: nenhum dado pessoal real entra no repositório público.
 const LANCAMENTOS = [
@@ -133,5 +133,26 @@ describe('saldoAntesDe', () => {
     // Hoje 100000; depois do mês vieram +680000, −185000 e uma transferência.
     expect(saldoAntesDe([LANCAMENTOS[0], LANCAMENTOS[1], LANCAMENTOS[2]], 100000)).toBe(-395000);
     expect(saldoAntesDe([], 100000)).toBe(100000);
+  });
+});
+
+describe('somarPorOrigem', () => {
+  const MES = [
+    { data: '2026-09-05', categoria: 'Salário', valor: 680000, tipo: 'receita', noCartao: false },
+    { data: '2026-09-06', categoria: 'Mercado', valor: -20000, tipo: 'despesa', noCartao: false },
+    { data: '2026-09-07', categoria: 'Lazer', valor: -15000, tipo: 'despesa', noCartao: true },
+    { data: '2026-09-08', categoria: 'Lazer', valor: 5000, tipo: 'receita', noCartao: true },
+    { data: '2026-09-10', categoria: 'Pagamento de fatura', valor: -40000, tipo: 'pagamento', noCartao: false },
+    { data: '2026-09-11', categoria: 'Transferência', valor: -10000, tipo: 'transferencia', noCartao: false },
+  ];
+
+  it('separa o que saiu à vista do que foi para a fatura, sem contar o pagamento duas vezes', () => {
+    expect(somarPorOrigem(MES)).toEqual({ entradas: 680000, aVista: 20000, noCredito: 10000, faturasPagas: 40000, sobra: 650000 });
+  });
+
+  it('estorno de uma compra no cartão diminui o crédito do mês', () => {
+    const estorno = { data: '2026-09-12', categoria: 'Lazer', valor: 15000, tipo: 'despesa', noCartao: true, estorno: true };
+
+    expect(somarPorOrigem([MES[2], estorno]).noCredito).toBe(0);
   });
 });

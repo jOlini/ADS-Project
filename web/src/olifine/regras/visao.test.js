@@ -15,7 +15,7 @@ describe('montarVisao', () => {
   });
 
   it('soma o mês e compara com o mês anterior do relatório', () => {
-    expect(visao.totais).toEqual({ entradas: 735000, saidas: 357607, sobra: 377393 });
+    expect(visao.totais).toEqual({ entradas: 735000, saidas: 357607, sobra: 377393, aVista: 357607, noCredito: 0 });
     expect(visao.variacao).toEqual({ saldo: 12, receitas: 14, despesas: -8 });
   });
 
@@ -39,6 +39,18 @@ describe('montarVisao', () => {
     expect(visao.series['30d'].at(-1).saldo).toBe(SALDO_DE_EXEMPLO);
     expect(visao.series['12m']).toHaveLength(12);
     expect(visao.series['6m'][0].data).toBe('2026-04');
+  });
+
+  it('separa as despesas à vista das compras no crédito, e o estorno na fatura desconta do crédito', () => {
+    const linhas = [
+      { data: '2026-09-05', categoria: 'Salário', valor: 500000, tipo: 'receita', noCartao: false },
+      { data: '2026-09-06', categoria: 'Mercado', valor: -20000, tipo: 'despesa', noCartao: false },
+      { data: '2026-09-07', categoria: 'Lazer', valor: -15000, tipo: 'despesa', noCartao: true },
+      { data: '2026-09-08', categoria: 'Lazer', valor: 5000, tipo: 'despesa', noCartao: true, estorno: true },
+    ];
+    const comCartao = montarVisao({ linhasDasContas: [], linhasDoMes: linhas, linhasRecentes: [], saldo: 0, meses: null, hoje: HOJE });
+
+    expect(comCartao.totais).toEqual({ entradas: 500000, saidas: 30000, sobra: 470000, aVista: 20000, noCredito: 10000 });
   });
 
   it('sem relatório, não compara nem mostra meses', () => {

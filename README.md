@@ -25,8 +25,9 @@ abre um menu. Detalhes em [Como executar](#como-executar).
 
 - **Clareza em vez de planilha.** A Visão geral junta saldo, receitas e despesas do mês comparadas ao anterior,
   evolução do saldo e gasto por categoria. Cada número mostra de onde veio, lançamento por lançamento.
-- **Do seu jeito, sem burocracia.** Contas, cartões de crédito com fatura e parcelas, categorias, racha entre
-  pessoas e importação do extrato do banco em CSV (vários formatos, sem duplicar).
+- **Do seu jeito, sem burocracia.** Contas, carteira de cartões de crédito com fatura e parcelas, categorias, racha
+  entre pessoas, edição e remoção em lote e importação do extrato do banco em CSV (vários formatos, sem duplicar;
+  na fatura do cartão, a compra "03/12" já gera as parcelas das próximas faturas).
 - **Metas que dão vontade de cumprir.** Cada meta é uma árvore: cada aporte rega, ela brota, cresce e, completa,
   dá maçãs. O plano mensal diz quanto guardar para chegar lá no prazo.
 - **Privacidade e segurança desde o início.** Conta com e-mail confirmado, sessão que termina ao fechar o
@@ -483,13 +484,13 @@ observador.
 | API | `api/tests/test_emails.py` e `test_emails_rotas.py` | E-mails da conta: modelos (link e key escapados), Resend, SMTP só com criptografia, pasta, conta de serviço e código do Firebase sem rede, rotas `/conta` com `202` igual com e sem conta, `429`, `503` sem provedor e log sem o endereço |
 | API | `api/tests/test_producao.py` | `AMBIENTE=producao`: recusa exemplo, CORS inseguro, MongoDB sem senha e `APP_URL` sem HTTPS; segredos em arquivo; Swagger fora do ar; `/saude` |
 | API | `api/tests/test_monitoramento.py` | Alertas no Discord: canal certo, repetição a cada 15 minutos, sem menção, falha do Discord que não afeta a API, força bruta e rajada de `401` sem o e-mail nem o token, `500` sem a mensagem da exceção, e-mail que não saiu, cota de e-mails, resumo por rota e webhook fora do Discord recusado sem aparecer no erro |
-| API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, rotas e isolamento entre clientes, importação de CSV de vários bancos, racha, exclusão, cartão de crédito (fatura, parcelas, pagamento) e relatórios |
+| API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, edição, rotas e isolamento entre clientes, importação de CSV de vários bancos, racha, exclusão (uma e em lote), cartão de crédito (fatura, parcelas, pagamento, parcelas geradas da fatura importada) e relatórios |
 | Front-end | `web/src/regras/tentativas.test.js` | Tentativas de login: contagem por e-mail, bloqueio na quinta, janela de 15 minutos, o que conta como senha errada e a chave sem o e-mail em texto |
 | Front-end | `web/src/regras/dadosLocais.test.js` e `servicos/dadosLocais.test.js` | O que o logout apaga do navegador (metas, tentativas, sessão) e o que fica (tema e dados de outros sites) |
 | Front-end | `web/src/regras/sessao.test.js` e `servicos/contas.test.js` | Área logada só com sessão e e-mail confirmado; cadastro no Firebase com o link de confirmação, logout e "Já confirmei" com o SDK simulado |
 | Front-end | `web/src/regras/acaoDaConta.test.js` e `servicos/emailsDaConta.test.js` | Links dos e-mails: código no fragmento ou na consulta, modo do Firebase para cada página, senha nova repetida, e quando a API manda o e-mail ou o Firebase assume |
 | Front-end | `web/src/regras/tema.test.js` | Tema salvo ou do sistema e alternância |
-| Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, importação, racha, busca, calendário, seletor, cartões e relatórios |
+| Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |
 | Front-end | `web/src/servicos/livroCaixa.test.js` e `enderecoDaApi.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar, token que não renova e endereço pela rede local |
 | Front-end | `web/src/olifine/regras/*.test.js` | OliFine: tendência, séries do gráfico de saldo, Visão geral, metas, a árvore que cresce e o simulador de orçamento da landing |
 | Front-end | `web/src/componentes/*.test.js` | Error Boundary, avisos (toasts) e todo nome de ícone usado nas telas com desenho na família própria |
@@ -591,18 +592,23 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
 **Livro-caixa (só local, com a API no ar).** Com `VITE_API_URL=http://localhost:8081` no `web/.env`,
 `FIREBASE_PROJECT_ID` e `CORS_ORIGENS` no `api/.env`, a API rodando e uma conta com o e-mail confirmado:
 
-1. Em **Contas & Cartões**, crie "Conta corrente" com saldo de hoje `1.000,00` e "Poupança" com `0`.
+1. Em **Contas & Cartões**, pelo botão **Nova conta** (abre um modal), crie "Conta corrente" com saldo de hoje
+   `1.000,00` e "Poupança" com `0`. As contas bancárias e a carteira de cartões ficam em seções separadas.
 2. Em **Lançamentos**, o extrato ocupa a tela e só a lista rola. Pelo botão **+ Novo lançamento**, lance uma
-   receita (`Salário`, `3.000,00`), uma despesa (`Mercado`, `214,37`) e uma transferência de `500,00` da conta
-   corrente para a poupança. O extrato mostra cada dia com o saldo de todas as contas; a transferência não muda o
+   receita (`Salário`, `3.000,00`), uma despesa (`Mercado`, `214,37`, meio **Débito**) e uma transferência de
+   `500,00` da conta corrente para a poupança. O extrato mostra cada dia com o saldo de todas as contas; a transferência não muda o
    total.
 3. Lance uma despesa `Churrasco` de `300,00` e, em **Dividir com pessoas**, adicione Ana, Bruno e Carla com
    `100,00`, `150,00` e `50,00`. Com as partes passando de `300,00`, o formulário não deixa lançar.
 4. Na busca do extrato, digite `bruno` ou `300`: ficam só os lançamentos com a pessoa ou o valor.
 5. No menu **⋯** da despesa `Mercado`, **Estorne**: entra um lançamento de `+ R$ 214,37` com a data de hoje e o
    original fica marcado como "Estornado". Lance algo errado e, no mesmo menu, **Exclua**: ele some do extrato e
-   do saldo.
-6. Em **Categorias**, crie, renomeie ou desative uma categoria: desativada, ela sai do formulário de lançamento.
+   do saldo. **Editar**, no mesmo menu, corrige descrição, valor, data, categoria e meio. Marque duas linhas pelas
+   caixas da esquerda e use **Remover selecionados** (ou **Remover todos**, para tudo o que está na tela): a
+   confirmação diz o que sai junto.
+6. Na **Visão geral**, as despesas do mês aparecem separadas em à vista e no crédito, e o **+ Novo** do topo
+   escolhe entre lançamento, compra no crédito, conta e cartão, cada um no seu modal. Em **Categorias**, crie,
+   renomeie, desative ou remova uma categoria (a que já tem lançamentos não sai: o aviso manda desativar).
 7. Em **Importar CSV**, escolha um CSV com as colunas Data, Descrição e Valor (exemplo fictício abaixo), a conta
    e as categorias, e clique em **Continuar**. **Importe** e depois confira o mesmo arquivo de novo: nenhum
    lançamento é novo, todos aparecem como "Já importada".
@@ -615,10 +621,14 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
    12/09/2026;Padaria;-12,50
    ```
 
-8. Crie o cartão "Cartão Roxo" com limite `5.000,00`, fechamento no dia 3 e vencimento no dia 10. Na tela dele,
+8. Em **Contas & Cartões**, pelo botão **Novo cartão**, crie "Cartão Roxo" com limite `5.000,00`, fechamento no
+   dia 3, vencimento no dia 10 e a cor roxa: ele aparece na carteira desenhado como o plástico. Na tela dele,
    lance `Geladeira` de `3.000,00` em 10x: a primeira parcela entra na fatura atual, as outras em **Parcelamentos
    futuros**. Em **Pagar fatura**, escolha a conta corrente: depois de pagar, o limite volta.
-9. Em **Relatórios**, veja receitas e despesas por mês e o gasto por categoria em 3, 6 ou 12 meses.
+9. **Importar fatura**, na tela do cartão, traz a fatura do banco em CSV: uma linha `LOJA X 01/03` gera as
+   parcelas 2 e 3 nas próximas faturas, e a fatura seguinte, com `LOJA X 02/03`, reconhece a parcela que já
+   estava lá e não duplica.
+10. Em **Relatórios**, veja receitas e despesas por mês e o gasto por categoria em 3, 6 ou 12 meses.
 
 ---
 
@@ -659,12 +669,13 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de seguran�
 | `POST` | `/conta/nova-senha` | Mandar o link para criar uma senha nova (resposta igual com e sem conta) | Público | `202 Accepted` |
 | `GET` | `/saude` | Verificação de funcionamento (healthcheck) | Público | `200 OK` |
 | `GET` | `/espacos` | Listar os espaços do cliente (cria o pessoal no primeiro acesso) | Cliente com e-mail confirmado (ID token do Firebase) | `200 OK` |
-| `GET`, `POST`, `PUT` | `/espacos/{id}/contas` e `/espacos/{id}/categorias` | Contas (com saldo), cartões de crédito e categorias | Membro do espaço | `200 OK` / `201 Created` |
-| `GET` | `/espacos/{id}/cartoes`, `/cartoes/{id}` e `/cartoes/{id}/faturas/{AAAA-MM}` | Painel do cartão e extrato de uma fatura | Membro do espaço | `200 OK` |
+| `GET`, `POST`, `PUT`, `DELETE` | `/espacos/{id}/contas` e `/espacos/{id}/categorias` | Contas (com saldo), cartões de crédito e categorias | Membro do espaço | `200 OK` / `201 Created` / `204 No Content` |
+| `GET`, `DELETE` | `/espacos/{id}/cartoes`, `/cartoes/{id}`, `/cartoes/{id}/faturas` e `/faturas/{AAAA-MM}` | Painel do cartão, lista de faturas, extrato e exclusão de uma fatura | Membro do espaço | `200 OK` |
 | `POST` | `/espacos/{id}/cartoes/{id}/compras` e `/pagamentos` | Compra no cartão (à vista ou parcelada) e pagamento da fatura | Membro do espaço | `201 Created` |
 | `GET`, `POST` | `/espacos/{id}/lancamentos` | Listar e lançar receita, despesa ou transferência | Membro do espaço | `200 OK` / `201 Created` |
 | `POST` | `/espacos/{id}/lancamentos/{id}/estorno` | Estornar lançamento | Membro do espaço | `201 Created` |
-| `DELETE` | `/espacos/{id}/lancamentos/{id}` | Excluir lançamento (e o estorno dele) | Membro do espaço | `204 No Content` |
+| `PATCH`, `DELETE` | `/espacos/{id}/lancamentos/{id}` | Editar lançamento; excluir (e o estorno dele) | Membro do espaço | `200 OK` / `204 No Content` |
+| `POST` | `/espacos/{id}/lancamentos/exclusao-em-lote` | Excluir vários lançamentos de uma vez | Membro do espaço | `200 OK` |
 | `GET` | `/espacos/{id}/pessoas` | Nomes já usados em divisões | Membro do espaço | `200 OK` |
 | `POST` | `/espacos/{id}/importacoes` e `/importacoes/estrutura` | Importar extrato em CSV; mostrar o começo do arquivo e as colunas | Membro do espaço | `200 OK` |
 | `GET` | `/espacos/{id}/relatorios/mensal`, `/relatorios/categorias` e `/relatorios/cartoes` | Relatórios: receita × despesa e saldo por mês, gasto por categoria e compromisso nos cartões | Membro do espaço | `200 OK` |

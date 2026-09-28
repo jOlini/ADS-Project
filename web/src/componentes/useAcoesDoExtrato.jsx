@@ -1,15 +1,28 @@
 import { useState } from 'react';
 import Confirmacao from './Confirmacao';
+import FormularioDeEdicao from './FormularioDeEdicao';
+import Modal from './Modal';
 import { useToast } from './toast/useToast';
 import { formatarBRL } from '../regras/dinheiro';
 import { formatarData } from '../regras/datas';
-import { estornar, excluir } from '../servicos/livroCaixa';
+import { estornar, excluir, excluirVarios } from '../servicos/livroCaixa';
 
-// O que cada ação faz, dito no próprio menu da linha: estornar deixa rastro,
-// excluir não. A parcela de uma compra no cartão não se estorna sozinha:
-// excluir leva a compra inteira (a API faz o mesmo).
-function itensDaLinha(linha, { aoEstornar, aoExcluir }) {
-  const itens = [];
+const contar = (quantidade, singular, plural) => `${quantidade} ${quantidade === 1 ? singular : plural}`;
+
+// O que cada ação faz, dito no próprio menu da linha: editar muda o
+// lançamento, estornar deixa rastro, excluir não. A parcela de uma compra no
+// cartão não se estorna sozinha: excluir leva a compra inteira (a API faz o
+// mesmo).
+function itensDaLinha(linha, { aoEditar, aoEstornar, aoExcluir }) {
+  const itens = [
+    {
+      id: 'editar',
+      rotulo: 'Editar',
+      descricao: linha.parcela ? 'Renomeia ou muda a categoria da compra inteira.' : 'Renomeia ou corrige valor, data, categoria e meio.',
+      icone: 'editar',
+      aoEscolher: () => aoEditar(linha),
+    },
+  ];
   if (!linha.estorno && !linha.estornado && !linha.parcela) {
     itens.push({
       id: 'estornar',
@@ -36,13 +49,38 @@ function itensDaLinha(linha, { aoEstornar, aoExcluir }) {
   return itens;
 }
 
-// Estornar e excluir uma linha do extrato (da conta ou da fatura do cartão),
-// com a confirmação de cada um. Devolve os itens do menu de uma linha e os
-// diálogos, que a página desenha uma vez. aoMudar recarrega a tela.
-export function useAcoesDoExtrato({ espacoId, aoMudar }) {
+// O que sai junto numa remoção em lote, dito antes de confirmar.
+function consequenciasDoLote(linhas) {
+  const avisos = [];
+  const parcelas = linhas.filter((linha) => linha.parcela).length;
+  const pagamentos = linhas.filter((linha) => linha.tipo === 'pagamento').length;
+  const estornados = linhas.filter((linha) => linha.estornado).length;
+  if (parcelas) {
+    avisos.push('Compra parcelada sai inteira: as parcelas das outras faturas também, e o limite ocupado por elas volta.');
+  }
+  if (pagamentos) {
+    avisos.push(
+      `${contar(pagamentos, 'pagamento de fatura sai', 'pagamentos de fatura saem')} da conta e da fatura: o saldo da conta volta, e o valor volta a ocupar o limite do cartão.`,
+    );
+  }
+  if (estornados) {
+    avisos.push('O estorno de cada lançamento estornado sai junto.');
+  }
+  return avisos;
+}
+
+// Editar, estornar e excluir linhas do extrato (da conta ou da fatura do
+// cartão), uma por uma pelo menu ou em lote pela seleção, com a confirmação
+// de cada ação. Devolve os itens do menu de uma linha, removerEmLote(linhas)
+// e os diálogos, que a página desenha uma vez. aoMudar recarrega a tela;
+// removerEmLote chama aoConcluir (limpar a seleção) quando dá certo.
+export function useAcoesDoExtrato({ espacoId, categorias = [], aoMudar }) {
   const toast = useToast();
+  const [aEditar, setAEditar] = useState(null);
+  const [editando, setEditando] = useState(false);
   const [aEstornar, setAEstornar] = useState(null);
   const [aExcluir, setAExcluir] = useState(null);
+  const [lote, setLote] = useState(null);
   const [ocupado, setOcupado] = useState(false);
 
   async function confirmarEstorno() {
@@ -79,10 +117,64 @@ export function useAcoesDoExtrato({ espacoId, aoMudar }) {
     }
   }
 
-  const itens = (linha) => itensDaLinha(linha, { aoEstornar: setAEstornar, aoExcluir: setAExcluir });
+  async function confirmarLote() {
+    setOcupado(true);
+    try {
+      const { excluidos } = await excluirVarios(
+        espacoId,
+        lote.linhas.map((linha) => linha.id),
+      );
+      const extras = excluidos - lote.linhas.length;
+      const detalhe =
+        extras > 0
+          ? `Inclui ${contar(extras, 'lançamento ligado', 'lançamentos ligados')} aos escolhidos (parcelas e estornos).`
+          : 'Saíram do extrato e do saldo.';
+      toast.sucesso(detalhe, { titulo: contar(excluidos, 'lançamento excluído', 'lançamentos excluídos') });
+      lote.aoConcluir?.();
+      setLote(null);
+      aoMudar();
+    } catch (erro) {
+      toast.erro(erro.message, { titulo: 'Lançamentos não excluídos' });
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  function aposEditar(salvo) {
+    setAEditar(null);
+    setEditando(false);
+    if (salvo) {
+      aoMudar();
+    }
+  }
+
+  const itens = (linha) => itensDaLinha(linha, { aoEditar: setAEditar, aoEstornar: setAEstornar, aoExcluir: setAExcluir });
+
+  // linhas: as linhas do extrato a remover (marcadas ou todas as da tela).
+  const removerEmLote = (linhas, aoConcluir) => {
+    if (linhas.length > 0) {
+      setLote({ linhas, aoConcluir });
+    }
+  };
+
+  const total = lote ? lote.linhas.reduce((soma, linha) => soma + Math.abs(linha.valor), 0) : 0;
 
   const dialogos = (
     <>
+      <Modal aberta={Boolean(aEditar)} titulo="Editar lançamento" descricao={aEditar?.descricao}
+        aoFechar={() => aposEditar(null)} ocupado={editando}>
+        {aEditar && (
+          <FormularioDeEdicao
+            espacoId={espacoId}
+            linha={aEditar}
+            categorias={categorias}
+            aoSalvar={aposEditar}
+            aoCancelar={() => aposEditar(null)}
+            aoMudarOcupado={setEditando}
+          />
+        )}
+      </Modal>
+
       <Confirmacao
         aberta={Boolean(aEstornar)}
         titulo={aEstornar ? `Estornar "${aEstornar.descricao}"?` : ''}
@@ -126,8 +218,30 @@ export function useAcoesDoExtrato({ espacoId, aoMudar }) {
           </p>
         )}
       </Confirmacao>
+
+      <Confirmacao
+        aberta={Boolean(lote)}
+        titulo={lote ? `Remover ${contar(lote.linhas.length, 'lançamento', 'lançamentos')}?` : ''}
+        rotuloDeConfirmar="Remover"
+        perigo
+        ocupado={ocupado}
+        aoConfirmar={confirmarLote}
+        aoCancelar={() => !ocupado && setLote(null)}
+      >
+        {lote && (
+          <>
+            <p>
+              {lote.linhas.length === 1 ? 'Ele some' : 'Eles somem'} do extrato e do saldo ({formatarBRL(total)} ao todo), sem
+              deixar registro. Não há como desfazer.
+            </p>
+            {consequenciasDoLote(lote.linhas).map((aviso) => (
+              <p key={aviso}>{aviso}</p>
+            ))}
+          </>
+        )}
+      </Confirmacao>
     </>
   );
 
-  return { itens, dialogos };
+  return { itens, removerEmLote, dialogos };
 }
