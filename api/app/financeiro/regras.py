@@ -12,12 +12,16 @@ gravado e atualizado: é o saldo inicial mais a soma das partidas dela. Assim
 nenhum saldo fica "descolado" do histórico que o explica.
 """
 
+from dataclasses import replace
+
 from app.financeiro.importacao import normalizar
 from app.financeiro.modelos import (
     AtualizacaoConta,
+    AtualizacaoLancamento,
     Categoria,
     Conta,
     CorCategoria,
+    Lancamento,
     NovaCompra,
     NovaConta,
     NovoLancamento,
@@ -45,6 +49,10 @@ CATEGORIAS_INICIAIS: list[tuple[str, TipoCategoria, CorCategoria]] = [
 OBRIGATORIO = "Campo obrigatório."
 CAMPOS_DO_CARTAO = ("limite_centavos", "dia_fechamento", "dia_vencimento")
 CARTAO_NAO_TRANSFERE = "Cartão de crédito não é origem de transferência. Para quitar a fatura, use Pagar fatura."
+COMPRA_PELO_CARTAO = "Compra no crédito entra na fatura do cartão (Nova compra), não no extrato das contas."
+EDICAO_VAZIA = "Informe o que mudar: descrição, data, valor, categoria ou meio."
+ESTORNADO_SO_RENOMEIA = "Lançamento estornado (ou estorno) só muda a descrição e o meio: o estorno espelha o original."
+PARCELA_SO_RENOMEIA = "Parcela de compra no cartão não muda data nem valor. Para isso, exclua a compra e lance de novo."
 
 
 def conferir_conta(dados: NovaConta | AtualizacaoConta, atual: Conta | None = None) -> dict[str, str]:
@@ -71,6 +79,8 @@ def conferir_conta(dados: NovaConta | AtualizacaoConta, atual: Conta | None = No
     # inicial não teria fatura nem data.
     if cartao and isinstance(dados, NovaConta) and dados.saldo_inicial_centavos != 0:
         erros["saldo_inicial_centavos"] = "O cartão começa sem dívida: importe a fatura ou lance as compras."
+    if not cartao and dados.cor is not None:
+        erros["cor"] = "Só cartão de crédito tem cor."
     return erros
 
 
@@ -140,6 +150,9 @@ def _conferir_contas_e_categoria(
             erros["conta_destino_id"] = erro
         return erros
 
+    # Lançamentos é só o dinheiro à vista das contas; o cartão tem a fatura.
+    if conta is not None and conta.cartao:
+        erros["conta_id"] = COMPRA_PELO_CARTAO
     if dados.conta_destino_id is not None:
         erros["conta_destino_id"] = "Só transferência tem conta de destino."
     if dados.categoria_id is None:
@@ -224,7 +237,57 @@ def _erro_da_categoria(categoria: Categoria | None, tipo: TipoCategoria) -> str 
     return None
 
 
-def montar_partidas(dados: NovoLancamento) -> list[Partida]:
+def conferir_edicao(
+    lancamento: Lancamento,
+    dados: AtualizacaoLancamento,
+    conta: Conta | None,
+    categoria: Categoria | None,
+) -> dict[str, str]:
+    """Erros por campo de uma edição (PATCH). Só contam os campos enviados.
+
+    - estorno e lançamento estornado só mudam a descrição e o meio: o estorno
+      é o espelho do original, e mudar um lado deixaria o outro errado;
+    - parcela de compra no cartão muda a descrição e a categoria (da compra
+      inteira), não a data nem o valor, que vêm do parcelamento;
+    - compra no cartão não tem meio (ela é o crédito);
+    - o novo valor não pode ficar abaixo das partes do racha."""
+    enviados = dados.model_fields_set
+    if not enviados:
+        return {"lancamento": EDICAO_VAZIA}
+    erros: dict[str, str] = {}
+    for campo in ("descricao", "data", "valor_centavos"):
+        if campo in enviados and getattr(dados, campo) is None:
+            erros[campo] = OBRIGATORIO
+    if lancamento.estorno_de or lancamento.estornado_por:
+        for campo in enviados & {"data", "valor_centavos", "categoria_id"}:
+            erros[campo] = ESTORNADO_SO_RENOMEIA
+    elif lancamento.compra_id:
+        for campo in enviados & {"data", "valor_centavos"}:
+            erros[campo] = PARCELA_SO_RENOMEIA
+    if "categoria_id" in enviados and "categoria_id" not in erros:
+        if lancamento.tipo == TipoLancamento.TRANSFERENCIA:
+            erros["categoria_id"] = "Transferência entre contas não tem categoria."
+        elif erro := _erro_da_categoria(categoria, TipoCategoria(lancamento.tipo.value)):
+            erros["categoria_id"] = erro
+    if dados.meio is not None and conta is not None and conta.cartao:
+        erros["meio"] = "Compra no cartão não tem meio de pagamento: ela entra na fatura."
+    novo_valor = dados.valor_centavos
+    if novo_valor and "valor_centavos" not in erros and sum(p.valor_centavos for p in lancamento.divisao) > novo_valor:
+        erros["valor_centavos"] = "As partes da divisão somam mais que o novo valor."
+    return erros
+
+
+def aplicar_edicao(lancamento: Lancamento, dados: AtualizacaoLancamento) -> Lancamento:
+    """O lançamento com os campos enviados já trocados (conferidos antes) e as
+    partidas remontadas: o novo valor e a nova categoria mudam os dois lados."""
+    campos = {campo: getattr(dados, campo) for campo in dados.model_fields_set}
+    editado = replace(lancamento, **campos)
+    if {"valor_centavos", "categoria_id"} & campos.keys():
+        editado.partidas = montar_partidas(editado)
+    return editado
+
+
+def montar_partidas(dados: NovoLancamento | Lancamento) -> list[Partida]:
     """As duas partidas de um lançamento já conferido (soma zero)."""
     valor = dados.valor_centavos
     if dados.tipo == TipoLancamento.RECEITA:

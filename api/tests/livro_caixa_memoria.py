@@ -62,6 +62,13 @@ class LivroCaixaMemoria:
         self.contas[conta.id] = replace(conta)
         return conta
 
+    def excluir_conta(self, espaco_id, id):
+        conta = self.contas.get(id)
+        if not conta or conta.espaco_id != espaco_id:
+            return False
+        del self.contas[id]
+        return True
+
     # --- Categorias ---
 
     def listar_categorias(self, espaco_id):
@@ -81,6 +88,16 @@ class LivroCaixaMemoria:
     def atualizar_categoria(self, categoria):
         self.categorias[categoria.id] = replace(categoria)
         return categoria
+
+    def excluir_categoria(self, espaco_id, id):
+        categoria = self.categorias.get(id)
+        if not categoria or categoria.espaco_id != espaco_id:
+            return False
+        del self.categorias[id]
+        return True
+
+    def contar_lancamentos_da_categoria(self, espaco_id, categoria_id):
+        return sum(1 for l in self.lancamentos.values() if l.espaco_id == espaco_id and l.categoria_id == categoria_id)
 
     # --- Lançamentos ---
 
@@ -111,6 +128,30 @@ class LivroCaixaMemoria:
         lancamento.id = str(ObjectId())
         self.lancamentos[lancamento.id] = replace(lancamento, estornado_por=None)
         return lancamento
+
+    def atualizar_lancamento(self, lancamento):
+        chave = lancamento.chave_importacao
+        if chave and any(
+            l.chave_importacao == chave and l.espaco_id == lancamento.espaco_id and l.id != lancamento.id
+            for l in self.lancamentos.values()
+        ):
+            raise LancamentoJaImportado()
+        self.lancamentos[lancamento.id] = replace(lancamento, estornado_por=None)
+        return lancamento
+
+    def listar_compra(self, espaco_id, compra_id):
+        parcelas = [l for l in self.lancamentos.values() if l.espaco_id == espaco_id and l.compra_id == compra_id]
+        return [replace(l) for l in sorted(parcelas, key=lambda l: l.parcela)]
+
+    def excluir_lancamentos_da_conta(self, espaco_id, conta_id):
+        ids = [
+            l.id
+            for l in self.lancamentos.values()
+            if l.espaco_id == espaco_id and any(p.conta_id == conta_id for p in l.partidas)
+        ]
+        for id in ids:
+            del self.lancamentos[id]
+        return len(ids)
 
     def excluir_lancamento(self, espaco_id, id):
         lancamento = self.lancamentos.get(id)

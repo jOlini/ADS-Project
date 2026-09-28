@@ -23,6 +23,8 @@ TAMANHO_MAXIMO_DO_CSV = 500_000
 MAXIMO_DE_PESSOAS = 20
 # Parcelas de uma compra no cartão de crédito (4 anos).
 MAXIMO_DE_PARCELAS = 48
+# Lançamentos numa exclusão em lote (o teto de uma consulta do extrato).
+MAXIMO_NA_EXCLUSAO = 1000
 
 
 class TipoEspaco(StrEnum):
@@ -43,6 +45,30 @@ class TipoConta(StrEnum):
     # Conta de dívida: compra no crédito deixa o saldo negativo (o que se
     # deve), e o pagamento da fatura é uma transferência de uma conta para ele.
     CARTAO_CREDITO = "CARTAO_CREDITO"
+
+
+class CorDoCartao(StrEnum):
+    """Cor do cartão na carteira da tela (Contas & Cartões), como o plástico
+    do cartão de verdade. Só enfeite: o nome do cartão está sempre escrito."""
+
+    GRAFITE = "grafite"
+    AZUL = "azul"
+    ROXO = "roxo"
+    VERDE = "verde"
+    VINHO = "vinho"
+    LARANJA = "laranja"
+    DOURADO = "dourado"
+    PRATA = "prata"
+
+
+class MeioDePagamento(StrEnum):
+    """Como o dinheiro saiu ou entrou na conta. Só movimentação à vista: a
+    compra no crédito não é um meio daqui, ela entra na fatura do cartão."""
+
+    PIX = "PIX"
+    DEBITO = "DEBITO"
+    DINHEIRO = "DINHEIRO"
+    TRANSFERENCIA = "TRANSFERENCIA"  # TED ou DOC
 
 
 class SituacaoDaFatura(StrEnum):
@@ -125,6 +151,7 @@ class Conta:
     limite_centavos: int | None = None
     dia_fechamento: int | None = None
     dia_vencimento: int | None = None
+    cor: CorDoCartao | None = None
     id: str | None = None
 
     @property
@@ -190,6 +217,7 @@ class Lancamento:
     compra_id: str | None = None
     parcela: int | None = None
     parcelas: int | None = None
+    meio: MeioDePagamento | None = None
     id: str | None = None
     # Calculado na leitura (id do estorno deste lançamento); não é gravado.
     estornado_por: str | None = field(default=None, compare=False)
@@ -234,8 +262,8 @@ DiaDoMes = Annotated[int, Field(strict=True, ge=1, le=31)]
 
 class NovaConta(Entrada):
     """Cartão de crédito (tipo CARTAO_CREDITO) pede limite e os dias de
-    fechamento e vencimento da fatura; as outras contas não os aceitam
-    (regras.conferir_conta)."""
+    fechamento e vencimento da fatura, e aceita a cor; as outras contas não
+    têm nada disso (regras.conferir_conta)."""
 
     nome: Nome
     tipo: TipoConta
@@ -245,6 +273,7 @@ class NovaConta(Entrada):
     limite_centavos: CentavosPositivos | None = None
     dia_fechamento: DiaDoMes | None = None
     dia_vencimento: DiaDoMes | None = None
+    cor: CorDoCartao | None = None
 
 
 class AtualizacaoConta(Entrada):
@@ -258,6 +287,7 @@ class AtualizacaoConta(Entrada):
     limite_centavos: CentavosPositivos | None = None
     dia_fechamento: DiaDoMes | None = None
     dia_vencimento: DiaDoMes | None = None
+    cor: CorDoCartao | None = None
 
 
 class NovaCategoria(Entrada):
@@ -286,7 +316,9 @@ class NovoLancamento(Entrada):
     regras.conferir_lancamento. As partidas são montadas pela API, nunca
     enviadas pelo cliente: assim a soma zero não depende de quem chama.
 
-    divisao (opcional, só receita e despesa) reparte o valor entre pessoas."""
+    divisao (opcional, só receita e despesa) reparte o valor entre pessoas.
+    meio (opcional) diz como o dinheiro se moveu: PIX, débito, dinheiro ou
+    transferência bancária. Compra no crédito não entra por aqui."""
 
     tipo: TipoLancamento
     descricao: Descricao
@@ -296,6 +328,26 @@ class NovoLancamento(Entrada):
     categoria_id: Identificador | None = None
     conta_destino_id: Identificador | None = None
     divisao: Annotated[list[NovaParte], Field(max_length=MAXIMO_DE_PESSOAS)] = []
+    meio: MeioDePagamento | None = None
+
+
+class AtualizacaoLancamento(Entrada):
+    """PATCH: só os campos enviados mudam. O tipo, a conta e a divisão não
+    mudam (para isso, exclua e lance de novo). As restrições de cada caso
+    (estorno, parcela de compra, compra no cartão) ficam em
+    regras.conferir_edicao. meio: null tira o meio do lançamento."""
+
+    descricao: Descricao | None = None
+    data: Data | None = None
+    valor_centavos: CentavosPositivos | None = None
+    categoria_id: Identificador | None = None
+    meio: MeioDePagamento | None = None
+
+
+class ExclusaoEmLote(Entrada):
+    """Lançamentos a excluir de uma vez (seleção do extrato ou da fatura)."""
+
+    ids: Annotated[list[Identificador], Field(min_length=1, max_length=MAXIMO_NA_EXCLUSAO)]
 
 
 class NovaCompra(Entrada):
@@ -405,6 +457,7 @@ class ContaResposta(BaseModel):
     limite_centavos: int | None
     dia_fechamento: int | None
     dia_vencimento: int | None
+    cor: CorDoCartao | None
 
     @classmethod
     def de(cls, conta: Conta, saldo_centavos: int) -> "ContaResposta":
@@ -419,6 +472,7 @@ class ContaResposta(BaseModel):
             limite_centavos=conta.limite_centavos,
             dia_fechamento=conta.dia_fechamento,
             dia_vencimento=conta.dia_vencimento,
+            cor=conta.cor,
         )
 
 
@@ -467,6 +521,7 @@ class LancamentoResposta(BaseModel):
     compra_id: str | None
     parcela: int | None
     parcelas: int | None
+    meio: MeioDePagamento | None
     criado_em: datetime
 
     @classmethod
@@ -494,8 +549,15 @@ class LancamentoResposta(BaseModel):
             compra_id=lancamento.compra_id,
             parcela=lancamento.parcela,
             parcelas=lancamento.parcelas,
+            meio=lancamento.meio,
             criado_em=lancamento.criado_em,
         )
+
+
+class ExclusaoResposta(BaseModel):
+    # Lançamentos que saíram do banco (cada parcela da mesma compra e cada
+    # estorno contam).
+    excluidos: int
 
 
 class PeriodoDaFaturaResposta(BaseModel):
@@ -527,6 +589,7 @@ class CartaoResposta(BaseModel):
     limite_centavos: int
     dia_fechamento: int
     dia_vencimento: int
+    cor: CorDoCartao
     # Saldo do cartão no livro-caixa: negativo é o que se deve.
     saldo_centavos: int
     # Quanto do limite está ocupado (todas as faturas e parcelas futuras).
@@ -549,6 +612,7 @@ class CartaoResposta(BaseModel):
             limite_centavos=cartao.limite_centavos,
             dia_fechamento=cartao.dia_fechamento,
             dia_vencimento=cartao.dia_vencimento,
+            cor=cartao.cor or CorDoCartao.GRAFITE,
             saldo_centavos=saldo_centavos,
             usado_centavos=resumo.usado,
             disponivel_centavos=resumo.disponivel,
@@ -568,6 +632,26 @@ class FaturaResposta(PeriodoDaFaturaResposta):
     # Pagamentos recebidos no período (quitam faturas, não mudam o total).
     pagamentos_centavos: int
     lancamentos: list[LancamentoResposta]
+
+
+class ResumoDaFaturaResposta(PeriodoDaFaturaResposta):
+    """Uma fatura na lista do cartão, sem os lançamentos."""
+
+    situacao: SituacaoDaFatura
+    total_centavos: int
+    pagamentos_centavos: int
+    # Compras e créditos do período (o pagamento não conta).
+    quantidade: int
+
+    @classmethod
+    def de(cls, resumo) -> "ResumoDaFaturaResposta":
+        return cls(
+            **PeriodoDaFaturaResposta.de(resumo.periodo).model_dump(),
+            situacao=resumo.situacao,
+            total_centavos=resumo.total,
+            pagamentos_centavos=resumo.pagamentos,
+            quantidade=resumo.quantidade,
+        )
 
 
 class LinhaImportadaResposta(BaseModel):

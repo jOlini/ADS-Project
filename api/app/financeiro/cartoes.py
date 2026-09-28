@@ -135,11 +135,14 @@ def cobranca(lancamento: Lancamento, cartao_id: str) -> int:
     return -sum(partida.valor_centavos for partida in lancamento.partidas if partida.conta_id == cartao_id)
 
 
+def eh_pagamento(lancamento: Lancamento, cartao_id: str) -> bool:
+    """Transferência de uma conta para este cartão (o "Pagar fatura")."""
+    return lancamento.tipo == TipoLancamento.TRANSFERENCIA and lancamento.conta_destino_id == cartao_id
+
+
 def pagamento(lancamento: Lancamento, cartao_id: str) -> int:
-    """Quanto o lançamento pagou deste cartão (transferência para ele)."""
-    if lancamento.tipo != TipoLancamento.TRANSFERENCIA or lancamento.conta_destino_id != cartao_id:
-        return 0
-    return lancamento.valor_centavos
+    """Quanto o lançamento pagou deste cartão."""
+    return lancamento.valor_centavos if eh_pagamento(lancamento, cartao_id) else 0
 
 
 def total_da_fatura(lancamentos: list[Lancamento], cartao_id: str, periodo: PeriodoDaFatura) -> int:
@@ -165,3 +168,32 @@ def resumir(cartao: Conta, saldo: int, lancamentos: list[Lancamento], hoje: date
         ultima_fechada=periodo_da_fatura(cartao, somar_meses(atual.referencia, -1)),
         parcelamentos_futuros=futuros,
     )
+
+
+@dataclass(frozen=True)
+class ResumoDaFatura:
+    periodo: PeriodoDaFatura
+    situacao: SituacaoDaFatura
+    total: int
+    pagamentos: int
+    # Compras e créditos do período (o pagamento não conta).
+    quantidade: int
+
+
+def resumir_faturas(cartao: Conta, lancamentos: list[Lancamento], hoje: date) -> list[ResumoDaFatura]:
+    """As faturas que têm algum lançamento, da mais nova para a mais antiga.
+    A fatura atual aparece sempre, mesmo vazia."""
+    atual = referencia_da_data(cartao, hoje)
+    grupos: dict[Referencia, list[Lancamento]] = {atual: []}
+    for lancamento in lancamentos:
+        grupos.setdefault(referencia_da_data(cartao, lancamento.data), []).append(lancamento)
+    return [
+        ResumoDaFatura(
+            periodo=periodo_da_fatura(cartao, referencia),
+            situacao=situacao_da_fatura(referencia, atual),
+            total=sum(cobranca(lancamento, cartao.id) for lancamento in grupos[referencia]),
+            pagamentos=sum(pagamento(lancamento, cartao.id) for lancamento in grupos[referencia]),
+            quantidade=sum(1 for lancamento in grupos[referencia] if lancamento.tipo != TipoLancamento.TRANSFERENCIA),
+        )
+        for referencia in sorted(grupos, reverse=True)
+    ]

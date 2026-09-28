@@ -21,8 +21,10 @@ from app.financeiro.modelos import (
     Categoria,
     Conta,
     CorCategoria,
+    CorDoCartao,
     Espaco,
     Lancamento,
+    MeioDePagamento,
     Membro,
     Papel,
     Parte,
@@ -62,6 +64,8 @@ class RepositorioLivroCaixa(Protocol):
 
     def atualizar_conta(self, conta: Conta) -> Conta: ...
 
+    def excluir_conta(self, espaco_id: str, id: str) -> bool: ...
+
     def listar_categorias(self, espaco_id: str) -> list[Categoria]: ...
 
     def buscar_categoria(self, espaco_id: str, id: str) -> Categoria | None: ...
@@ -69,6 +73,10 @@ class RepositorioLivroCaixa(Protocol):
     def inserir_categorias(self, categorias: list[Categoria]) -> list[Categoria]: ...
 
     def atualizar_categoria(self, categoria: Categoria) -> Categoria: ...
+
+    def excluir_categoria(self, espaco_id: str, id: str) -> bool: ...
+
+    def contar_lancamentos_da_categoria(self, espaco_id: str, categoria_id: str) -> int: ...
 
     def listar_lancamentos(
         self, espaco_id: str, de: date | None, ate: date | None, limite: int, conta_id: str | None = None
@@ -78,7 +86,13 @@ class RepositorioLivroCaixa(Protocol):
 
     def inserir_lancamento(self, lancamento: Lancamento) -> Lancamento: ...
 
+    def atualizar_lancamento(self, lancamento: Lancamento) -> Lancamento: ...
+
+    def listar_compra(self, espaco_id: str, compra_id: str) -> list[Lancamento]: ...
+
     def excluir_lancamento(self, espaco_id: str, id: str) -> bool: ...
+
+    def excluir_lancamentos_da_conta(self, espaco_id: str, conta_id: str) -> int: ...
 
     def excluir_estornos_de(self, espaco_id: str, id: str) -> int: ...
 
@@ -189,6 +203,10 @@ class LivroCaixaMongo:
         self._contas.replace_one({"_id": ObjectId(conta.id), "espaco_id": conta.espaco_id}, _documento_da_conta(conta))
         return conta
 
+    def excluir_conta(self, espaco_id: str, id: str) -> bool:
+        oid = _object_id(id)
+        return bool(oid) and self._contas.delete_one({"_id": oid, "espaco_id": espaco_id}).deleted_count == 1
+
     # --- Categorias ---
 
     def listar_categorias(self, espaco_id: str) -> list[Categoria]:
@@ -211,6 +229,13 @@ class LivroCaixaMongo:
             {"_id": ObjectId(categoria.id), "espaco_id": categoria.espaco_id}, _documento_da_categoria(categoria)
         )
         return categoria
+
+    def excluir_categoria(self, espaco_id: str, id: str) -> bool:
+        oid = _object_id(id)
+        return bool(oid) and self._categorias.delete_one({"_id": oid, "espaco_id": espaco_id}).deleted_count == 1
+
+    def contar_lancamentos_da_categoria(self, espaco_id: str, categoria_id: str) -> int:
+        return self._lancamentos.count_documents({"espaco_id": espaco_id, "categoria_id": categoria_id})
 
     # --- Lançamentos ---
 
@@ -246,16 +271,9 @@ class LivroCaixaMongo:
         documento = {
             "espaco_id": lancamento.espaco_id,
             "tipo": lancamento.tipo.value,
-            "descricao": lancamento.descricao,
-            "data": lancamento.data.isoformat(),
-            "valor_centavos": lancamento.valor_centavos,
+            **_campos_editaveis(lancamento),
             "conta_id": lancamento.conta_id,
-            "categoria_id": lancamento.categoria_id,
             "conta_destino_id": lancamento.conta_destino_id,
-            "partidas": [
-                {"conta_id": p.conta_id, "categoria_id": p.categoria_id, "valor_centavos": p.valor_centavos}
-                for p in lancamento.partidas
-            ],
             "criado_em": lancamento.criado_em,
             "criado_por": lancamento.criado_por,
         }
@@ -271,6 +289,8 @@ class LivroCaixaMongo:
             documento["compra_id"] = lancamento.compra_id
             documento["parcela"] = lancamento.parcela
             documento["parcelas"] = lancamento.parcelas
+        if lancamento.meio:
+            documento["meio"] = lancamento.meio.value
         try:
             lancamento.id = str(self._lancamentos.insert_one(documento).inserted_id)
         except DuplicateKeyError as erro:
@@ -280,9 +300,36 @@ class LivroCaixaMongo:
             raise ErroConflito(MENSAGEM_JA_ESTORNADO) from erro
         return lancamento
 
+    def atualizar_lancamento(self, lancamento: Lancamento) -> Lancamento:
+        """Grava o que a edição muda (descrição, data, valor, categoria,
+        partidas e meio) e a chave de importação de uma parcela prevista que
+        a fatura do banco confirmou. O resto não muda depois de lançado."""
+        definir = _campos_editaveis(lancamento)
+        remover = {}
+        for campo, valor in (("meio", lancamento.meio), ("chave_importacao", lancamento.chave_importacao)):
+            if valor is None:
+                remover[campo] = ""
+            else:
+                definir[campo] = valor.value if isinstance(valor, MeioDePagamento) else valor
+        mudancas = {"$set": definir, **({"$unset": remover} if remover else {})}
+        try:
+            self._lancamentos.update_one({"_id": ObjectId(lancamento.id), "espaco_id": lancamento.espaco_id}, mudancas)
+        except DuplicateKeyError as erro:
+            raise LancamentoJaImportado() from erro
+        return lancamento
+
+    def listar_compra(self, espaco_id: str, compra_id: str) -> list[Lancamento]:
+        """As parcelas de uma compra no cartão, da primeira à última."""
+        documentos = self._lancamentos.find({"espaco_id": espaco_id, "compra_id": compra_id}).sort("parcela", ASCENDING)
+        return [_para_lancamento(documento) for documento in documentos]
+
     def excluir_lancamento(self, espaco_id: str, id: str) -> bool:
         oid = _object_id(id)
         return bool(oid) and self._lancamentos.delete_one({"_id": oid, "espaco_id": espaco_id}).deleted_count == 1
+
+    def excluir_lancamentos_da_conta(self, espaco_id: str, conta_id: str) -> int:
+        """Todos os lançamentos que mexem na conta (origem ou destino)."""
+        return self._lancamentos.delete_many({"espaco_id": espaco_id, "partidas.conta_id": conta_id}).deleted_count
 
     def excluir_estornos_de(self, espaco_id: str, id: str) -> int:
         return self._lancamentos.delete_many({"espaco_id": espaco_id, "estorno_de": id}).deleted_count
@@ -403,6 +450,7 @@ def _documento_da_conta(conta: Conta) -> dict:
         documento["limite_centavos"] = conta.limite_centavos
         documento["dia_fechamento"] = conta.dia_fechamento
         documento["dia_vencimento"] = conta.dia_vencimento
+        documento["cor"] = (conta.cor or CorDoCartao.GRAFITE).value
     return documento
 
 
@@ -418,6 +466,8 @@ def _para_conta(documento: dict) -> Conta:
         limite_centavos=documento.get("limite_centavos"),
         dia_fechamento=documento.get("dia_fechamento"),
         dia_vencimento=documento.get("dia_vencimento"),
+        # Cartão gravado antes da cor existir sai grafite.
+        cor=CorDoCartao(documento.get("cor", CorDoCartao.GRAFITE)) if documento["tipo"] == TipoConta.CARTAO_CREDITO else None,
     )
 
 
@@ -467,4 +517,19 @@ def _para_lancamento(documento: dict) -> Lancamento:
         compra_id=documento.get("compra_id"),
         parcela=documento.get("parcela"),
         parcelas=documento.get("parcelas"),
+        meio=MeioDePagamento(documento["meio"]) if documento.get("meio") else None,
     )
+
+
+def _campos_editaveis(lancamento: Lancamento) -> dict:
+    """Os campos que a edição pode mudar, no formato do documento."""
+    return {
+        "descricao": lancamento.descricao,
+        "data": lancamento.data.isoformat(),
+        "valor_centavos": lancamento.valor_centavos,
+        "categoria_id": lancamento.categoria_id,
+        "partidas": [
+            {"conta_id": p.conta_id, "categoria_id": p.categoria_id, "valor_centavos": p.valor_centavos}
+            for p in lancamento.partidas
+        ],
+    }

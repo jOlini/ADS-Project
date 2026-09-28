@@ -10,12 +10,14 @@ from zoneinfo import ZoneInfo
 
 from app.erros import ErroConflito, ErroNaoEncontrado, ErroValidacao
 from app.financeiro import cartoes, importacao, regras, relatorios
-from app.financeiro.cartoes import PeriodoDaFatura, Referencia, ResumoDoCartao
+from app.financeiro.cartoes import PeriodoDaFatura, Referencia, ResumoDaFatura, ResumoDoCartao
 from app.financeiro.modelos import (
     AtualizacaoCategoria,
     AtualizacaoConta,
+    AtualizacaoLancamento,
     Categoria,
     Conta,
+    CorDoCartao,
     Espaco,
     Lancamento,
     Membro,
@@ -32,6 +34,7 @@ from app.financeiro.modelos import (
     SituacaoDaFatura,
     SituacaoDaLinha,
     TipoCategoria,
+    TipoConta,
     TipoEspaco,
     TipoLancamento,
 )
@@ -112,6 +115,7 @@ class ServicoLivroCaixa:
             limite_centavos=dados.limite_centavos,
             dia_fechamento=dados.dia_fechamento,
             dia_vencimento=dados.dia_vencimento,
+            cor=dados.cor or (CorDoCartao.GRAFITE if dados.tipo == TipoConta.CARTAO_CREDITO else None),
         )
         return self.repositorio.inserir_conta(conta)
 
@@ -125,7 +129,22 @@ class ServicoLivroCaixa:
         conta.limite_centavos = dados.limite_centavos
         conta.dia_fechamento = dados.dia_fechamento
         conta.dia_vencimento = dados.dia_vencimento
+        # Sem cor no corpo, o cartão fica com a que tinha.
+        if conta.cartao:
+            conta.cor = dados.cor or conta.cor
         return self.repositorio.atualizar_conta(conta)
+
+    def excluir_conta(self, espaco: Espaco, id: str) -> int:
+        """Apaga a conta (ou o cartão) e todos os lançamentos que mexem nela,
+        inclusive as transferências e os pagamentos de fatura com outras
+        contas (o saldo delas muda junto). Para guardar o histórico, o caminho
+        é desativar. Os lançamentos saem antes da conta: se a operação parar
+        no meio, a conta continua lá e excluir de novo termina. Devolve quantos
+        lançamentos saíram."""
+        conta = self._conta(espaco, id)
+        excluidos = self.repositorio.excluir_lancamentos_da_conta(espaco.id, conta.id)
+        self.repositorio.excluir_conta(espaco.id, conta.id)
+        return excluidos
 
     def _conta(self, espaco: Espaco, id: str) -> Conta:
         conta = self.repositorio.buscar_conta(espaco.id, id)
@@ -169,6 +188,25 @@ class ServicoLivroCaixa:
         )
         situacao = cartoes.situacao_da_fatura(referencia, atual)
         return cartao, periodo, situacao, self._marcar_estornados(espaco, lancamentos)
+
+    def faturas(self, espaco: Espaco, id: str) -> list[ResumoDaFatura]:
+        """As faturas do cartão que têm lançamentos (e a atual), da mais nova
+        para a mais antiga."""
+        cartao = self._cartao(espaco, id)
+        lancamentos = self.repositorio.listar_lancamentos(espaco.id, None, None, LIMITE_DO_CARTAO, cartao.id)
+        return cartoes.resumir_faturas(cartao, lancamentos, self.hoje(espaco))
+
+    def excluir_fatura(self, espaco: Espaco, id: str, referencia: Referencia) -> int:
+        """Apaga as compras e os créditos de uma fatura. Compra parcelada sai
+        inteira, com as parcelas das outras faturas, como na exclusão de uma
+        parcela. O pagamento fica: ele saiu de uma conta e aparece no extrato
+        dela (sai pela seleção na fatura ou no extrato)."""
+        cartao = self._cartao(espaco, id)
+        periodo = cartoes.periodo_da_fatura(cartao, referencia)
+        lancamentos = self.repositorio.listar_lancamentos(
+            espaco.id, periodo.inicio, periodo.ultimo_dia, LIMITE_DO_CARTAO, cartao.id
+        )
+        return self.excluir_varios(espaco, [l.id for l in lancamentos if not cartoes.eh_pagamento(l, cartao.id)])
 
     def comprar(self, espaco: Espaco, cartao_id: str, dados: NovaCompra, uid: str) -> list[Lancamento]:
         """Compra no cartão: uma despesa por parcela, cada uma na fatura
@@ -284,6 +322,18 @@ class ServicoLivroCaixa:
         categoria.ativa = dados.ativa
         return self.repositorio.atualizar_categoria(categoria)
 
+    def excluir_categoria(self, espaco: Espaco, id: str) -> None:
+        """Só categoria sem lançamentos. Com lançamentos, 409: apagá-la
+        deixaria o extrato sem o "para onde foi" deles. Desativar tira a
+        categoria das opções e mantém o histórico."""
+        categoria = self.categoria(espaco, id)
+        if usados := self.repositorio.contar_lancamentos_da_categoria(espaco.id, categoria.id):
+            quantos = "1 lançamento" if usados == 1 else f"{usados} lançamentos"
+            raise ErroConflito(
+                f'"{categoria.nome}" está em {quantos}. Desative a categoria para tirá-la das opções sem mexer no histórico.'
+            )
+        self.repositorio.excluir_categoria(espaco.id, categoria.id)
+
     # --- Lançamentos ---
 
     def lancamentos(
@@ -324,8 +374,27 @@ class ServicoLivroCaixa:
             criado_em=agora(),
             criado_por=uid,
             divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
+            meio=dados.meio,
         )
         return self._gravar(lancamento)
+
+    def editar(self, espaco: Espaco, id: str, dados: AtualizacaoLancamento) -> Lancamento:
+        """Muda descrição, data, valor, categoria ou meio, com as restrições de
+        regras.conferir_edicao. Na parcela de uma compra no cartão, a
+        descrição e a categoria mudam na compra inteira: as parcelas são uma
+        compra só."""
+        lancamento = self.lancamento(espaco, id)
+        conta = self.repositorio.buscar_conta(espaco.id, lancamento.conta_id)
+        categoria = self.repositorio.buscar_categoria(espaco.id, dados.categoria_id) if dados.categoria_id else None
+        if erros := regras.conferir_edicao(lancamento, dados, conta, categoria):
+            raise ErroValidacao(erros)
+        alvos = self.repositorio.listar_compra(espaco.id, lancamento.compra_id) if lancamento.compra_id else [lancamento]
+        for alvo in alvos:
+            editado = regras.aplicar_edicao(alvo, dados)
+            if not regras.soma_zero(editado.partidas):
+                raise AssertionError("Partidas do lançamento não somam zero.")
+            self.repositorio.atualizar_lancamento(editado)
+        return self.lancamento(espaco, id)
 
     def excluir(self, espaco: Espaco, id: str) -> None:
         """Apaga o lançamento de vez (erro de digitação, lançamento duplicado).
@@ -338,13 +407,26 @@ class ServicoLivroCaixa:
 
         Parcela de compra no cartão leva a compra inteira: uma parcela sozinha
         não existe, porque o limite foi ocupado pelo total."""
-        lancamento = self.lancamento(espaco, id)
+        self._excluir(espaco, self.lancamento(espaco, id))
+
+    def excluir_varios(self, espaco: Espaco, ids: list[str]) -> int:
+        """Exclusão em lote (seleção do extrato ou da fatura), com as mesmas
+        regras da exclusão de um. Id que já saiu (outra parcela da mesma
+        compra, estorno de outro da lista) ou que não é do espaço é pulado.
+        Devolve quantos lançamentos saíram do banco."""
+        excluidos = 0
+        for id in dict.fromkeys(ids):
+            lancamento = self.repositorio.buscar_lancamento(espaco.id, id)
+            if lancamento is not None:
+                excluidos += self._excluir(espaco, lancamento)
+        return excluidos
+
+    def _excluir(self, espaco: Espaco, lancamento: Lancamento) -> int:
         if lancamento.compra_id:
-            self.repositorio.excluir_compra(espaco.id, lancamento.compra_id)
-            return
-        self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
-        self.repositorio.excluir_lancamento(espaco.id, lancamento.id)
-        self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
+            return self.repositorio.excluir_compra(espaco.id, lancamento.compra_id)
+        excluidos = self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
+        excluidos += int(self.repositorio.excluir_lancamento(espaco.id, lancamento.id))
+        return excluidos + self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
 
     def pessoas(self, espaco: Espaco) -> list[str]:
         """Nomes já usados em divisões, para a tela sugerir. Nomes que só
