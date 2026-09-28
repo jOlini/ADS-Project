@@ -9,7 +9,9 @@ import { opcaoPorDigitacao, primeiraHabilitada, proximaHabilitada, ultimaHabilit
 //
 // itens: [{ id, rotulo, descricao?, icone?, perigo?, desabilitado?, aoEscolher }].
 // rotulo é o nome do botão para leitores de tela (o botão mostra só o ícone).
-export default function Menu({ rotulo, itens }) {
+// Com texto, o botão vira um botão principal com o texto e a seta ("+ Novo"
+// do topo da Visão geral), e o menu abre alinhado pelo começo.
+export default function Menu({ rotulo, itens, texto, icone = 'mais' }) {
   const idBase = useId();
   const botao = useRef(null);
   const menu = useRef(null);
@@ -18,7 +20,7 @@ export default function Menu({ rotulo, itens }) {
 
   const opcoes = itens.map((item) => ({ rotulo: item.rotulo, desabilitada: item.desabilitado }));
   const fechar = () => setAberto(false);
-  const estilo = usePosicaoFlutuante(botao, menu, aberto, { alinhar: 'fim', aoRolarFora: fechar });
+  const estilo = usePosicaoFlutuante(botao, menu, aberto, { alinhar: texto ? 'inicio' : 'fim', aoRolarFora: fechar });
   // Continua na tela durante a animação de saída.
   const presente = usePresenca(aberto);
   useCliqueFora([botao, menu], fechar, aberto);
@@ -87,15 +89,23 @@ export default function Menu({ rotulo, itens }) {
         ref={botao}
         type="button"
         id={`${idBase}-botao`}
-        className="botao-icone"
-        aria-label={rotulo}
+        className={texto ? 'botao-do-menu' : 'botao-icone'}
+        aria-label={texto ? undefined : rotulo}
         aria-haspopup="menu"
         aria-expanded={aberto}
         aria-controls={aberto ? `${idBase}-menu` : undefined}
         onClick={() => (aberto ? fechar() : abrir(primeiraHabilitada(opcoes)))}
         onKeyDown={teclarNoBotao}
       >
-        <Icone nome="maisOpcoes" tamanho={18} />
+        {texto ? (
+          <>
+            <Icone nome={icone} tamanho={18} />
+            {texto}
+            <Icone nome="seta" tamanho={16} />
+          </>
+        ) : (
+          <Icone nome="maisOpcoes" tamanho={18} />
+        )}
       </button>
 
       {presente && (

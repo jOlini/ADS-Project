@@ -91,9 +91,15 @@ export function atualizarConta(espacoId, contaId, conta) {
   return chamar(doEspaco(espacoId, `/contas/${encodeURIComponent(contaId)}`), { metodo: 'PUT', corpo: conta });
 }
 
+// Apaga a conta (ou o cartão) com todos os lançamentos dela, inclusive as
+// transferências com outras contas. Devolve { excluidos } (lançamentos).
+export function excluirConta(espacoId, contaId) {
+  return chamar(doEspaco(espacoId, `/contas/${encodeURIComponent(contaId)}`), { metodo: 'DELETE' });
+}
+
 // ------------------------------------------------ Cartões de crédito
-// O cartão é criado e editado como conta (tipo CARTAO_CREDITO, com limite e
-// os dias de fechamento e vencimento). Aqui ficam o painel, as faturas, a
+// O cartão é criado e editado como conta (tipo CARTAO_CREDITO, com limite,
+// os dias de fechamento e vencimento e a cor). Aqui ficam o painel, as faturas, a
 // compra (à vista ou parcelada) e o pagamento da fatura.
 
 const doCartao = (espacoId, cartaoId, resto = '') => doEspaco(espacoId, `/cartoes/${encodeURIComponent(cartaoId)}${resto}`);
@@ -110,6 +116,18 @@ export function buscarCartao(espacoId, cartaoId) {
 // referencia: 'AAAA-MM', o mês do vencimento da fatura.
 export function buscarFatura(espacoId, cartaoId, referencia) {
   return chamar(doCartao(espacoId, cartaoId, `/faturas/${encodeURIComponent(referencia)}`));
+}
+
+// As faturas que têm lançamentos (e a atual), da mais nova para a mais antiga,
+// com o total de cada uma.
+export function listarFaturas(espacoId, cartaoId) {
+  return chamar(doCartao(espacoId, cartaoId, '/faturas'));
+}
+
+// Apaga as compras e os créditos da fatura (compra parcelada sai inteira); os
+// pagamentos ficam. Devolve { excluidos }.
+export function excluirFatura(espacoId, cartaoId, referencia) {
+  return chamar(doCartao(espacoId, cartaoId, `/faturas/${encodeURIComponent(referencia)}`), { metodo: 'DELETE' });
 }
 
 // { descricao, data, valor_centavos (total), categoria_id, parcelas, divisao? }.
@@ -133,6 +151,12 @@ export function criarCategoria(espacoId, categoria) {
 
 export function atualizarCategoria(espacoId, categoriaId, categoria) {
   return chamar(doEspaco(espacoId, `/categorias/${encodeURIComponent(categoriaId)}`), { metodo: 'PUT', corpo: categoria });
+}
+
+// Só categoria sem lançamentos: com lançamentos, a API responde 409 (o caminho
+// é desativar). 204.
+export function excluirCategoria(espacoId, categoriaId) {
+  return chamar(doEspaco(espacoId, `/categorias/${encodeURIComponent(categoriaId)}`), { metodo: 'DELETE' });
 }
 
 // Limite da API para uma consulta.
@@ -162,9 +186,22 @@ export function estornar(espacoId, lancamentoId) {
   return chamar(doEspaco(espacoId, `/lancamentos/${encodeURIComponent(lancamentoId)}/estorno`), { metodo: 'POST' });
 }
 
+// Só os campos enviados mudam: { descricao, data, valor_centavos,
+// categoria_id, meio }. Na parcela de uma compra, a descrição e a categoria
+// mudam na compra inteira.
+export function editarLancamento(espacoId, lancamentoId, mudancas) {
+  return chamar(doEspaco(espacoId, `/lancamentos/${encodeURIComponent(lancamentoId)}`), { metodo: 'PATCH', corpo: mudancas });
+}
+
 // Apaga de vez (erro de digitação, duplicata), junto com o estorno dele. 204.
 export function excluir(espacoId, lancamentoId) {
   return chamar(doEspaco(espacoId, `/lancamentos/${encodeURIComponent(lancamentoId)}`), { metodo: 'DELETE' });
+}
+
+// Vários de uma vez, com as mesmas regras (estorno junto, parcela leva a
+// compra). Devolve { excluidos }, contando parcelas e estornos.
+export function excluirVarios(espacoId, ids) {
+  return chamar(doEspaco(espacoId, '/lancamentos/exclusao-em-lote'), { metodo: 'POST', corpo: { ids } });
 }
 
 // Nomes já usados em rachas, para o formulário sugerir.

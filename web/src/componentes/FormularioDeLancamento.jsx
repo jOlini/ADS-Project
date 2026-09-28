@@ -4,6 +4,7 @@ import Campo from './Campo';
 import DivisaoEntrePessoas from './DivisaoEntrePessoas';
 import Seletor from './Seletor';
 import SeletorDeData from './SeletorDeData';
+import SeletorDeMeio from './SeletorDeMeio';
 import { useToast } from './toast/useToast';
 import { primeiroCampoComErro } from '../regras/cadastro';
 import { hojeIso } from '../regras/datas';
@@ -21,12 +22,15 @@ const formularioVazio = (contas) => ({
   categoria_id: '',
   conta_destino_id: '',
   divisao: [],
+  // O meio mais comum já vem marcado; a pessoa troca com um clique.
+  meio: 'PIX',
 });
 
 const opcoesDeConta = (contas) => contas.map((conta) => ({ valor: conta.id, rotulo: conta.nome }));
 
 // Formulário do "+ Novo lançamento" (dentro do modal): receita, despesa ou
-// transferência entre contas, com o racha entre pessoas nas duas primeiras.
+// transferência entre contas, sempre à vista (PIX, débito, dinheiro ou
+// TED/DOC), com o racha entre pessoas nas duas primeiras.
 // Confere tudo antes de ir à API e põe o foco no primeiro campo com erro.
 // aoLancar recebe o lançamento criado. Compras no crédito não entram aqui: com
 // cartões cadastrados, o formulário aponta a fatura (temCartoes).
@@ -115,7 +119,7 @@ export default function FormularioDeLancamento({ espacoId, contas, temCartoes = 
         ))}
       </div>
 
-      <Campo rotulo="Descrição" name="descricao" autoComplete="off" maxLength={120}
+      <Campo rotulo="Descrição" name="descricao" autoComplete="off" maxLength={120} data-foco-inicial
         placeholder={transferencia ? 'Ex.: Para a poupança' : 'Ex.: Churrasco de sábado'}
         value={formulario.descricao} onChange={(evento) => mudar('descricao', evento.target.value)} erro={erros.descricao} />
 
@@ -143,6 +147,8 @@ export default function FormularioDeLancamento({ espacoId, contas, temCartoes = 
             onChange={(evento) => mudar('categoria_id', evento.target.value)} erro={erros.categoria_id} />
         )}
       </div>
+
+      <SeletorDeMeio valor={formulario.meio} aoMudar={(meio) => mudar('meio', meio)} erro={erros.meio} />
 
       {!transferencia && categoriasDoTipo.length === 0 && (
         <AvisoComAtalho compacto

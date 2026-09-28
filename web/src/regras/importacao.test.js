@@ -6,6 +6,7 @@ import {
   categoriaSugerida,
   dataMaisRecente,
   decodificarExtrato,
+  destinoDaImportacao,
   descreverMapeamento,
   errosDaImportacao,
   linhasDeDados,
@@ -88,6 +89,12 @@ describe('resumoDaImportacao', () => {
     expect(resumoDaImportacao({ simulacao: true, novas: 12, importadas: 0, ja_importadas: 3, invalidas: 1 })).toBe(
       '12 lançamentos novos · 3 já importados · 1 linha com erro',
     );
+  });
+
+  it('conta as parcelas futuras geradas pela fatura do cartão', () => {
+    expect(
+      resumoDaImportacao({ simulacao: false, novas: 0, importadas: 2, ja_importadas: 0, invalidas: 0, parcelas_futuras: 11 }),
+    ).toBe('2 lançamentos importados · 11 parcelas futuras');
   });
 
   it('resume a importação, no singular quando é um só', () => {
@@ -175,5 +182,30 @@ describe('colunas do arquivo', () => {
     expect(descreverMapeamento(mapeamento, nomesDasColunas(AMOSTRA, 3))).toBe(
       'Data: Data · Descrição: Histórico · Valor: Valor (R$) · D/C: D/C · sinal invertido',
     );
+  });
+});
+
+describe('destinoDaImportacao', () => {
+  it('no extrato da conta, é o mês do lançamento mais recente que entrou', () => {
+    const linhas = [
+      { situacao: 'IMPORTADA', data: '2026-08-30', fatura: null },
+      { situacao: 'IMPORTADA', data: '2026-09-02', fatura: null },
+      { situacao: 'JA_IMPORTADA', data: '2026-10-15', fatura: null },
+    ];
+    expect(destinoDaImportacao(linhas)).toBe('2026-09');
+  });
+
+  it('na fatura do cartão, é a fatura com mais linhas', () => {
+    const linhas = [
+      { situacao: 'IMPORTADA', data: '2026-09-04', fatura: '2026-10' },
+      { situacao: 'IMPORTADA', data: '2026-09-20', fatura: '2026-10' },
+      { situacao: 'IMPORTADA', data: '2026-07-15', fatura: '2026-11' },
+    ];
+    expect(destinoDaImportacao(linhas)).toBe('2026-10');
+  });
+
+  it('sem nada novo, leva ao que já estava importado; com tudo errado, a lugar nenhum', () => {
+    expect(destinoDaImportacao([{ situacao: 'JA_IMPORTADA', data: '2026-06-10', fatura: null }])).toBe('2026-06');
+    expect(destinoDaImportacao([{ situacao: 'INVALIDA', data: null, fatura: null }])).toBeNull();
   });
 });

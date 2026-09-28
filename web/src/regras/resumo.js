@@ -39,6 +39,31 @@ export function somarMes(lancamentos) {
   return { entradas, saidas, sobra: entradas - saidas };
 }
 
+// Números do mês separados pela origem do dinheiro (a Visão geral):
+// - entradas: o que entrou nas contas;
+// - aVista: o que saiu das contas (débito, PIX, dinheiro, TED), sem o
+//   pagamento de fatura, que quita compras já contadas no crédito;
+// - noCredito: as compras no cartão com parcela no mês (competência), menos
+//   os créditos da fatura (estorno, reembolso);
+// - faturasPagas: o que saiu das contas para pagar faturas no mês;
+// - sobra: entradas menos o que saiu à vista e no crédito.
+// Cada linha precisa de noCartao e do tipo 'pagamento' (paraExtrato).
+export function somarPorOrigem(lancamentos) {
+  const contas = somarMes(lancamentos.filter((item) => !item.noCartao && item.tipo !== 'pagamento'));
+  const cartao = somarMes(lancamentos.filter((item) => item.noCartao));
+  const faturasPagas = lancamentos
+    .filter((item) => !item.noCartao && item.tipo === 'pagamento')
+    .reduce((soma, item) => soma - item.valor, 0);
+  const noCredito = cartao.saidas - cartao.entradas;
+  return {
+    entradas: contas.entradas,
+    aVista: contas.saidas,
+    noCredito,
+    faturasPagas,
+    sobra: contas.entradas - contas.saidas - noCredito,
+  };
+}
+
 // Quanto do que entrou já foi gasto, de 0 a 100. Sem entrada, devolve 0.
 export function usoDaRenda({ entradas, saidas }) {
   if (entradas <= 0) {
