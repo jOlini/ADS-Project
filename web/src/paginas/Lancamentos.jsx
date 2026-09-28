@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import AvisoComAtalho from '../componentes/AvisoComAtalho';
+import BarraDeSelecao from '../componentes/BarraDeSelecao';
 import CampoDeBusca from '../componentes/CampoDeBusca';
 import Esqueleto from '../componentes/Esqueleto';
 import Extrato from '../componentes/Extrato';
@@ -11,12 +12,15 @@ import ImportarExtrato from '../componentes/ImportarExtrato';
 import Menu from '../componentes/Menu';
 import Modal from '../componentes/Modal';
 import SeletorDeMes from '../componentes/SeletorDeMes';
+import { useToast } from '../componentes/toast/useToast';
 import { useAcoesDoExtrato } from '../componentes/useAcoesDoExtrato';
 import { useCarga } from '../componentes/useCarga';
+import { useSelecao } from '../componentes/useSelecao';
 import { buscarNoExtrato } from '../regras/busca';
 import { nomeDoMes } from '../regras/calendario';
+import { mesDaReferencia } from '../regras/cartoes';
 import { formatarBRL } from '../regras/dinheiro';
-import { dataMaisRecente } from '../regras/importacao';
+import { destinoDaImportacao } from '../regras/importacao';
 import {
   cartoesDe,
   contasBancarias,
@@ -45,6 +49,8 @@ const FILTROS = [
   { id: 'saidas', rotulo: 'Saídas' },
 ];
 
+const mesmoMes = (a, b) => a.ano === b.ano && a.mes === b.mes;
+
 // Contas, categorias e pessoas já usadas em rachas (nomes no extrato e
 // opções dos formulários). As pessoas são só sugestão: se a busca falhar,
 // a tela abre sem elas em vez de mostrar erro.
@@ -68,14 +74,16 @@ async function carregarMes(espacoId, mes) {
 }
 
 // Lançamentos: o extrato das contas num mês, ocupando a tela, com rolagem
-// própria. Só o que mexe no dinheiro das contas (lançamentos, débitos, PIX,
-// transferências e o pagamento de fatura); as compras no crédito ficam na
-// fatura do cartão, em Contas & Cartões. No topo, a barra com "+ Novo
-// lançamento" e "Importar CSV" (os dois abrem um modal); logo abaixo, o mês,
-// a busca e o filtro. Cada linha tem o menu com Estornar (lançamento inverso,
-// o histórico fica) e Excluir (apaga de vez).
+// própria. Só dinheiro à vista: PIX, débito, dinheiro, transferências e o
+// pagamento de fatura (que sai de uma conta). As compras no crédito ficam na
+// fatura do cartão, em Contas & Cartões, e não aparecem aqui como saída.
+// No topo, "+ Novo lançamento" e "Importar CSV" (os dois abrem um modal);
+// logo abaixo, o mês, a busca e o filtro, e a seleção em lote para remover.
+// Cada linha tem o menu com Editar, Estornar (lançamento inverso, o
+// histórico fica) e Excluir (apaga de vez).
 export default function Lancamentos() {
   const { espaco } = useOutletContext();
+  const toast = useToast();
   const [mes, setMes] = useState(() => mesDe(new Date()));
   const [filtro, setFiltro] = useState('tudo');
   // ?busca= vem da barra de busca do topo e preenche a busca.
@@ -95,16 +103,17 @@ export default function Lancamentos() {
   const buscarMes = useMemo(() => (espacoId ? () => carregarMes(espacoId, mes) : null), [espacoId, mes]);
   const cadastros = useCarga(buscarCadastros);
   const extrato = useCarga(buscarMes);
+
+  const contas = useMemo(() => cadastros.dados?.contas ?? [], [cadastros.dados]);
+  const categorias = useMemo(() => cadastros.dados?.categorias ?? [], [cadastros.dados]);
   const acoes = useAcoesDoExtrato({
     espacoId,
+    categorias,
     aoMudar: () => {
       cadastros.recarregar();
       extrato.recarregar();
     },
   });
-
-  const contas = useMemo(() => cadastros.dados?.contas ?? [], [cadastros.dados]);
-  const categorias = useMemo(() => cadastros.dados?.categorias ?? [], [cadastros.dados]);
   // Lançar e importar aqui é só nas contas; o cartão tem a fatura dele.
   const contasAtivas = contasBancarias(contas).filter((conta) => conta.ativa);
   const temCartoes = cartoesDe(contas).length > 0;
@@ -123,6 +132,11 @@ export default function Lancamentos() {
       saldoConfiavel: extrato.dados.depois.length < LIMITE_DE_LANCAMENTOS && extrato.dados.doMes.length < LIMITE_DE_LANCAMENTOS,
     };
   }, [cadastros.dados, extrato.dados, contas, categorias]);
+
+  const diasVisiveis = useMemo(() => buscarNoExtrato(filtrarDias(visao?.dias ?? [], filtro), busca), [visao, filtro, busca]);
+  const linhasVisiveis = useMemo(() => diasVisiveis.flatMap((dia) => dia.lancamentos), [diasVisiveis]);
+  const idsVisiveis = useMemo(() => linhasVisiveis.map((linha) => linha.id), [linhasVisiveis]);
+  const selecao = useSelecao(idsVisiveis);
 
   if (!apiConfigurada) {
     return (
@@ -170,20 +184,32 @@ export default function Lancamentos() {
     recarregar();
   }
 
-  // Depois da importação, o extrato abre no mês do lançamento mais recente
-  // que entrou, se ele não for o mês na tela.
+  // Depois da importação, o extrato vai para o mês do lançamento mais recente
+  // que entrou, se ele não for o mês na tela, e o aviso diz isso: sem ele,
+  // parece que a importação falhou.
   function aposImportar(resposta) {
     fecharModal();
-    const ultima = dataMaisRecente(resposta.linhas);
-    if (ultima && !estaNoMes(ultima, mes)) {
-      setMes(mesDe(ultima));
-    }
+    irParaOMesImportado(resposta);
     recarregar();
   }
 
+  function irParaOMesImportado(resposta) {
+    const destino = destinoDaImportacao(resposta.linhas);
+    if (!destino) {
+      return;
+    }
+    const mesDoDestino = mesDaReferencia(destino);
+    if (!mesmoMes(mesDoDestino, mes)) {
+      setMes(mesDoDestino);
+      setFiltro('tudo');
+      setBusca('');
+      toast.info(`Os lançamentos do arquivo são de ${nomeDoMes(mesDoDestino)}: o extrato foi para esse mês.`, {
+        titulo: 'Extrato em outro mês',
+      });
+    }
+  }
+
   const filtrado = filtro !== 'tudo' || busca.trim() !== '';
-  const diasVisiveis = buscarNoExtrato(filtrarDias(visao?.dias ?? [], filtro), busca);
-  const linhasVisiveis = diasVisiveis.flatMap((dia) => dia.lancamentos);
   // Com filtro ou busca, os totais descrevem só o que está na tela.
   const totais = somarMes(linhasVisiveis);
   const pessoasConhecidas = cadastros.dados?.pessoas ?? [];
@@ -239,6 +265,9 @@ export default function Lancamentos() {
           </p>
         )}
 
+        <BarraDeSelecao ids={idsVisiveis} selecao={selecao} nomes={['lançamento', 'lançamentos']}
+          aoRemover={(ids) => acoes.removerEmLote(linhasVisiveis.filter((linha) => ids.includes(linha.id)), selecao.limpar)} />
+
         <div className="rolagem-do-extrato" tabIndex={0} role="region" aria-label={`Lançamentos de ${nomeDoMes(mes)}`}>
           {extrato.erro ? (
             <p className="mensagem erro" role="alert">
@@ -251,6 +280,7 @@ export default function Lancamentos() {
             <Extrato
               dias={diasVisiveis}
               mostrarSaldo={!filtrado && visao.saldoConfiavel}
+              selecao={selecao}
               acoes={(linha) => <Menu rotulo={`Ações de ${linha.descricao}`} itens={acoes.itens(linha)} />}
             />
           ) : (
@@ -277,7 +307,8 @@ export default function Lancamentos() {
         </div>
       </section>
 
-      <Modal aberta={modal === 'novo'} titulo="Novo lançamento" aoFechar={fecharModal} ocupado={modalOcupado}>
+      <Modal aberta={modal === 'novo'} titulo="Novo lançamento" descricao="PIX, débito, dinheiro ou TED: o que mexe no saldo das contas."
+        aoFechar={fecharModal} ocupado={modalOcupado}>
         <FormularioDeLancamento
           espacoId={espacoId}
           contas={contasAtivas}
@@ -308,6 +339,10 @@ export default function Lancamentos() {
             contas={contasAtivas}
             categorias={categorias}
             aoImportar={aposImportar}
+            aoVerImportados={(resposta) => {
+              fecharModal();
+              irParaOMesImportado(resposta);
+            }}
             aoCancelar={fecharModal}
             aoMudarOcupado={setModalOcupado}
           />

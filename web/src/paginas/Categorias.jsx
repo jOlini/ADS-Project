@@ -1,23 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
-import Campo from '../componentes/Campo';
+import BarraDeSelecao from '../componentes/BarraDeSelecao';
+import Confirmacao from '../componentes/Confirmacao';
 import Esqueleto from '../componentes/Esqueleto';
+import FormularioDeCategoria from '../componentes/FormularioDeCategoria';
 import Icone from '../componentes/Icone';
-import Seletor from '../componentes/Seletor';
+import Modal from '../componentes/Modal';
 import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
-import { useFocoAoChegar } from '../componentes/useFocoAoChegar';
-import { primeiroCampoComErro } from '../regras/cadastro';
-import { CORES_DE_CATEGORIA, errosDaApi, ORDEM_DA_CATEGORIA, validarCategoria } from '../regras/livroCaixa';
-import { apiConfigurada, atualizarCategoria, criarCategoria, listarCategorias } from '../servicos/livroCaixa';
-
-const NOVA = { nome: '', tipo: 'DESPESA', cor: 'neutro', ativa: true };
-
-const TIPOS_DE_CATEGORIA = [
-  { valor: 'DESPESA', rotulo: 'Despesa', descricao: 'Dinheiro que sai' },
-  { valor: 'RECEITA', rotulo: 'Receita', descricao: 'Dinheiro que entra' },
-];
+import { useSelecao } from '../componentes/useSelecao';
+import { CORES_DE_CATEGORIA, TIPOS_DE_CATEGORIA } from '../regras/livroCaixa';
+import { apiConfigurada, excluirCategoria, listarCategorias } from '../servicos/livroCaixa';
 
 const GRUPOS = [
   { tipo: 'DESPESA', titulo: 'Despesas', icone: 'saida' },
@@ -25,26 +19,37 @@ const GRUPOS = [
 ];
 
 const rotuloDaCor = (cor) => CORES_DE_CATEGORIA.find((item) => item.valor === cor)?.rotulo ?? cor;
+const contar = (quantidade, singular, plural) => `${quantidade} ${quantidade === 1 ? singular : plural}`;
+// "Mercado", "Mercado e Lazer", "Mercado, Lazer e Saúde".
+const juntar = (nomes) => (nomes.length > 1 ? `${nomes.slice(0, -1).join(', ')} e ${nomes.at(-1)}` : nomes[0]);
 
 // Categorias: o "para onde foi" das despesas e o "de onde veio" das receitas.
 // O espaço já nasce com as mais comuns; aqui a pessoa cria, renomeia,
-// recolore ou desativa. O tipo não muda depois de criado. Um atalho de outra
-// tela chega com ?cadastrar=DESPESA (ou RECEITA): o formulário já vem com o
-// tipo escolhido e o foco no nome.
+// recolore, desativa ou remove, sempre num modal. O tipo não muda depois de
+// criado. Categoria com lançamentos não sai (a API responde 409): o caminho é
+// desativar, que mantém o histórico. Um atalho de outra tela chega com
+// ?cadastrar=DESPESA (ou RECEITA) e já abre o modal com o tipo escolhido.
 export default function Categorias() {
   const { espaco } = useOutletContext();
   const toast = useToast();
-  const [parametros] = useSearchParams();
+  const [parametros, setParametros] = useSearchParams();
   const tipoDoAtalho = TIPOS_DE_CATEGORIA.find((item) => item.valor === parametros.get('cadastrar'))?.valor;
-  const [emEdicao, setEmEdicao] = useState(null);
-  const [formulario, setFormulario] = useState(() => ({ ...NOVA, tipo: tipoDoAtalho ?? NOVA.tipo }));
-  const [erros, setErros] = useState({});
-  const [enviando, setEnviando] = useState(false);
+  // { emEdicao } com o modal aberto; senão, null.
+  const [modal, setModal] = useState(() => (tipoDoAtalho ? { emEdicao: null } : null));
+  const [modalOcupado, setModalOcupado] = useState(false);
+  const [aRemover, setARemover] = useState(null);
+  const [removendo, setRemovendo] = useState(false);
 
   const espacoId = espaco.dados?.id;
   const buscarCategorias = useMemo(() => (espacoId ? () => listarCategorias(espacoId) : null), [espacoId]);
   const categorias = useCarga(buscarCategorias);
-  useFocoAoChegar(Boolean(tipoDoAtalho), 'formulario-da-categoria');
+  const lista = useMemo(() => categorias.dados ?? [], [categorias.dados]);
+  // Na ordem da tela: despesas e depois receitas.
+  const ids = useMemo(
+    () => GRUPOS.flatMap((grupo) => lista.filter((categoria) => categoria.tipo === grupo.tipo).map((categoria) => categoria.id)),
+    [lista],
+  );
+  const selecao = useSelecao(ids);
 
   if (!apiConfigurada) {
     return (
@@ -74,53 +79,60 @@ export default function Categorias() {
     );
   }
 
-  const lista = categorias.dados ?? [];
-
-  function mudar(campo, valor) {
-    setFormulario((atual) => ({ ...atual, [campo]: valor }));
-    setErros((atuais) => ({ ...atuais, [campo]: undefined }));
-  }
-
-  function editar(categoria) {
-    setEmEdicao(categoria);
-    setFormulario({ nome: categoria.nome, tipo: categoria.tipo, cor: categoria.cor, ativa: categoria.ativa });
-    setErros({});
-    requestAnimationFrame(() => document.getElementById('formulario-da-categoria')?.elements.nome?.focus());
-  }
-
-  function cancelar() {
-    setEmEdicao(null);
-    setFormulario(NOVA);
-    setErros({});
-  }
-
-  async function enviar(evento) {
-    evento.preventDefault();
-    const elementos = evento.currentTarget.elements;
-    const encontrados = validarCategoria(formulario);
-    setErros(encontrados);
-    const primeiro = primeiroCampoComErro(encontrados, ORDEM_DA_CATEGORIA);
-    if (primeiro) {
-      elementos[primeiro]?.focus();
-      return;
+  function fecharModal() {
+    setModal(null);
+    setModalOcupado(false);
+    if (tipoDoAtalho) {
+      setParametros({}, { replace: true });
     }
+  }
 
-    setEnviando(true);
+  function aposSalvar() {
+    fecharModal();
+    categorias.recarregar();
+  }
+
+  // Uma por uma. Em uso (409) não sai e vai para o aviso; outro erro para
+  // tudo, e as anteriores já saíram.
+  async function confirmarRemocao() {
+    setRemovendo(true);
+    const removidas = [];
+    const emUso = [];
     try {
-      const nome = formulario.nome.trim();
-      const salva = emEdicao
-        ? await atualizarCategoria(espacoId, emEdicao.id, { nome, cor: formulario.cor, ativa: formulario.ativa })
-        : await criarCategoria(espacoId, { nome, tipo: formulario.tipo, cor: formulario.cor });
-      toast.sucesso(emEdicao ? 'Os lançamentos dela mostram o nome novo.' : 'Já aparece no formulário de lançamento.', {
-        titulo: `Categoria "${salva.nome}" ${emEdicao ? 'salva' : 'criada'}`,
-      });
-      cancelar();
-      categorias.recarregar();
+      for (const categoria of aRemover) {
+        try {
+          await excluirCategoria(espacoId, categoria.id);
+          removidas.push(categoria.nome);
+        } catch (erro) {
+          if (erro.status !== 409) {
+            throw erro;
+          }
+          emUso.push(categoria.nome);
+        }
+      }
+      if (removidas.length > 0) {
+        toast.sucesso(`${juntar(removidas)}.`, { titulo: contar(removidas.length, 'categoria removida', 'categorias removidas') });
+      }
+      if (emUso.length > 0) {
+        toast.aviso(
+          `${juntar(emUso)} ${emUso.length === 1 ? 'está' : 'estão'} em lançamentos. Desative em Editar para tirar das opções sem mexer no histórico.`,
+          { titulo: contar(emUso.length, 'categoria ficou', 'categorias ficaram') },
+        );
+      }
     } catch (erro) {
-      setErros(errosDaApi(erro.campos));
-      toast.erro(erro.message, { titulo: 'Categoria não salva' });
+      toast.erro(erro.message, { titulo: 'Remoção interrompida' });
     } finally {
-      setEnviando(false);
+      setRemovendo(false);
+      setARemover(null);
+      selecao.limpar();
+      categorias.recarregar();
+    }
+  }
+
+  function pedirRemocao(idsEscolhidos) {
+    const itens = lista.filter((categoria) => idsEscolhidos.includes(categoria.id));
+    if (itens.length > 0) {
+      setARemover(itens);
     }
   }
 
@@ -128,96 +140,86 @@ export default function Categorias() {
     <>
       <header className="cabecalho-da-pagina">
         <h1>Categorias</h1>
+        <div className="acoes-da-pagina">
+          <button type="button" onClick={() => setModal({ emEdicao: null })}>
+            <Icone nome="mais" tamanho={18} />
+            Nova categoria
+          </button>
+        </div>
       </header>
 
-      <div className="corpo-do-resumo pagina-de-cadastro">
-        <section className="cartao lista" aria-label="Categorias">
-          {GRUPOS.map((grupo) => {
-            const doGrupo = lista.filter((categoria) => categoria.tipo === grupo.tipo);
-            return (
-              <div key={grupo.tipo}>
-                <h2 className="dia">
-                  <span>{grupo.titulo}</span>
-                  <span>{doGrupo.length}</span>
-                </h2>
-                {doGrupo.length === 0 ? (
-                  <p className="item discreto">Nenhuma categoria de {grupo.titulo.toLowerCase()}.</p>
-                ) : (
-                  <ul className="itens">
-                    {doGrupo.map((categoria) => (
-                      <li key={categoria.id} className={`item${categoria.ativa ? '' : ' desativado'}`}
-                        aria-current={emEdicao?.id === categoria.id || undefined}>
-                        <span className="marca-da-categoria" style={{ '--cor-da-categoria': `var(--cat-${categoria.cor})` }} aria-hidden="true">
-                          <Icone nome={grupo.icone} tamanho={16} />
-                        </span>
-                        <span className="descricao">
-                          <b>{categoria.nome}</b>
-                          <small>
-                            {rotuloDaCor(categoria.cor)}
-                            {!categoria.ativa && <span className="etiqueta">Desativada</span>}
-                          </small>
-                        </span>
-                        <button type="button" className="discreto-botao" onClick={() => editar(categoria)}>
-                          <Icone nome="editar" tamanho={16} />
-                          <span className="rotulo-da-acao">Editar</span>
-                          <span className="apenas-leitor">: {categoria.nome}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
-        </section>
-
-        <div className="lado">
-          <section className="cartao painel" aria-labelledby="titulo-formulario-da-categoria">
-            <div className="cabecalho-do-painel">
-              <h2 id="titulo-formulario-da-categoria">{emEdicao ? 'Editar categoria' : 'Nova categoria'}</h2>
-            </div>
-            <form id="formulario-da-categoria" onSubmit={enviar} noValidate>
-              <Campo rotulo="Nome" name="nome" autoComplete="off" maxLength={60} placeholder="Ex.: Pets"
-                value={formulario.nome} onChange={(evento) => mudar('nome', evento.target.value)} erro={erros.nome} />
-
-              {emEdicao ? (
-                <p className="dica-do-campo">
-                  Categoria de {emEdicao.tipo === 'DESPESA' ? 'despesa' : 'receita'}. O tipo não muda depois de criado.
-                </p>
+      <section className="cartao lista pagina-de-categorias" aria-label="Categorias">
+        <BarraDeSelecao ids={ids} selecao={selecao} nomes={['categoria', 'categorias']} aoRemover={pedirRemocao} ocupado={removendo} />
+        {GRUPOS.map((grupo) => {
+          const doGrupo = lista.filter((categoria) => categoria.tipo === grupo.tipo);
+          return (
+            <div key={grupo.tipo}>
+              <h2 className="dia">
+                <span>{grupo.titulo}</span>
+                <span>{doGrupo.length}</span>
+              </h2>
+              {doGrupo.length === 0 ? (
+                <p className="item discreto">Nenhuma categoria de {grupo.titulo.toLowerCase()}.</p>
               ) : (
-                <Campo elemento={Seletor} rotulo="Tipo" name="tipo" value={formulario.tipo} opcoes={TIPOS_DE_CATEGORIA}
-                  onChange={(evento) => mudar('tipo', evento.target.value)} erro={erros.tipo} />
+                <ul className="itens">
+                  {doGrupo.map((categoria) => (
+                    <li
+                      key={categoria.id}
+                      className={`item com-selecao${categoria.ativa ? '' : ' desativado'}${selecao.marcado(categoria.id) ? ' marcado' : ''}`}
+                    >
+                      <input type="checkbox" className="marcar-linha" checked={selecao.marcado(categoria.id)}
+                        onChange={() => selecao.alternar(categoria.id)} aria-label={`Selecionar ${categoria.nome}`} />
+                      <span className="marca-da-categoria" style={{ '--cor-da-categoria': `var(--cat-${categoria.cor})` }} aria-hidden="true">
+                        <Icone nome={grupo.icone} tamanho={16} />
+                      </span>
+                      <span className="descricao">
+                        <b>{categoria.nome}</b>
+                        <small>
+                          {rotuloDaCor(categoria.cor)}
+                          {!categoria.ativa && <span className="etiqueta">Desativada</span>}
+                        </small>
+                      </span>
+                      <button type="button" className="discreto-botao" onClick={() => setModal({ emEdicao: categoria })}>
+                        <Icone nome="editar" tamanho={16} />
+                        <span className="rotulo-da-acao">Editar</span>
+                        <span className="apenas-leitor">: {categoria.nome}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
+            </div>
+          );
+        })}
+      </section>
 
-              <Campo elemento={Seletor} rotulo="Cor" name="cor" value={formulario.cor}
-                opcoes={CORES_DE_CATEGORIA.map((cor) => ({ ...cor, cor: cor.valor }))}
-                onChange={(evento) => mudar('cor', evento.target.value)} erro={erros.cor} />
+      <Modal aberta={Boolean(modal)} titulo={modal?.emEdicao ? 'Editar categoria' : 'Nova categoria'} descricao={modal?.emEdicao?.nome}
+        aoFechar={fecharModal} ocupado={modalOcupado}>
+        {modal && (
+          <FormularioDeCategoria espacoId={espacoId} emEdicao={modal.emEdicao} tipoInicial={tipoDoAtalho ?? 'DESPESA'}
+            aoSalvar={aposSalvar} aoCancelar={fecharModal} aoMudarOcupado={setModalOcupado} />
+        )}
+      </Modal>
 
-              {emEdicao && (
-                <label className="caixa-de-marcar">
-                  <input type="checkbox" name="ativa" checked={formulario.ativa}
-                    onChange={(evento) => mudar('ativa', evento.target.checked)} />
-                  <span>
-                    <b>Categoria ativa</b>
-                    <small>Desativada, sai das opções de novos lançamentos e mantém o histórico.</small>
-                  </span>
-                </label>
-              )}
-
-              <div className="acoes-do-formulario">
-                {emEdicao && (
-                  <button type="button" className="secundario" onClick={cancelar} disabled={enviando}>
-                    Cancelar
-                  </button>
-                )}
-                <button type="submit" disabled={enviando} aria-busy={enviando}>
-                  {enviando ? 'Salvando…' : emEdicao ? 'Salvar' : 'Criar categoria'}
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
-      </div>
+      <Confirmacao
+        aberta={Boolean(aRemover)}
+        titulo={aRemover ? `Remover ${contar(aRemover.length, 'categoria', 'categorias')}?` : ''}
+        rotuloDeConfirmar="Remover"
+        perigo
+        ocupado={removendo}
+        aoConfirmar={confirmarRemocao}
+        aoCancelar={() => !removendo && setARemover(null)}
+      >
+        {aRemover && (
+          <>
+            <p>{juntar(aRemover.map((categoria) => categoria.nome))}.</p>
+            <p>
+              Categoria sem lançamentos some de vez. A que já está em algum lançamento fica: desative-a em Editar para tirá-la
+              das opções sem mexer no histórico.
+            </p>
+          </>
+        )}
+      </Confirmacao>
     </>
   );
 }

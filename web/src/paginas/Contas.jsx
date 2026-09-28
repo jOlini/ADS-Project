@@ -1,42 +1,46 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useOutletContext, useSearchParams } from 'react-router-dom';
+import { useLocation, useOutletContext, useSearchParams } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
-import Campo from '../componentes/Campo';
+import BarraDeSelecao from '../componentes/BarraDeSelecao';
+import CartaoVisual from '../componentes/CartaoVisual';
+import Confirmacao from '../componentes/Confirmacao';
 import Esqueleto from '../componentes/Esqueleto';
+import FormularioDeCartao from '../componentes/FormularioDeCartao';
+import FormularioDeConta from '../componentes/FormularioDeConta';
 import Icone from '../componentes/Icone';
-import MedidorDoLimite from '../componentes/MedidorDoLimite';
-import Seletor from '../componentes/Seletor';
+import Modal from '../componentes/Modal';
 import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
-import { useFocoAoChegar } from '../componentes/useFocoAoChegar';
-import { primeiroCampoComErro } from '../regras/cadastro';
-import { formatarBRL, lerValor, valorParaCampo } from '../regras/dinheiro';
-import { formatarData } from '../regras/datas';
-import {
-  cartoesDe,
-  contasBancarias,
-  corpoDoCartao,
-  DIAS_DO_MES,
-  ehCartao,
-  errosDaApi,
-  ORDEM_DA_CONTA,
-  ORDEM_DO_CARTAO,
-  rotuloDoTipoDeConta,
-  saldoTotal,
-  TIPOS_DE_CONTA,
-  validarCartao,
-  validarConta,
-} from '../regras/livroCaixa';
-import { apiConfigurada, atualizarConta, criarConta, listarCartoes, listarContas } from '../servicos/livroCaixa';
+import { useSelecao } from '../componentes/useSelecao';
+import { formatarBRL } from '../regras/dinheiro';
+import { cartoesDe, contasBancarias, rotuloDoTipoDeConta, saldoTotal } from '../regras/livroCaixa';
+import { apiConfigurada, excluirConta, listarCartoes, listarContas } from '../servicos/livroCaixa';
 import '../estilos/cartoes.css';
 
-const ID_DO_FORMULARIO = 'formulario-da-conta';
-const CONTA_NOVA = { nome: '', tipo: 'CORRENTE', saldoInicial: '', ativa: true };
-const CARTAO_NOVO = { nome: '', limite: '', diaFechamento: '', diaVencimento: '', ativa: true };
-const TIPOS_DO_FORMULARIO = [
-  { id: 'conta', rotulo: 'Conta' },
-  { id: 'cartao', rotulo: 'Cartão de crédito' },
-];
+const contar = (quantidade, singular, plural) => `${quantidade} ${quantidade === 1 ? singular : plural}`;
+
+// Textos de cada cadastro: o título do modal, os nomes na seleção e o que a
+// remoção leva junto (dito antes de confirmar, porque não há volta).
+const TIPOS = {
+  conta: {
+    nomes: ['conta', 'contas'],
+    novo: 'Nova conta',
+    editar: 'Editar conta',
+    removidos: ['conta removida', 'contas removidas'],
+    consequencia:
+      'Cada conta sai com todos os lançamentos dela. Transferências e pagamentos de fatura com outras contas também saem, e o saldo delas muda.',
+    alternativa: 'Para guardar o histórico, desative a conta em Editar.',
+  },
+  cartao: {
+    nomes: ['cartão', 'cartões'],
+    novo: 'Novo cartão',
+    editar: 'Editar cartão',
+    removidos: ['cartão removido', 'cartões removidos'],
+    consequencia:
+      'Cada cartão sai com todas as compras, parcelas e faturas. Os pagamentos de fatura também saem, e o valor volta ao saldo da conta de onde saiu.',
+    alternativa: 'Para guardar o histórico, desative o cartão em Editar.',
+  },
+};
 
 // Contas e o painel de cada cartão (limite, fatura atual) de uma vez.
 async function carregarCadastros(espacoId) {
@@ -44,43 +48,40 @@ async function carregarCadastros(espacoId) {
   return { contas, paineis: new Map(cartoes.map((cartao) => [cartao.id, cartao])) };
 }
 
-function formularioDe(conta) {
-  if (ehCartao(conta)) {
-    return {
-      nome: conta.nome,
-      limite: valorParaCampo(conta.limite_centavos),
-      diaFechamento: String(conta.dia_fechamento),
-      diaVencimento: String(conta.dia_vencimento),
-      ativa: conta.ativa,
-    };
-  }
-  return { nome: conta.nome, tipo: conta.tipo, saldoInicial: '', ativa: conta.ativa };
-}
-
-// Contas & Cartões. Contas são onde o dinheiro está (corrente, poupança,
-// carteira, investimento), com o saldo de cada uma; o saldo inicial não muda
-// depois de criado. Cartões de crédito são contas de dívida, com limite e
-// fatura: cada um abre a própria tela, com o extrato da fatura, as compras
-// parceladas e o pagamento. Um atalho de outra tela chega com
-// ?cadastrar=conta (ou cartao) e cai no formulário certo, com o foco no nome.
+// Contas & Cartões, em duas seções separadas:
+// - Contas bancárias: onde o dinheiro está (corrente, poupança, carteira,
+//   investimento), com o saldo de cada uma;
+// - Cartões de crédito: a carteira, com cada cartão desenhado como o plástico
+//   (cor, faixa magnética, fatura atual e limite disponível); o cartão
+//   inteiro abre a tela dele, com a fatura e as parcelas.
+// Criar e editar é sempre num modal. As duas listas têm seleção em lote para
+// remover. Um atalho de outra tela chega com ?cadastrar=conta (ou cartao) e
+// já abre o modal certo, com o foco no nome.
 export default function Contas() {
   const { espaco } = useOutletContext();
   const toast = useToast();
-  const [parametros] = useSearchParams();
-  const atalho = parametros.get('cadastrar');
-  const [tipoDoFormulario, setTipoDoFormulario] = useState(atalho === 'cartao' ? 'cartao' : 'conta');
-  // null = criando; senão, a conta ou o cartão em edição.
-  const [emEdicao, setEmEdicao] = useState(null);
-  const [formulario, setFormulario] = useState(() => (atalho === 'cartao' ? CARTAO_NOVO : CONTA_NOVA));
-  const [erros, setErros] = useState({});
-  const [enviando, setEnviando] = useState(false);
+  const [parametros, setParametros] = useSearchParams();
+  const atalho = TIPOS[parametros.get('cadastrar')] ? parametros.get('cadastrar') : null;
+  // { tipo: 'conta' | 'cartao', emEdicao } com o modal aberto; senão, null.
+  const [modal, setModal] = useState(() => (atalho ? { tipo: atalho, emEdicao: null } : null));
+  const [modalOcupado, setModalOcupado] = useState(false);
+  // { tipo, itens } esperando a confirmação da remoção.
+  const [aRemover, setARemover] = useState(null);
+  const [removendo, setRemovendo] = useState(false);
 
   const espacoId = espaco.dados?.id;
   const buscarCadastros = useMemo(() => (espacoId ? () => carregarCadastros(espacoId) : null), [espacoId]);
   const cadastros = useCarga(buscarCadastros);
-  useFocoAoChegar(atalho === 'conta' || atalho === 'cartao', ID_DO_FORMULARIO);
-  // O atalho "Abrir cartões" (/contas#cartoes) rola até a lista de cartões
-  // quando ela aparece.
+  const todas = useMemo(() => cadastros.dados?.contas ?? [], [cadastros.dados]);
+  const contas = useMemo(() => contasBancarias(todas), [todas]);
+  const cartoes = useMemo(() => cartoesDe(todas), [todas]);
+  const idsDasContas = useMemo(() => contas.map((conta) => conta.id), [contas]);
+  const idsDosCartoes = useMemo(() => cartoes.map((cartao) => cartao.id), [cartoes]);
+  const selecaoDeContas = useSelecao(idsDasContas);
+  const selecaoDeCartoes = useSelecao(idsDosCartoes);
+
+  // O atalho "Abrir cartões" (/contas#cartoes) rola até a carteira quando
+  // ela aparece.
   const { hash } = useLocation();
   const listaPronta = Boolean(cadastros.dados);
   useEffect(() => {
@@ -117,128 +118,106 @@ export default function Contas() {
     );
   }
 
-  const todas = cadastros.dados?.contas ?? [];
   const paineis = cadastros.dados?.paineis ?? new Map();
-  const contas = contasBancarias(todas);
-  const cartoes = cartoesDe(todas);
-  const cartao = tipoDoFormulario === 'cartao';
+  const faturasAtuais = cartoes.reduce((soma, cartao) => soma + (paineis.get(cartao.id)?.fatura_atual_centavos ?? 0), 0);
+  const disponivel = cartoes.reduce((soma, cartao) => soma + (paineis.get(cartao.id)?.disponivel_centavos ?? 0), 0);
 
-  function focarNoNome() {
-    // O formulário fica ao lado (ou abaixo, no celular): o foco vai até ele.
-    requestAnimationFrame(() => document.getElementById(ID_DO_FORMULARIO)?.elements.nome?.focus());
+  function abrir(tipo, emEdicao = null) {
+    setModal({ tipo, emEdicao });
   }
 
-  function trocarTipo(tipo) {
-    setTipoDoFormulario(tipo);
-    setFormulario(tipo === 'cartao' ? CARTAO_NOVO : CONTA_NOVA);
-    setErros({});
-  }
-
-  function mudar(campo, valor) {
-    setFormulario((atual) => ({ ...atual, [campo]: valor }));
-    setErros((atuais) => ({ ...atuais, [campo]: undefined }));
-  }
-
-  function editar(conta) {
-    setEmEdicao(conta);
-    setTipoDoFormulario(ehCartao(conta) ? 'cartao' : 'conta');
-    setFormulario(formularioDe(conta));
-    setErros({});
-    focarNoNome();
-  }
-
-  function novoCartao() {
-    cancelar();
-    trocarTipo('cartao');
-    focarNoNome();
-  }
-
-  function cancelar() {
-    setEmEdicao(null);
-    setFormulario(tipoDoFormulario === 'cartao' ? CARTAO_NOVO : CONTA_NOVA);
-    setErros({});
-  }
-
-  async function salvarConta() {
-    if (emEdicao) {
-      const salva = await atualizarConta(espacoId, emEdicao.id, {
-        nome: formulario.nome.trim(),
-        tipo: formulario.tipo,
-        ativa: formulario.ativa,
-      });
-      toast.sucesso(salva.ativa ? 'Os lançamentos continuam iguais.' : 'Ela sai das opções de novos lançamentos.', {
-        titulo: `Conta "${salva.nome}" salva`,
-      });
-      return;
+  function fecharModal() {
+    setModal(null);
+    setModalOcupado(false);
+    // O atalho já cumpriu o papel: recarregar a página não reabre o modal.
+    if (atalho) {
+      setParametros({}, { replace: true });
     }
-    const criada = await criarConta(espacoId, {
-      nome: formulario.nome.trim(),
-      tipo: formulario.tipo,
-      saldo_inicial_centavos: formulario.saldoInicial.trim() ? lerValor(formulario.saldoInicial, { permitirNegativo: true }) : 0,
-    });
-    toast.sucesso(`Saldo inicial de ${formatarBRL(criada.saldo_inicial_centavos)}.`, { titulo: `Conta "${criada.nome}" criada` });
   }
 
-  async function salvarCartao() {
-    if (emEdicao) {
-      const salvo = await atualizarConta(espacoId, emEdicao.id, corpoDoCartao(formulario, { comAtiva: true }));
-      toast.sucesso(`Limite de ${formatarBRL(salvo.limite_centavos)}.`, { titulo: `Cartão "${salvo.nome}" salvo` });
-      return;
-    }
-    const criado = await criarConta(espacoId, corpoDoCartao(formulario));
-    toast.sucesso(`Fecha no dia ${criado.dia_fechamento} e vence no dia ${criado.dia_vencimento}.`, {
-      titulo: `Cartão "${criado.nome}" criado`,
-    });
+  function aposSalvar() {
+    fecharModal();
+    cadastros.recarregar();
   }
 
-  async function enviar(evento) {
-    evento.preventDefault();
-    const elementos = evento.currentTarget.elements;
-    const encontrados = cartao
-      ? validarCartao(formulario)
-      : validarConta(emEdicao ? { ...formulario, saldoInicial: '' } : formulario);
-    setErros(encontrados);
-    const primeiro = primeiroCampoComErro(encontrados, cartao ? ORDEM_DO_CARTAO : ORDEM_DA_CONTA);
-    if (primeiro) {
-      elementos[primeiro]?.focus();
-      return;
+  function pedirRemocao(tipo, ids) {
+    const itens = (tipo === 'conta' ? contas : cartoes).filter((item) => ids.includes(item.id));
+    if (itens.length > 0) {
+      setARemover({ tipo, itens });
     }
+  }
 
-    setEnviando(true);
+  // Uma por uma: a API apaga cada conta com os lançamentos dela. Se uma
+  // falhar, as anteriores já saíram, e o aviso diz quantas.
+  async function confirmarRemocao() {
+    const { tipo, itens } = aRemover;
+    const textos = TIPOS[tipo];
+    setRemovendo(true);
+    let removidos = 0;
+    let lancamentos = 0;
     try {
-      await (cartao ? salvarCartao() : salvarConta());
-      cancelar();
-      cadastros.recarregar();
+      for (const item of itens) {
+        lancamentos += (await excluirConta(espacoId, item.id)).excluidos;
+        removidos += 1;
+      }
+      toast.sucesso(`Com ${contar(lancamentos, 'lançamento', 'lançamentos')}.`, { titulo: contar(removidos, ...textos.removidos) });
     } catch (erro) {
-      setErros(errosDaApi(erro.campos));
-      toast.erro(erro.message, { titulo: cartao ? 'Cartão não salvo' : 'Conta não salva' });
+      const antes = removidos > 0 ? ` Antes da falha, ${contar(removidos, ...textos.removidos)}.` : '';
+      toast.erro(`${erro.message}${antes}`, { titulo: 'Remoção interrompida' });
     } finally {
-      setEnviando(false);
+      setRemovendo(false);
+      setARemover(null);
+      (tipo === 'conta' ? selecaoDeContas : selecaoDeCartoes).limpar();
+      cadastros.recarregar();
     }
   }
 
   const botaoEditar = (conta) => (
-    <button type="button" className="discreto-botao" onClick={() => editar(conta)}>
+    <button type="button" className="discreto-botao" onClick={() => abrir('conta', conta)}>
       <Icone nome="editar" tamanho={16} />
       <span className="rotulo-da-acao">Editar</span>
       <span className="apenas-leitor">: {conta.nome}</span>
     </button>
   );
 
+  const textosDoModal = modal ? TIPOS[modal.tipo] : null;
+  const textosDaRemocao = aRemover ? TIPOS[aRemover.tipo] : null;
+
   return (
     <>
       <header className="cabecalho-da-pagina">
         <h1>Contas & Cartões</h1>
+        <div className="acoes-da-pagina">
+          <button type="button" className="secundario" onClick={() => abrir('conta')}>
+            <Icone nome="contas" tamanho={18} />
+            Nova conta
+          </button>
+          <button type="button" onClick={() => abrir('cartao')}>
+            <Icone nome="cartao" tamanho={18} />
+            Novo cartão
+          </button>
+        </div>
       </header>
 
-      <div className="corpo-do-resumo pagina-de-cadastro">
-        <div className="colunas-de-cadastro">
-          <section className="cartao lista" aria-labelledby="titulo-contas">
-            <div className="cabecalho-do-painel">
-              <h2 id="titulo-contas">Contas</h2>
-              {contas.length > 0 && <small>Total {formatarBRL(saldoTotal(contas))}</small>}
-            </div>
+      <div className="pagina-de-contas">
+        <section className="secao-do-cadastro" aria-labelledby="titulo-contas">
+          <div className="cabecalho-da-secao">
+            <h2 id="titulo-contas">
+              <span className="simbolo-da-secao" aria-hidden="true">
+                <Icone nome="contas" tamanho={18} />
+              </span>
+              Contas bancárias
+            </h2>
+            {contas.length > 0 && (
+              <p>
+                Saldo em contas <b>{formatarBRL(saldoTotal(contas))}</b>
+              </p>
+            )}
+          </div>
 
+          <div className="cartao lista">
+            <BarraDeSelecao ids={idsDasContas} selecao={selecaoDeContas} nomes={TIPOS.conta.nomes}
+              aoRemover={(ids) => pedirRemocao('conta', ids)} ocupado={removendo} />
             {contas.length === 0 ? (
               <div className="vazio">
                 <span className="simbolo" aria-hidden="true">
@@ -249,11 +228,20 @@ export default function Contas() {
                   Comece pela conta onde o salário cai e informe o saldo de hoje. Poupança e dinheiro na carteira também
                   contam.
                 </p>
+                <button type="button" onClick={() => abrir('conta')}>
+                  <Icone nome="mais" tamanho={16} />
+                  Cadastrar conta
+                </button>
               </div>
             ) : (
               <ul className="itens">
                 {contas.map((conta) => (
-                  <li key={conta.id} className={`item${conta.ativa ? '' : ' desativado'}`} aria-current={emEdicao?.id === conta.id || undefined}>
+                  <li
+                    key={conta.id}
+                    className={`item com-selecao${conta.ativa ? '' : ' desativado'}${selecaoDeContas.marcado(conta.id) ? ' marcado' : ''}`}
+                  >
+                    <input type="checkbox" className="marcar-linha" checked={selecaoDeContas.marcado(conta.id)}
+                      onChange={() => selecaoDeContas.alternar(conta.id)} aria-label={`Selecionar ${conta.nome}`} />
                     <span className="marca-da-categoria" aria-hidden="true">
                       <Icone nome="contas" tamanho={16} />
                     </span>
@@ -270,153 +258,94 @@ export default function Contas() {
                 ))}
               </ul>
             )}
-          </section>
+          </div>
+        </section>
 
-          <section className="cartao lista" aria-labelledby="titulo-cartoes" id="cartoes">
-            <div className="cabecalho-do-painel">
-              <h2 id="titulo-cartoes">Cartões de crédito</h2>
-              {cartoes.length > 0 && (
-                <button type="button" className="discreto-botao" onClick={novoCartao}>
-                  <Icone nome="mais" tamanho={16} />
-                  Novo cartão
-                </button>
-              )}
+        <section className="secao-do-cadastro" aria-labelledby="titulo-cartoes" id="cartoes">
+          <div className="cabecalho-da-secao">
+            <h2 id="titulo-cartoes">
+              <span className="simbolo-da-secao" aria-hidden="true">
+                <Icone nome="cartao" tamanho={18} />
+              </span>
+              Cartões de crédito
+            </h2>
+            {cartoes.length > 0 && (
+              <p>
+                Faturas atuais <b>{formatarBRL(faturasAtuais)}</b> · Limite disponível <b>{formatarBRL(disponivel)}</b>
+              </p>
+            )}
+          </div>
+
+          {cartoes.length === 0 ? (
+            <div className="cartao vazio">
+              <span className="simbolo" aria-hidden="true">
+                <Icone nome="cartao" tamanho={20} />
+              </span>
+              <h3>Nenhum cartão cadastrado</h3>
+              <p>
+                Cadastre o cartão com o limite e os dias de fechamento e vencimento. As compras no crédito ficam na fatura dele,
+                separadas do extrato das contas, e o pagamento sai de uma conta.
+              </p>
+              <button type="button" onClick={() => abrir('cartao')}>
+                <Icone nome="mais" tamanho={16} />
+                Cadastrar cartão
+              </button>
             </div>
-
-            {cartoes.length === 0 ? (
-              <div className="vazio">
-                <span className="simbolo" aria-hidden="true">
-                  <Icone nome="cartao" tamanho={20} />
-                </span>
-                <h3>Nenhum cartão cadastrado</h3>
-                <p>
-                  Cadastre o cartão com o limite e os dias de fechamento e vencimento. As compras no crédito ficam na fatura
-                  dele, e o pagamento sai de uma conta.
-                </p>
-                <button type="button" onClick={novoCartao}>
-                  <Icone nome="mais" tamanho={16} />
-                  Cadastrar cartão
-                </button>
+          ) : (
+            <>
+              <div className="cartao barra-da-carteira">
+                <BarraDeSelecao ids={idsDosCartoes} selecao={selecaoDeCartoes} nomes={TIPOS.cartao.nomes}
+                  aoRemover={(ids) => pedirRemocao('cartao', ids)} ocupado={removendo} />
               </div>
-            ) : (
-              <ul className="itens">
-                {cartoes.map((item) => {
-                  const painel = paineis.get(item.id);
-                  return (
-                    <li key={item.id} className={`item item-de-cartao${item.ativa ? '' : ' desativado'}`} aria-current={emEdicao?.id === item.id || undefined}>
-                      <span className="marca-da-categoria" aria-hidden="true">
-                        <Icone nome="cartao" tamanho={16} />
-                      </span>
-                      <span className="descricao">
-                        <Link to={`/contas/cartoes/${item.id}`} className="nome-do-cartao">
-                          {item.nome}
-                        </Link>
-                        <small>
-                          Fecha dia {item.dia_fechamento} · vence dia {item.dia_vencimento}
-                          {!item.ativa && <span className="etiqueta">Desativado</span>}
-                        </small>
-                      </span>
-                      {painel && (
-                        <span className="fatura-do-item">
-                          <small>Fatura atual · vence {formatarData(painel.fatura_atual.vencimento).slice(0, 5)}</small>
-                          <b>{formatarBRL(painel.fatura_atual_centavos)}</b>
-                        </span>
-                      )}
-                      {botaoEditar(item)}
-                      {painel && <MedidorDoLimite cartao={painel} compacto />}
-                    </li>
-                  );
+              <div className="carteira">
+                {cartoes.map((cartao) => {
+                  const painel = paineis.get(cartao.id);
+                  return painel ? (
+                    <CartaoVisual
+                      key={cartao.id}
+                      cartao={painel}
+                      para={`/contas/cartoes/${cartao.id}`}
+                      marcado={selecaoDeCartoes.marcado(cartao.id)}
+                      aoMarcar={() => selecaoDeCartoes.alternar(cartao.id)}
+                      aoEditar={() => abrir('cartao', painel)}
+                    />
+                  ) : null;
                 })}
-              </ul>
-            )}
-          </section>
-        </div>
-
-        <div className="lado">
-          <section className="cartao painel" aria-labelledby="titulo-formulario-da-conta">
-            <div className="cabecalho-do-painel">
-              <h2 id="titulo-formulario-da-conta">
-                {emEdicao ? (cartao ? 'Editar cartão' : 'Editar conta') : cartao ? 'Novo cartão' : 'Nova conta'}
-              </h2>
-            </div>
-            {!emEdicao && (
-              <div className="abas largas" role="group" aria-label="O que cadastrar">
-                {TIPOS_DO_FORMULARIO.map((tipo) => (
-                  <button key={tipo.id} type="button" aria-pressed={tipoDoFormulario === tipo.id} onClick={() => trocarTipo(tipo.id)}>
-                    {tipo.rotulo}
-                  </button>
-                ))}
               </div>
-            )}
-            <form id={ID_DO_FORMULARIO} onSubmit={enviar} noValidate>
-              <Campo rotulo="Nome" name="nome" autoComplete="off" maxLength={60}
-                placeholder={cartao ? 'Ex.: Cartão do banco' : 'Ex.: Conta do banco'}
-                value={formulario.nome} onChange={(evento) => mudar('nome', evento.target.value)} erro={erros.nome} />
-
-              {cartao ? (
-                <>
-                  <Campo rotulo="Limite (R$)" name="limite" inputMode="decimal" autoComplete="off" placeholder="0,00"
-                    value={formulario.limite} onChange={(evento) => mudar('limite', evento.target.value)} erro={erros.limite} />
-                  <div className="duas-colunas">
-                    <Campo elemento={Seletor} rotulo="Fatura fecha" name="diaFechamento" placeholder="Dia" opcoes={DIAS_DO_MES}
-                      value={formulario.diaFechamento} onChange={(evento) => mudar('diaFechamento', evento.target.value)}
-                      erro={erros.diaFechamento} />
-                    <Campo elemento={Seletor} rotulo="Fatura vence" name="diaVencimento" placeholder="Dia" opcoes={DIAS_DO_MES}
-                      value={formulario.diaVencimento} onChange={(evento) => mudar('diaVencimento', evento.target.value)}
-                      erro={erros.diaVencimento} />
-                  </div>
-                  <p className="dica-do-campo">
-                    A compra feita no dia do fechamento já entra na fatura seguinte. Dias 29 a 31 viram o último dia nos meses
-                    mais curtos.
-                  </p>
-                </>
-              ) : (
-                <Campo elemento={Seletor} rotulo="Tipo" name="tipo" value={formulario.tipo} opcoes={TIPOS_DE_CONTA}
-                  onChange={(evento) => mudar('tipo', evento.target.value)} erro={erros.tipo} />
-              )}
-
-              {!cartao && emEdicao && (
-                <p className="dica-do-campo">
-                  Saldo inicial: {formatarBRL(emEdicao.saldo_inicial_centavos)}. Ele não muda depois de criado, para não
-                  reescrever o saldo dos dias passados; para corrigir, lance um ajuste.
-                </p>
-              )}
-              {!cartao && !emEdicao && (
-                <Campo rotulo="Saldo de hoje (R$)" name="saldoInicial" inputMode="decimal" autoComplete="off" placeholder="0,00"
-                  dica="Quanto já está na conta. Use -150,00 se estiver no vermelho."
-                  value={formulario.saldoInicial} onChange={(evento) => mudar('saldoInicial', evento.target.value)}
-                  erro={erros.saldoInicial} />
-              )}
-
-              {emEdicao && (
-                <label className="caixa-de-marcar">
-                  <input type="checkbox" name="ativa" checked={formulario.ativa}
-                    onChange={(evento) => mudar('ativa', evento.target.checked)} />
-                  <span>
-                    <b>{cartao ? 'Cartão ativo' : 'Conta ativa'}</b>
-                    <small>
-                      {cartao
-                        ? 'Desativado, não recebe compras novas. As faturas e o pagamento continuam.'
-                        : 'Desativada, sai das opções de novos lançamentos e mantém o histórico.'}
-                    </small>
-                  </span>
-                </label>
-              )}
-
-              <div className="acoes-do-formulario">
-                {emEdicao && (
-                  <button type="button" className="secundario" onClick={cancelar} disabled={enviando}>
-                    Cancelar
-                  </button>
-                )}
-                <button type="submit" disabled={enviando} aria-busy={enviando}>
-                  {enviando ? 'Salvando…' : emEdicao ? 'Salvar' : cartao ? 'Criar cartão' : 'Criar conta'}
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
+            </>
+          )}
+        </section>
       </div>
+
+      <Modal aberta={Boolean(modal)} titulo={modal?.emEdicao ? textosDoModal?.editar : textosDoModal?.novo}
+        descricao={modal?.emEdicao?.nome} aoFechar={fecharModal} ocupado={modalOcupado}>
+        {modal?.tipo === 'conta' && (
+          <FormularioDeConta espacoId={espacoId} emEdicao={modal.emEdicao} aoSalvar={aposSalvar} aoCancelar={fecharModal}
+            aoMudarOcupado={setModalOcupado} />
+        )}
+        {modal?.tipo === 'cartao' && (
+          <FormularioDeCartao espacoId={espacoId} emEdicao={modal.emEdicao} aoSalvar={aposSalvar} aoCancelar={fecharModal}
+            aoMudarOcupado={setModalOcupado} />
+        )}
+      </Modal>
+
+      <Confirmacao
+        aberta={Boolean(aRemover)}
+        titulo={aRemover ? `Remover ${contar(aRemover.itens.length, ...textosDaRemocao.nomes)}?` : ''}
+        rotuloDeConfirmar="Remover"
+        perigo
+        ocupado={removendo}
+        aoConfirmar={confirmarRemocao}
+        aoCancelar={() => !removendo && setARemover(null)}
+      >
+        {aRemover && (
+          <>
+            <p>{aRemover.itens.map((item) => item.nome).join(', ')}.</p>
+            <p>{textosDaRemocao.consequencia} Não há como desfazer.</p>
+            <p>{textosDaRemocao.alternativa}</p>
+          </>
+        )}
+      </Confirmacao>
     </>
   );
 }

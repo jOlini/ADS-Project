@@ -219,8 +219,11 @@ button[aria-pressed='true'] {
     box-shadow var(--tempo-medio) var(--curva-chegada);
 }
 
-/* Caixa de marcar própria: o fundo enche de verde e o visto cresce. */
-.caixa-de-marcar input[type='checkbox'] {
+/* Caixa de marcar própria: o fundo enche de verde e o visto cresce. Vale
+   também para as caixas da seleção em lote (linha, cartão, "Selecionar
+   todos"). */
+:is(.caixa-de-marcar, .marcar-todos) input[type='checkbox'],
+input[type='checkbox']:is(.marcar-linha, .marcar-cartao) {
   appearance: none;
   display: grid;
   place-content: center;
@@ -234,7 +237,8 @@ button[aria-pressed='true'] {
     box-shadow var(--tempo-medio) var(--curva-chegada);
 }
 
-.caixa-de-marcar input[type='checkbox']::before {
+:is(.caixa-de-marcar, .marcar-todos) input[type='checkbox']::before,
+input[type='checkbox']:is(.marcar-linha, .marcar-cartao)::before {
   content: '';
   width: 11px;
   height: 11px;
@@ -245,25 +249,42 @@ button[aria-pressed='true'] {
   transition: transform var(--tempo-medio) var(--curva-chegada);
 }
 
-.caixa-de-marcar:hover input[type='checkbox']:not(:disabled) {
+:is(.caixa-de-marcar, .marcar-todos):hover input[type='checkbox']:not(:disabled),
+input[type='checkbox']:is(.marcar-linha, .marcar-cartao):hover:not(:disabled) {
   border-color: var(--of-verde);
 }
 
-.caixa-de-marcar input[type='checkbox']:checked {
+:is(.caixa-de-marcar, .marcar-todos) input[type='checkbox']:checked,
+input[type='checkbox']:is(.marcar-linha, .marcar-cartao):checked {
   background: var(--marca);
   border-color: var(--marca);
 }
 
-.caixa-de-marcar input[type='checkbox']:checked::before {
+:is(.caixa-de-marcar, .marcar-todos) input[type='checkbox']:checked::before,
+input[type='checkbox']:is(.marcar-linha, .marcar-cartao):checked::before {
   transform: scale(1);
 }
 
-.caixa-de-marcar input[type='checkbox']:focus-visible {
+/* "Selecionar todos" com parte marcada: cheio, com um traço no lugar do visto. */
+.marcar-todos input[type='checkbox']:indeterminate {
+  background: var(--marca);
+  border-color: var(--marca);
+}
+
+.marcar-todos input[type='checkbox']:indeterminate::before {
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6h7' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  transform: scale(1);
+}
+
+:is(.caixa-de-marcar, .marcar-todos) input[type='checkbox']:focus-visible,
+input[type='checkbox']:is(.marcar-linha, .marcar-cartao):focus-visible {
   outline: none;
   box-shadow: var(--anel-de-foco);
 }
 
-.caixa-de-marcar input[type='checkbox']:disabled {
+:is(.caixa-de-marcar, .marcar-todos) input[type='checkbox']:disabled,
+input[type='checkbox']:is(.marcar-linha, .marcar-cartao):disabled {
   cursor: not-allowed;
   opacity: var(--opacidade-desligado);
 }
@@ -477,7 +498,8 @@ button.item-do-menu,
 
   :is(button, a, .of-metas-lista button):active:not(:disabled),
   a.of-menu-item:hover .icone,
-  .caixa-de-marcar input[type='checkbox']::before {
+  :is(.caixa-de-marcar, .marcar-todos) input[type='checkbox']::before,
+  input[type='checkbox']:is(.marcar-linha, .marcar-cartao)::before {
     transform: none;
   }
 

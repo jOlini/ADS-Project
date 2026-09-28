@@ -564,6 +564,22 @@ button.link:hover:not(:disabled) {
   border-top: var(--borda);
 }
 
+/* Linha marcada na seleção em lote (o fundo sob o ponteiro vem de
+   estilos/movimento.css). */
+.lancamento.marcado,
+.lancamento.marcado:hover {
+  background: var(--fundo-marcado);
+}
+
+/* Com a caixa de marcar no começo da linha. */
+.lancamento.com-selecao {
+  grid-template-columns: auto var(--tamanho-marca-categoria) minmax(0, 1fr) auto;
+}
+
+.lancamento.com-selecao.com-acoes {
+  grid-template-columns: auto var(--tamanho-marca-categoria) minmax(0, 1fr) auto auto;
+}
+
 /* Linha do extrato com uma ação no fim (menu de Estornar e Excluir). */
 .lancamento.com-acoes {
   grid-template-columns: var(--tamanho-marca-categoria) minmax(0, 1fr) auto auto;
@@ -718,11 +734,6 @@ button.link:hover:not(:disabled) {
   .corpo-do-resumo {
     grid-template-columns: minmax(0, 1fr);
   }
-
-  /* No celular o formulário vem antes da lista: é o que se usa na hora. */
-  .pagina-de-cadastro .lado {
-    order: -1;
-  }
 }
 
 @media (max-width: 560px) {
@@ -867,6 +878,20 @@ form {
   display: flex;
   gap: var(--espaco-5);
   align-items: flex-start;
+  margin: calc(var(--espaco-3) * -1);
+  padding: var(--espaco-3);
+  border-radius: var(--raio-pequeno);
+  cursor: pointer;
+  transition: background-color var(--transicao);
+}
+
+.caixa-de-marcar:hover {
+  background: var(--fundo-ao-passar);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--marca);
   cursor: pointer;
 }
 
@@ -1017,6 +1042,28 @@ a.botao:hover {
 
 .itens .item + .item {
   border-top: var(--borda);
+}
+
+.itens .item {
+  transition: background-color var(--transicao);
+}
+
+.itens .item:hover {
+  background: var(--fundo-ao-passar);
+}
+
+.itens .item.marcado,
+.itens .item.marcado:hover {
+  background: var(--fundo-marcado);
+}
+
+/* Com a caixa de marcar no começo: contas (com valor) e categorias (sem). */
+.item.com-selecao {
+  grid-template-columns: auto var(--tamanho-marca-categoria) minmax(0, 1fr) auto auto;
+}
+
+.item.com-selecao:has(> .descricao + button) {
+  grid-template-columns: auto var(--tamanho-marca-categoria) minmax(0, 1fr) auto;
 }
 
 p.item {

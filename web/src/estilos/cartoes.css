@@ -1,71 +1,268 @@
 /*
- * Cartões de crédito: a lista em Contas & Cartões, o medidor do limite e a
- * tela do cartão (painel com os números e o extrato da fatura). Só tokens,
- * como o resto da área do cliente.
+ * Cartões de crédito: as duas seções de Contas & Cartões (contas bancárias e
+ * a carteira de cartões), o cartão desenhado como o plástico, o medidor do
+ * limite, a tela do cartão (painel, fatura e lista de faturas) e a compra no
+ * crédito do "+ Novo". Só tokens, como o resto da área do cliente. O painel
+ * dos cartões na Visão geral fica em olifine/estilos/olifine.css.
  */
 
-/* ---------------------------------------------- Contas & Cartões (lista) */
+/* ------------------------------------------- Contas & Cartões (seções) */
 
-/* As duas listas (contas e cartões), uma embaixo da outra. */
-.colunas-de-cadastro {
+.pagina-de-contas {
   display: grid;
-  gap: var(--espaco-8);
+  gap: var(--espaco-16);
   min-width: 0;
 }
 
-/* Linha do cartão: marca, nome, fatura atual e editar; o medidor ocupa a
-   linha de baixo inteira. */
-.item.item-de-cartao {
-  grid-template-columns: var(--tamanho-marca-categoria) minmax(0, 1fr) auto auto;
-  row-gap: var(--espaco-4);
-}
-
-.item-de-cartao .medidor-do-limite {
-  grid-column: 2 / -1;
-}
-
-a.nome-do-cartao {
-  display: block;
-  overflow: hidden;
-  color: var(--texto);
-  font-weight: var(--peso-semi);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-decoration: underline;
-  text-decoration-color: var(--linha-forte);
-  text-underline-offset: var(--espaco-2);
-}
-
-a.nome-do-cartao:hover {
-  text-decoration-color: currentColor;
-}
-
-.fatura-do-item {
+.secao-do-cadastro {
   display: grid;
-  justify-items: end;
-  line-height: var(--altura-de-linha-justa);
+  gap: var(--espaco-7);
+  min-width: 0;
 }
 
-.fatura-do-item small {
+/* Título de cada seção com o símbolo e um resumo à direita; a linha embaixo
+   separa as duas seções de vez. */
+.cabecalho-da-secao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4) var(--espaco-8);
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: var(--espaco-5);
+  border-bottom: var(--borda-forte);
+}
+
+.cabecalho-da-secao h2 {
+  display: flex;
+  gap: var(--espaco-5);
+  align-items: center;
+  font-size: var(--fonte-dialogo);
+}
+
+.cabecalho-da-secao p {
   color: var(--suave);
   font-size: var(--fonte-apoio);
+  font-variant-numeric: tabular-nums;
 }
 
-.fatura-do-item b {
-  font-weight: var(--peso-semi);
+.cabecalho-da-secao b {
+  color: var(--texto);
+}
+
+.simbolo-da-secao {
+  display: grid;
+  place-items: center;
+  width: var(--tamanho-avatar);
+  height: var(--tamanho-avatar);
+  border-radius: var(--raio-pequeno);
+  background: var(--marca-suave);
+  color: var(--marca);
+}
+
+.cartao.vazio {
+  padding: var(--espaco-12) var(--espaco-10);
+}
+
+/* A barra de seleção dos cartões fica num card próprio, acima da carteira. */
+.barra-da-carteira {
+  overflow: hidden;
+}
+
+.barra-da-carteira .barra-de-selecao {
+  border-bottom: 0;
+}
+
+/* --------------------------------------------------- Carteira de cartões */
+
+.carteira {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--largura-cartao-visual)), 1fr));
+  gap: var(--espaco-8);
+}
+
+/* O cartão como o plástico: cor escolhida, faixa magnética no alto, chip,
+   nome e números. A cor é enfeite (o nome está escrito); o texto é sempre
+   claro, sobre um degradê da cor do cartão. */
+.cartao-visual {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: var(--espaco-6);
+  min-width: 0;
+  padding: 0 var(--espaco-9) var(--espaco-8);
+  overflow: hidden;
+  border-radius: var(--raio-grande);
+  color: var(--sobre-cartao);
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgb(255 255 255 / 0.16), transparent 55%),
+    linear-gradient(135deg, var(--cor-da-amostra), color-mix(in srgb, var(--cor-da-amostra) 62%, #000));
+  box-shadow: var(--sombra);
+  transition:
+    transform var(--tempo-medio) var(--curva-chegada),
+    box-shadow var(--tempo-medio) var(--curva),
+    outline-color var(--tempo) var(--curva);
+  outline: var(--espessura-do-foco) solid transparent;
+  outline-offset: var(--afastamento-do-foco);
+}
+
+/* Sobe um passo como os outros cartões que levam a algum lugar
+   (estilos/movimento.css) e afunda de leve ao apertar. */
+.cartao-visual.clicavel:hover {
+  transform: translateY(var(--elevacao));
+  box-shadow: var(--sombra-elevada);
+}
+
+.cartao-visual.clicavel:active:not(:has(.marcar-cartao:active, .sobre-o-plastico:active)) {
+  transform: translateY(0) scale(0.99);
+  transition-duration: var(--tempo-curto);
+}
+
+/* O foco do link (esticado sobre o cartão) aparece no cartão inteiro. */
+.cartao-visual.clicavel:has(.link-do-cartao:focus-visible) {
+  outline-color: var(--marca);
+}
+
+.cartao-visual.marcado {
+  outline-color: var(--marca);
+  box-shadow: var(--sombra-elevada), 0 0 0 5px var(--marca-suave);
+}
+
+.cartao-visual.desativado {
+  filter: saturate(0.35);
+}
+
+.faixa-magnetica {
+  display: block;
+  height: 1.75rem;
+  margin: var(--espaco-6) calc(var(--espaco-9) * -1) 0;
+  background: var(--faixa-magnetica);
+}
+
+.topo-do-plastico {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  min-width: 0;
+}
+
+.nome-no-plastico {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--fonte-botao);
+  font-weight: var(--peso-forte);
+  letter-spacing: var(--letra-leve);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* O link se estica sobre o cartão inteiro: clicar em qualquer ponto abre a
+   tela do cartão. */
+a.link-do-cartao {
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: none;
+}
+
+a.link-do-cartao::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+a.link-do-cartao:focus-visible {
+  outline: none;
+}
+
+/* A caixa de seleção e o editar ficam por cima do link esticado. */
+.marcar-cartao,
+button.sobre-o-plastico {
+  position: relative;
+  z-index: 1;
+}
+
+
+button.botao-icone.sobre-o-plastico {
+  color: var(--sobre-cartao);
+  background: rgb(255 255 255 / 0.1);
+}
+
+button.botao-icone.sobre-o-plastico:hover:not(:disabled) {
+  color: var(--sobre-cartao);
+  background: rgb(255 255 255 / 0.24);
+}
+
+.chip {
+  flex: none;
+  width: 2.1rem;
+  height: 1.6rem;
+  border-radius: var(--raio-mini);
+  background: var(--chip);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.2);
+}
+
+.numeros-do-plastico {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espaco-6);
+  align-self: end;
+  margin: 0;
+}
+
+.numeros-do-plastico dt {
+  opacity: 0.8;
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-medio);
+}
+
+.numeros-do-plastico dd {
+  margin: 0;
+  font-size: var(--fonte-numero-compacto);
+  font-weight: var(--peso-forte);
+  letter-spacing: var(--letra-leve);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-@media (max-width: 560px) {
-  .item.item-de-cartao {
-    grid-template-columns: var(--tamanho-marca-categoria) minmax(0, 1fr) auto;
-  }
+.limite-no-plastico {
+  display: grid;
+  gap: var(--espaco-3);
+}
 
-  .item-de-cartao .fatura-do-item {
-    grid-column: 2;
-    justify-items: start;
-  }
+.limite-no-plastico .trilho {
+  height: var(--espaco-3);
+  border-radius: var(--raio-pilula);
+  background: rgb(255 255 255 / 0.22);
+  overflow: hidden;
+}
+
+.limite-no-plastico .trilho i {
+  display: block;
+  height: 100%;
+  border-radius: var(--raio-pilula);
+  background: var(--sobre-cartao);
+}
+
+/* Situação do limite escrita no próprio cartão; a cor só reforça. */
+.cartao-visual.atencao .limite-no-plastico .trilho i {
+  background: #f3c46b;
+}
+
+.cartao-visual.esgotado .limite-no-plastico .trilho i {
+  background: #ff9b8f;
+}
+
+.limite-no-plastico small {
+  opacity: 0.85;
+  font-size: var(--fonte-micro);
+  line-height: var(--altura-de-linha-justa);
+}
+
+.limite-no-plastico b {
+  display: inline-flex;
+  gap: var(--espaco-1);
+  align-items: center;
 }
 
 /* ------------------------------------------------------ Medidor do limite */
@@ -120,10 +317,6 @@ a.nome-do-cartao:hover {
   font-weight: var(--peso-semi);
 }
 
-.medidor-do-limite.compacto .trilho {
-  height: var(--espaco-3);
-}
-
 /* --------------------------------------------------------- Tela do cartão */
 
 .pagina-do-cartao {
@@ -159,15 +352,74 @@ a.voltar:hover {
 
 .painel-do-cartao {
   display: grid;
-  gap: var(--espaco-8);
+  grid-template-columns: var(--largura-plastico-no-painel) minmax(0, 1fr);
+  gap: var(--espaco-10);
+  align-items: center;
   padding: var(--espaco-10) var(--espaco-11);
 }
 
-/* Fileira de números do cartão: mesmo desenho dos números do mês na
-   Principal (rótulo em cima, valor grande, nota embaixo). */
+.numeros-e-limite {
+  display: grid;
+  gap: var(--espaco-8);
+  min-width: 0;
+}
+
+/* Fatura aberta à esquerda, lista de faturas à direita. */
+.corpo-do-cartao {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--largura-coluna-lateral);
+  gap: var(--espaco-8);
+  align-items: start;
+}
+
+.lista-de-faturas .item-de-fatura {
+  grid-template-columns: auto minmax(0, 1fr);
+  padding-right: var(--espaco-6);
+}
+
+/* A linha inteira (menos a caixa) abre a fatura. */
+button.abrir-fatura {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--espaco-4);
+  align-items: center;
+  width: 100%;
+  min-height: 0;
+  padding: var(--espaco-2) var(--espaco-3);
+  color: var(--texto);
+  background: transparent;
+  border-color: transparent;
+  border-radius: var(--raio-pequeno);
+  font-size: inherit;
+  font-weight: inherit;
+  text-align: left;
+}
+
+button.abrir-fatura:hover:not(:disabled) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.item-de-fatura[aria-current='true'] {
+  box-shadow: inset 3px 0 0 var(--marca);
+}
+
+.item-de-fatura .descricao b::first-letter {
+  text-transform: uppercase;
+}
+
+.item-de-fatura .descricao small {
+  display: flex;
+  gap: var(--espaco-3);
+  align-items: center;
+}
+
+/* Números do cartão em 2 × 2, ao lado do plástico (rótulo em cima, valor
+   grande, nota embaixo). */
 .numeros-do-cartao {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: var(--espaco-7);
   margin: 0;
 }
 
@@ -178,9 +430,14 @@ a.voltar:hover {
   padding-right: var(--espaco-6);
 }
 
-.numeros-do-cartao > div + div {
+.numeros-do-cartao > div:nth-child(2n) {
   padding-left: var(--espaco-7);
   border-left: var(--borda);
+}
+
+.numeros-do-cartao > div:nth-child(n + 3) {
+  padding-top: var(--espaco-7);
+  border-top: var(--borda);
 }
 
 .numeros-do-cartao dt {
@@ -224,14 +481,13 @@ a.voltar:hover {
 }
 
 @media (max-width: 1080px) {
-  .numeros-do-cartao {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    row-gap: var(--espaco-8);
+  .painel-do-cartao,
+  .corpo-do-cartao {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .numeros-do-cartao > div:nth-child(3) {
-    padding-left: 0;
-    border-left: 0;
+  .plastico-do-painel {
+    max-width: var(--largura-plastico-no-painel);
   }
 }
 
@@ -245,7 +501,8 @@ a.voltar:hover {
     row-gap: var(--espaco-6);
   }
 
-  .numeros-do-cartao > div + div {
+  .numeros-do-cartao > div + div,
+  .numeros-do-cartao > div:nth-child(2n) {
     padding-left: 0;
     padding-top: var(--espaco-6);
     border-left: 0;
@@ -330,4 +587,9 @@ a.voltar:hover {
   font-size: var(--fonte-apoio);
 }
 
-/* "A vencer" da Principal: o nome da fatura leva à tela do cartão. */
+/* Compra no crédito aberta pelo "+ Novo" da Visão geral: o cartão e o
+   formulário. */
+.compra-no-cartao {
+  display: grid;
+  gap: var(--espaco-9);
+}

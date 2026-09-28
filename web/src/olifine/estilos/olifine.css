@@ -803,6 +803,124 @@ a.of-kpi-link:hover {
   font-size: var(--fonte-rotulo);
 }
 
+/* Despesas do mês pela origem: à vista (contas) e no crédito (faturas). */
+.of-kpi-origem {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------ Cartões de crédito */
+
+/* Linha inteira da grade: o compromisso à esquerda e os cartões ao lado. */
+.of-painel-cartoes {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  column-gap: var(--espaco-12);
+}
+
+.of-painel-cartoes .of-painel-cabecalho {
+  grid-column: 1 / -1;
+}
+
+.of-compromisso {
+  display: grid;
+  gap: var(--espaco-2);
+  align-content: start;
+}
+
+.of-compromisso span,
+.of-compromisso small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-compromisso b {
+  font-size: 1.375rem;
+  font-weight: var(--peso-forte);
+  letter-spacing: var(--letra-titulo);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-cartoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-content: start;
+  gap: var(--espaco-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* O nome leva à tela do cartão; o link cobre a linha inteira. */
+.of-cartoes li {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: var(--espaco-5);
+  align-items: center;
+  padding: var(--espaco-5) var(--espaco-6);
+  border: var(--borda);
+  border-radius: var(--raio);
+  transition:
+    background-color var(--tempo) var(--curva),
+    border-color var(--tempo) var(--curva);
+}
+
+.of-cartoes li:hover {
+  background: var(--fundo-ao-passar);
+  border-color: var(--linha-forte);
+}
+
+.of-cartoes-pastilha {
+  width: var(--espaco-12);
+  height: var(--espaco-8);
+  border-radius: var(--raio-mini);
+  background: linear-gradient(135deg, var(--cor-da-amostra), color-mix(in srgb, var(--cor-da-amostra) 62%, #000));
+}
+
+.of-cartoes a {
+  overflow: hidden;
+  color: var(--texto);
+  font-weight: var(--peso-semi);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-cartoes a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.of-cartoes a:focus-visible {
+  outline: none;
+}
+
+.of-cartoes a:focus-visible::after {
+  outline: var(--espessura-do-foco) solid var(--of-verde);
+  outline-offset: var(--afastamento-do-foco);
+}
+
+.of-cartoes-valor {
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-cartoes small {
+  grid-column: 2 / -1;
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+@media (max-width: 900px) {
+  .of-painel-cartoes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ------------------------------------------------------ Evolução do saldo */
 
 .of-painel-metas {

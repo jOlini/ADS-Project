@@ -1,15 +1,23 @@
 import { useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
+import CompraNoCartao from '../../componentes/CompraNoCartao';
 import Esqueleto from '../../componentes/Esqueleto';
+import FormularioDeCartao from '../../componentes/FormularioDeCartao';
+import FormularioDeConta from '../../componentes/FormularioDeConta';
+import FormularioDeLancamento from '../../componentes/FormularioDeLancamento';
+import Menu from '../../componentes/Menu';
+import Modal from '../../componentes/Modal';
 import { useCarga } from '../../componentes/useCarga';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
 import { formatarData, hojeIso } from '../../regras/datas';
 import { contasBancarias, estaNoMes, lancamentosDasContas, mesDe, paraExtrato, saldoTotal } from '../../regras/livroCaixa';
 import {
   apiConfigurada,
+  listarCartoes,
   listarCategorias,
   listarContas,
   listarLancamentos,
+  listarPessoas,
   relatorioMensal,
 } from '../../servicos/livroCaixa';
 import Arvore from '../componentes/Arvore';
@@ -29,11 +37,20 @@ import { somarDias } from '../regras/serie';
 import { leituraDaVariacao, textoDaVariacao } from '../regras/tendencia';
 import { FAIXAS, fatiasDaRosca, montarVisao } from '../regras/visao';
 import { useMetas } from '../useMetas';
+import '../../estilos/cartoes.css';
 
 const MES_POR_EXTENSO = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const NOME_DO_MES = new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' });
 const DIA_DA_LISTA = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
 const comoData = (iso) => new Date(`${iso}T12:00:00Z`);
+
+// Títulos dos modais do "+ Novo".
+const MODAIS = {
+  lancamento: { titulo: 'Novo lançamento', descricao: 'PIX, débito, dinheiro ou TED: o que mexe no saldo das contas.' },
+  compra: { titulo: 'Nova compra no crédito', descricao: 'Entra na fatura do cartão, à vista ou parcelada.' },
+  conta: { titulo: 'Nova conta' },
+  cartao: { titulo: 'Novo cartão' },
+};
 
 // "Hoje", "Ontem" ou "12 de setembro".
 function rotuloDoDia(data, hoje) {
@@ -48,17 +65,21 @@ function rotuloDoDia(data, hoje) {
 
 // Contas, categorias, os lançamentos dos últimos 30 dias (ou do mês, se ele
 // começou antes) em diante, e o relatório de 12 meses. Sem o relatório (API
-// antiga, erro), a tela abre do mesmo jeito, só sem a comparação.
+// antiga, erro), a tela abre do mesmo jeito, só sem a comparação. Os cartões
+// trazem as faturas (sem eles, a tela abre do mesmo jeito); as pessoas dos
+// rachas são só sugestão no formulário do "+ Novo".
 async function carregarVisao(espacoId, hoje) {
   const inicioDoMes = `${hoje.slice(0, 7)}-01`;
   const trintaDias = somarDias(hoje, -29);
-  const [contas, categorias, lancamentos, relatorio] = await Promise.all([
+  const [contas, categorias, lancamentos, relatorio, cartoes, pessoas] = await Promise.all([
     listarContas(espacoId),
     listarCategorias(espacoId),
     listarLancamentos(espacoId, { de: inicioDoMes < trintaDias ? inicioDoMes : trintaDias }),
     relatorioMensal(espacoId).catch(() => null),
+    listarCartoes(espacoId).catch(() => []),
+    listarPessoas(espacoId).catch(() => []),
   ]);
-  return { contas, categorias, lancamentos, relatorio };
+  return { contas, categorias, lancamentos, relatorio, cartoes, pessoas };
 }
 
 function SeloDeTendencia({ variacao, maiorEhMelhor = true, referencia }) {
@@ -75,9 +96,13 @@ function SeloDeTendencia({ variacao, maiorEhMelhor = true, referencia }) {
 }
 
 // Visão geral da OliFine: os quatro números do mês com a tendência, a
-// evolução do saldo, as despesas por categoria, as últimas transações e as
-// metas. Com a API, dados de verdade; sem ela (Pages), a tela vazia oferece o
-// modo de exemplo, sempre marcado.
+// evolução do saldo, as despesas por categoria, as últimas transações, as
+// metas e o compromisso nos cartões. Com a API, dados de verdade; sem ela
+// (Pages), a tela vazia oferece o modo de exemplo, sempre marcado.
+//
+// O "+ Novo" do topo deixa a pessoa escolher o que criar (lançamento à
+// vista, compra no crédito, conta ou cartão), cada um no seu modal, sem sair
+// da tela.
 export default function VisaoGeral() {
   const { usuario, pessoa, espaco } = useOutletContext();
   const [exemplo, setExemplo] = useState(
@@ -88,6 +113,8 @@ export default function VisaoGeral() {
   const [faixaEscolhida, setFaixa] = useState(null);
   const [hojeReal] = useState(hojeIso);
   const hoje = exemplo ? HOJE_DE_EXEMPLO : hojeReal;
+  const [modal, setModal] = useState(null);
+  const [modalOcupado, setModalOcupado] = useState(false);
 
   const espacoId = espaco.dados?.id;
   const buscar = useMemo(
@@ -168,6 +195,48 @@ export default function VisaoGeral() {
         return grupos;
       }, [])
     : [];
+  // Cartões e cadastros do "+ Novo": só com a API (o exemplo não tem cartão).
+  const cadastros = real ? livro.dados : null;
+  const cartoes = cadastros?.cartoes ?? [];
+  const compromisso = {
+    usado: cartoes.reduce((soma, cartao) => soma + Math.max(0, cartao.usado_centavos), 0),
+    faturasAtuais: cartoes.reduce((soma, cartao) => soma + cartao.fatura_atual_centavos, 0),
+    futuras: cartoes.reduce((soma, cartao) => soma + cartao.parcelamentos_futuros_centavos, 0),
+  };
+  const contasAtivas = cadastros ? contasBancarias(cadastros.contas).filter((conta) => conta.ativa) : [];
+
+  const opcoesDoNovo = [
+    {
+      id: 'lancamento',
+      rotulo: 'Novo lançamento manual',
+      descricao: 'PIX, débito, dinheiro ou TED, direto no saldo da conta.',
+      icone: 'lancamentos',
+      aoEscolher: () => setModal('lancamento'),
+    },
+    ...(cartoes.length > 0
+      ? [
+          {
+            id: 'compra',
+            rotulo: 'Nova compra no crédito',
+            descricao: 'Entra na fatura do cartão, à vista ou parcelada.',
+            icone: 'cartao',
+            aoEscolher: () => setModal('compra'),
+          },
+        ]
+      : []),
+    { id: 'conta', rotulo: 'Cadastrar conta', descricao: 'Corrente, poupança, carteira ou investimento.', icone: 'contas', aoEscolher: () => setModal('conta') },
+    { id: 'cartao', rotulo: 'Cadastrar cartão', descricao: 'Limite, fechamento, vencimento e a cor.', icone: 'cartao', aoEscolher: () => setModal('cartao') },
+  ];
+
+  function fecharModal() {
+    setModal(null);
+    setModalOcupado(false);
+  }
+
+  function aposCriar() {
+    fecharModal();
+    livro.recarregar();
+  }
 
   return (
     <div className="of-visao">
@@ -191,12 +260,7 @@ export default function VisaoGeral() {
               </button>
             </>
           )}
-          {real && comNumeros && (
-            <Link className="botao" to="/lancamentos">
-              <Icone nome="mais" tamanho={16} />
-              Novo lançamento
-            </Link>
-          )}
+          {cadastros && <Menu texto="Novo" rotulo="Novo: escolher o que criar" itens={opcoesDoNovo} />}
         </div>
       </header>
 
@@ -284,9 +348,16 @@ export default function VisaoGeral() {
           </p>
           <p className="of-kpi-valor">{comNumeros ? formatarBRL(visao.totais.saidas) : 'R$ —'}</p>
           {comNumeros ? (
-            <SeloDeTendencia variacao={visao.variacao.despesas} maiorEhMelhor={false} referencia={mesAnterior} />
+            <>
+              {/* O que saiu das contas e o que foi para as faturas (o
+                  pagamento da fatura não conta de novo). */}
+              <p className="of-kpi-origem">
+                {formatarBRL(visao.totais.aVista)} à vista · {formatarBRL(visao.totais.noCredito)} no crédito
+              </p>
+              <SeloDeTendencia variacao={visao.variacao.despesas} maiorEhMelhor={false} referencia={mesAnterior} />
+            </>
           ) : (
-            <p className="of-kpi-rodape">O que saiu no mês</p>
+            <p className="of-kpi-rodape">O que saiu no mês, à vista e no crédito</p>
           )}
         </article>
 
@@ -342,7 +413,8 @@ export default function VisaoGeral() {
               descricao={`Evolução do saldo em ${FAIXAS.find((opcao) => opcao.id === faixa).rotulo}: de ${formatarBRL(serie[0].saldo)} a ${formatarBRL(serie.at(-1).saldo)}`}
             />
           ) : (
-            <VazioDaVisao semContas={semContas} real={real} aoVerExemplo={() => setExemplo(true)} />
+            <VazioDaVisao semContas={semContas} real={real} aoVerExemplo={() => setExemplo(true)}
+              aoCadastrarConta={() => setModal('conta')} />
           )}
         </section>
 
@@ -458,6 +530,37 @@ export default function VisaoGeral() {
             </div>
           )}
         </section>
+
+        {cartoes.length > 0 && (
+          <section className="cartao of-painel of-painel-cartoes" aria-labelledby="titulo-dos-cartoes">
+            <div className="of-painel-cabecalho">
+              <h2 id="titulo-dos-cartoes">Cartões de crédito</h2>
+              <Link to="/contas#cartoes" className="of-ver-mais">
+                Ver todos
+                <Icone nome="proximo" tamanho={14} />
+              </Link>
+            </div>
+            {/* O que as faturas já comprometem, separado do saldo das contas. */}
+            <div className="of-compromisso">
+              <span>Compromisso nas faturas</span>
+              <b>{formatarBRL(compromisso.usado)}</b>
+              <small>
+                {formatarBRL(compromisso.faturasAtuais)} nas faturas atuais · {formatarBRL(compromisso.futuras)} em
+                parcelas futuras
+              </small>
+            </div>
+            <ul className="of-cartoes">
+              {cartoes.map((cartao) => (
+                <li key={cartao.id} className={`cor-${cartao.cor ?? 'grafite'}`}>
+                  <span className="of-cartoes-pastilha" aria-hidden="true" />
+                  <Link to={`/contas/cartoes/${cartao.id}`}>{cartao.nome}</Link>
+                  <span className="of-cartoes-valor">{formatarBRL(cartao.fatura_atual_centavos)}</span>
+                  <small>fatura atual · vence {formatarData(cartao.fatura_atual.vencimento).slice(0, 5)}</small>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
 
       {/* Dados do cadastro (Firestore), como pede a página Principal no
@@ -484,12 +587,35 @@ export default function VisaoGeral() {
           </dl>
         </section>
       )}
+
+      {cadastros && (
+        <Modal aberta={Boolean(modal)} titulo={MODAIS[modal]?.titulo} descricao={MODAIS[modal]?.descricao}
+          aoFechar={fecharModal} ocupado={modalOcupado}>
+          {modal === 'lancamento' && (
+            <FormularioDeLancamento espacoId={espacoId} contas={contasAtivas} temCartoes={cartoes.length > 0}
+              categorias={cadastros.categorias} pessoasConhecidas={cadastros.pessoas} aoLancar={aposCriar}
+              aoCancelar={fecharModal} aoMudarOcupado={setModalOcupado} />
+          )}
+          {modal === 'compra' && (
+            <CompraNoCartao espacoId={espacoId} cartoes={cartoes} categorias={cadastros.categorias}
+              pessoasConhecidas={cadastros.pessoas} aoComprar={aposCriar} aoCancelar={fecharModal}
+              aoMudarOcupado={setModalOcupado} />
+          )}
+          {modal === 'conta' && (
+            <FormularioDeConta espacoId={espacoId} aoSalvar={aposCriar} aoCancelar={fecharModal} aoMudarOcupado={setModalOcupado} />
+          )}
+          {modal === 'cartao' && (
+            <FormularioDeCartao espacoId={espacoId} aoSalvar={aposCriar} aoCancelar={fecharModal} aoMudarOcupado={setModalOcupado} />
+          )}
+        </Modal>
+      )}
     </div>
   );
 }
 
-// Gráfico vazio: sem contas, convida a cadastrar; sem API, oferece o exemplo.
-function VazioDaVisao({ semContas, real, aoVerExemplo }) {
+// Gráfico vazio: sem contas, convida a cadastrar (no modal, sem sair da
+// tela); sem API, oferece o exemplo.
+function VazioDaVisao({ semContas, real, aoVerExemplo, aoCadastrarConta }) {
   if (semContas) {
     return (
       <div className="vazio">
@@ -498,10 +624,10 @@ function VazioDaVisao({ semContas, real, aoVerExemplo }) {
         </span>
         <h3>Comece pelas suas contas</h3>
         <p>Cadastre onde o seu dinheiro está (conta corrente, poupança, carteira) com o saldo de hoje. O gráfico acompanha o saldo a partir daí.</p>
-        <Link className="botao" to="/contas">
+        <button type="button" onClick={aoCadastrarConta}>
           <Icone nome="mais" tamanho={16} />
           Cadastrar conta
-        </Link>
+        </button>
       </div>
     );
   }

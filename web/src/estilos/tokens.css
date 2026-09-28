@@ -71,6 +71,28 @@
   --sombra-elevada: 0 2px 4px rgb(26 36 48 / 0.04), 0 10px 22px -12px rgb(26 36 48 / 0.18);
   --sombra-flutuante: 0 2px 6px rgb(26 36 48 / 0.06), 0 16px 36px -14px rgb(26 36 48 / 0.2);
 
+  /* Estados de interação: o fundo de uma linha de lista sob o ponteiro (o
+     mesmo do extrato em estilos/movimento.css) e o da linha marcada na
+     seleção em lote. */
+  --fundo-ao-passar: color-mix(in srgb, var(--lateral) 60%, transparent);
+  --fundo-marcado: color-mix(in srgb, var(--marca-suave) 70%, var(--superficie));
+  --perigo-suave: color-mix(in srgb, var(--erro) 10%, var(--superficie));
+
+  /* Plástico dos cartões de crédito (a cor escolhida no cadastro). Todas
+     aguentam texto claro por cima (contraste de pelo menos 4,5:1), nos dois
+     temas: o cartão é um objeto, não muda com o tema. */
+  --cartao-grafite: #2b3230;
+  --cartao-azul: #1f4f8f;
+  --cartao-roxo: #5b3fa8;
+  --cartao-verde: #0d5c47;
+  --cartao-vinho: #7a2438;
+  --cartao-laranja: #b4501a;
+  --cartao-dourado: #86651a;
+  --cartao-prata: #5d676c;
+  --sobre-cartao: #f6f8f7;
+  --faixa-magnetica: rgb(10 14 13 / 0.78);
+  --chip: linear-gradient(135deg, #e9d18a, #b8903e);
+
   /* ---------------------------------------------- Só da OliFine (--of-) */
   --of-verde: #459b72; /* crescimento: gráfico, progresso, ícone ativo (sem texto) */
   --of-verde-vivo: #64bf8d; /* indicador positivo, fim do degradê de progresso */
@@ -252,6 +274,8 @@
   --largura-botao-de-confirmar: 11rem;
   --altura-previa-da-importacao: min(22rem, 45dvh);
   --altura-lista-flutuante: 288px;
+  --largura-cartao-visual: 272px; /* cartão na carteira */
+  --largura-plastico-no-painel: 300px; /* cartão no topo da tela dele */
 
   --medida-do-texto: 52ch; /* parágrafo explicativo */
   --medida-do-aviso: 60ch;
@@ -302,6 +326,8 @@
   --sombra: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 6px 14px -10px rgb(0 0 0 / 0.7);
   --sombra-elevada: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 12px 24px -14px rgb(0 0 0 / 0.8);
   --sombra-flutuante: 0 16px 34px -18px rgb(0 0 0 / 0.85), 0 0 0 1px var(--linha);
+  /* No escuro, a lateral quase some sobre a superfície: a linha marca mais. */
+  --fundo-ao-passar: color-mix(in srgb, var(--linha) 55%, var(--superficie));
 
   --of-verde: #68b88f;
   --of-verde-vivo: #84d2a5;
