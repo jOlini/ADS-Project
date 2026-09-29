@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, BeforeValidator, Field, StringConstraints
 
 from app.modelos import Entrada
+from app.sanitizacao import texto_limpo
 
 # Teto de um valor, em centavos (R$ 1 bilhão). Barra número absurdo digitado
 # por engano e soma que estouraria o inteiro de 64 bits do MongoDB.
@@ -259,8 +260,12 @@ def _data_sem_numero(valor):
 # strict: "10" (texto) e 10.5 (fração de centavo) são recusados, e true não vira 1.
 Centavos = Annotated[int, Field(strict=True, ge=-LIMITE_EM_CENTAVOS, le=LIMITE_EM_CENTAVOS)]
 CentavosPositivos = Annotated[int, Field(strict=True, gt=0, le=LIMITE_EM_CENTAVOS)]
-Nome = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
-Descricao = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+# Texto livre passa pela limpeza (app/sanitizacao.py) antes do tamanho: "<>"
+# sozinho não é um nome, e o que conta para o limite é o que fica gravado.
+Nome = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60), BeforeValidator(texto_limpo)]
+Descricao = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120), BeforeValidator(texto_limpo)
+]
 Identificador = Annotated[str, StringConstraints(min_length=1, max_length=64)]
 Booleano = Annotated[bool, Field(strict=True)]
 Data = Annotated[date, BeforeValidator(_data_sem_numero)]
