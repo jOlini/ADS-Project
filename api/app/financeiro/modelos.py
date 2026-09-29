@@ -223,6 +223,10 @@ class Lancamento:
     # importada de novo não vira outro lançamento.
     chave_importacao: str | None = None
     divisao: list[Parte] = field(default_factory=list)
+    # Pessoa responsável pelo lançamento (quem gastou ou de quem é a receita),
+    # só o nome. Vazio = quem lançou. Diferente da divisão: o valor inteiro é
+    # dela, sem partes.
+    responsavel: str | None = None
     # Compra parcelada no cartão: cada parcela é um lançamento, na data da
     # fatura em que ela cai, e todas levam o mesmo compra_id.
     compra_id: str | None = None
@@ -355,6 +359,8 @@ class NovoLancamento(Entrada):
     enviadas pelo cliente: assim a soma zero não depende de quem chama.
 
     divisao (opcional, só receita e despesa) reparte o valor entre pessoas.
+    responsavel (opcional, só receita e despesa) diz de quem é o lançamento
+    inteiro, sem precisar de divisão.
     meio (opcional) diz como o dinheiro se moveu: PIX, débito, dinheiro ou
     transferência bancária. Compra no crédito não entra por aqui."""
 
@@ -366,6 +372,7 @@ class NovoLancamento(Entrada):
     categoria_id: Identificador | None = None
     conta_destino_id: Identificador | None = None
     divisao: Annotated[list[NovaParte], Field(max_length=MAXIMO_DE_PESSOAS)] = []
+    responsavel: Nome | None = None
     meio: MeioDePagamento | None = None
 
 
@@ -373,13 +380,15 @@ class AtualizacaoLancamento(Entrada):
     """PATCH: só os campos enviados mudam. O tipo, a conta e a divisão não
     mudam (para isso, exclua e lance de novo). As restrições de cada caso
     (estorno, parcela de compra, compra no cartão) ficam em
-    regras.conferir_edicao. meio: null tira o meio do lançamento."""
+    regras.conferir_edicao. meio: null tira o meio do lançamento; responsavel:
+    null volta o lançamento para quem lançou."""
 
     descricao: Descricao | None = None
     data: Data | None = None
     valor_centavos: CentavosPositivos | None = None
     categoria_id: Identificador | None = None
     meio: MeioDePagamento | None = None
+    responsavel: Nome | None = None
 
 
 class ExclusaoEmLote(Entrada):
@@ -392,7 +401,8 @@ class NovaCompra(Entrada):
     """Compra no cartão de crédito. Em parcelas, cada uma vira uma despesa no
     cartão, a primeira na data da compra e as outras um mês depois da
     anterior: cada parcela cai numa fatura. O valor é o total da compra.
-    Racha (divisao) só na compra à vista."""
+    Racha (divisao) só na compra à vista; o responsável vale para todas as
+    parcelas."""
 
     descricao: Descricao
     data: Data
@@ -400,6 +410,7 @@ class NovaCompra(Entrada):
     categoria_id: Identificador
     parcelas: Annotated[int, Field(strict=True, ge=1, le=MAXIMO_DE_PARCELAS)] = 1
     divisao: Annotated[list[NovaParte], Field(max_length=MAXIMO_DE_PESSOAS)] = []
+    responsavel: Nome | None = None
 
 
 class NovoPagamento(Entrada):
@@ -569,6 +580,7 @@ class LancamentoResposta(BaseModel):
     conta_destino_id: str | None
     partidas: list[PartidaResposta]
     divisao: list[ParteResposta]
+    responsavel: str | None
     estorno_de: str | None
     estornado_por: str | None
     compra_id: str | None
@@ -597,6 +609,7 @@ class LancamentoResposta(BaseModel):
                 for partida in lancamento.partidas
             ],
             divisao=[ParteResposta(pessoa=parte.pessoa, valor_centavos=parte.valor_centavos) for parte in lancamento.divisao],
+            responsavel=lancamento.responsavel,
             estorno_de=lancamento.estorno_de,
             estornado_por=lancamento.estornado_por,
             compra_id=lancamento.compra_id,

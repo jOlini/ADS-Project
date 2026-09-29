@@ -312,6 +312,7 @@ class ServicoLivroCaixa:
                 criado_em=instante,
                 criado_por=uid,
                 divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
+                responsavel=dados.responsavel,
                 compra_id=compra_id,
                 parcela=numero if parcelada else None,
                 parcelas=dados.parcelas if parcelada else None,
@@ -440,15 +441,16 @@ class ServicoLivroCaixa:
             criado_em=agora(),
             criado_por=uid,
             divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
+            responsavel=dados.responsavel,
             meio=dados.meio,
         )
         return self._gravar(lancamento)
 
     def editar(self, espaco: Espaco, id: str, dados: AtualizacaoLancamento) -> Lancamento:
-        """Muda descrição, data, valor, categoria ou meio, com as restrições de
-        regras.conferir_edicao. Na parcela de uma compra no cartão, a
-        descrição e a categoria mudam na compra inteira: as parcelas são uma
-        compra só."""
+        """Muda descrição, data, valor, categoria, meio ou responsável, com as
+        restrições de regras.conferir_edicao. Na parcela de uma compra no
+        cartão, a descrição, a categoria e o responsável mudam na compra
+        inteira: as parcelas são uma compra só."""
         lancamento = self.lancamento(espaco, id)
         conta = self.repositorio.buscar_conta(espaco.id, lancamento.conta_id)
         categoria = self.repositorio.buscar_categoria(espaco.id, dados.categoria_id) if dados.categoria_id else None
@@ -495,8 +497,8 @@ class ServicoLivroCaixa:
         return excluidos + self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
 
     def pessoas(self, espaco: Espaco) -> list[str]:
-        """Nomes já usados em divisões, para a tela sugerir. Nomes que só
-        mudam na caixa ou nos espaços aparecem uma vez."""
+        """Nomes já usados em divisões e como responsável, para a tela
+        sugerir. Nomes que só mudam na caixa ou nos espaços aparecem uma vez."""
         unicos: dict[str, str] = {}
         for nome in self.repositorio.listar_pessoas(espaco.id):
             unicos.setdefault(" ".join(nome.split()).casefold(), nome)
@@ -504,8 +506,8 @@ class ServicoLivroCaixa:
 
     def estornar(self, espaco: Espaco, id: str, uid: str) -> Lancamento:
         """Anula um lançamento com outro de sinal trocado, na data de hoje. O
-        original continua no histórico, e a divisão entre pessoas vem junto
-        (o racha também é desfeito)."""
+        original continua no histórico, e a divisão entre pessoas e o
+        responsável vêm junto (o racha também é desfeito)."""
         original = self.lancamento(espaco, id)
         if original.compra_id:
             raise ErroConflito("Compra parcelada não se estorna parcela por parcela. Para desfazer, exclua a compra.")
@@ -528,6 +530,7 @@ class ServicoLivroCaixa:
             criado_por=uid,
             estorno_de=original.id,
             divisao=list(original.divisao),
+            responsavel=original.responsavel,
         )
         return self._gravar(estorno)
 

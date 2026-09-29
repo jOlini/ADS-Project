@@ -91,8 +91,11 @@ OBRIGATORIO = "Campo obrigatório."
 CAMPOS_DO_CARTAO = ("limite_centavos", "dia_fechamento", "dia_vencimento")
 CARTAO_NAO_TRANSFERE = "Cartão de crédito não é origem de transferência. Para quitar a fatura, use Pagar fatura."
 COMPRA_PELO_CARTAO = "Compra no crédito entra na fatura do cartão (Nova compra), não no extrato das contas."
-EDICAO_VAZIA = "Informe o que mudar: descrição, data, valor, categoria ou meio."
-ESTORNADO_SO_RENOMEIA = "Lançamento estornado (ou estorno) só muda a descrição e o meio: o estorno espelha o original."
+EDICAO_VAZIA = "Informe o que mudar: descrição, data, valor, categoria, meio ou responsável."
+ESTORNADO_SO_RENOMEIA = (
+    "Lançamento estornado (ou estorno) só muda a descrição, o meio e o responsável: o estorno espelha o original."
+)
+TRANSFERENCIA_SEM_RESPONSAVEL = "Transferência entre contas próprias não tem responsável."
 PARCELA_SO_RENOMEIA = "Parcela de compra no cartão não muda data nem valor. Para isso, exclua a compra e lance de novo."
 
 
@@ -139,6 +142,8 @@ def conferir_lancamento(
     """
     erros = _conferir_contas_e_categoria(dados, conta, categoria, conta_destino)
     erros.update(conferir_divisao(dados))
+    if dados.responsavel and dados.tipo == TipoLancamento.TRANSFERENCIA:
+        erros["responsavel"] = TRANSFERENCIA_SEM_RESPONSAVEL
     return erros
 
 
@@ -286,11 +291,13 @@ def conferir_edicao(
 ) -> dict[str, str]:
     """Erros por campo de uma edição (PATCH). Só contam os campos enviados.
 
-    - estorno e lançamento estornado só mudam a descrição e o meio: o estorno
-      é o espelho do original, e mudar um lado deixaria o outro errado;
+    - estorno e lançamento estornado só mudam a descrição, o meio e o
+      responsável: o estorno é o espelho do original, e mudar o valor de um
+      lado deixaria o outro errado;
     - parcela de compra no cartão muda a descrição e a categoria (da compra
       inteira), não a data nem o valor, que vêm do parcelamento;
     - compra no cartão não tem meio (ela é o crédito);
+    - transferência entre contas próprias não tem responsável;
     - o novo valor não pode ficar abaixo das partes do racha."""
     enviados = dados.model_fields_set
     if not enviados:
@@ -312,6 +319,8 @@ def conferir_edicao(
             erros["categoria_id"] = erro
     if dados.meio is not None and conta is not None and conta.cartao:
         erros["meio"] = "Compra no cartão não tem meio de pagamento: ela entra na fatura."
+    if dados.responsavel and lancamento.tipo == TipoLancamento.TRANSFERENCIA:
+        erros["responsavel"] = TRANSFERENCIA_SEM_RESPONSAVEL
     novo_valor = dados.valor_centavos
     if novo_valor and "valor_centavos" not in erros and sum(p.valor_centavos for p in lancamento.divisao) > novo_valor:
         erros["valor_centavos"] = "As partes da divisão somam mais que o novo valor."

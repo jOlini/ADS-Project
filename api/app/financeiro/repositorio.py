@@ -302,6 +302,8 @@ class LivroCaixaMongo:
             documento["divisao"] = [
                 {"pessoa": parte.pessoa, "valor_centavos": parte.valor_centavos} for parte in lancamento.divisao
             ]
+        if lancamento.responsavel:
+            documento["responsavel"] = lancamento.responsavel
         if lancamento.compra_id:
             documento["compra_id"] = lancamento.compra_id
             documento["parcela"] = lancamento.parcela
@@ -321,11 +323,16 @@ class LivroCaixaMongo:
 
     def atualizar_lancamento(self, lancamento: Lancamento) -> Lancamento:
         """Grava o que a edição muda (descrição, data, valor, categoria,
-        partidas e meio) e a chave de importação de uma parcela prevista que
+        partidas, meio e responsável) e a chave de importação de uma parcela prevista que
         a fatura do banco confirmou. O resto não muda depois de lançado."""
         definir = _campos_editaveis(lancamento)
         remover = {}
-        for campo, valor in (("meio", lancamento.meio), ("chave_importacao", lancamento.chave_importacao)):
+        opcionais = (
+            ("meio", lancamento.meio),
+            ("responsavel", lancamento.responsavel),
+            ("chave_importacao", lancamento.chave_importacao),
+        )
+        for campo, valor in opcionais:
             if valor is None:
                 remover[campo] = ""
             else:
@@ -372,8 +379,11 @@ class LivroCaixaMongo:
         return {documento["chave_importacao"] for documento in documentos}
 
     def listar_pessoas(self, espaco_id: str) -> list[str]:
-        """Nomes já usados em divisões do espaço, sem repetição exata."""
-        return self._lancamentos.distinct("divisao.pessoa", {"espaco_id": espaco_id})
+        """Nomes já usados em divisões e como responsável no espaço, sem
+        repetição exata."""
+        filtro = {"espaco_id": espaco_id}
+        nomes = self._lancamentos.distinct("divisao.pessoa", filtro) + self._lancamentos.distinct("responsavel", filtro)
+        return list(dict.fromkeys(nomes))
 
     def somar_partidas_por_conta(self, espaco_id: str) -> dict[str, int]:
         """{id da conta: soma das partidas}. O banco soma inteiros de 64 bits,
@@ -533,6 +543,7 @@ def _para_lancamento(documento: dict) -> Lancamento:
         estorno_de=documento.get("estorno_de"),
         chave_importacao=documento.get("chave_importacao"),
         divisao=[Parte(p["pessoa"], p["valor_centavos"]) for p in documento.get("divisao", [])],
+        responsavel=documento.get("responsavel"),
         compra_id=documento.get("compra_id"),
         parcela=documento.get("parcela"),
         parcelas=documento.get("parcelas"),
