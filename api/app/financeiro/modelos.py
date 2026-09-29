@@ -26,6 +26,8 @@ MAXIMO_DE_PESSOAS = 20
 MAXIMO_DE_PARCELAS = 48
 # Lançamentos numa exclusão em lote (o teto de uma consulta do extrato).
 MAXIMO_NA_EXCLUSAO = 1000
+# Linhas ajustadas na conferência de uma importação (o teto de linhas dela).
+MAXIMO_DE_AJUSTES = 1000
 
 
 class TipoEspaco(StrEnum):
@@ -244,6 +246,9 @@ class ResultadoDaLinha:
     fatura: tuple[int, int] | None = None
     # O que aconteceu além do básico (parcela lançada, parcelas geradas).
     observacao: str | None = None
+    # De onde veio a categoria: ARQUIVO, HISTORICO, REGRA, PADRAO ou AJUSTE
+    # (categorizacao.py).
+    origem_da_categoria: str | None = None
 
 
 # --- Entrada (corpo das requisições) -------------------------------------------
@@ -410,6 +415,17 @@ class MapeamentoDoExtrato(Entrada):
     inverter_sinal: Booleano = False
 
 
+class AjusteDaLinha(Entrada):
+    """O que a pessoa editou numa linha na conferência da importação."""
+
+    descricao: Descricao | None = None
+    categoria_id: Identificador | None = None
+
+
+# Número da linha no arquivo (1 = primeira), como a simulação devolve.
+NumeroDaLinha = Annotated[int, Field(ge=1, le=100_000)]
+
+
 class NovaImportacao(Entrada):
     """Extrato do banco em CSV (o texto do arquivo) e onde lançar cada linha:
     saídas (valor negativo) na categoria de despesa, entradas na de receita,
@@ -424,6 +440,10 @@ class NovaImportacao(Entrada):
     csv: TextoDoCsv
     mapeamento: MapeamentoDoExtrato | None = None
     simular: Booleano = False
+    # Descrição e categoria editadas na conferência, pelo número da linha. A
+    # chave da linha continua a do arquivo: a mesma linha, editada ou não, não
+    # entra duas vezes.
+    ajustes: Annotated[dict[NumeroDaLinha, AjusteDaLinha], Field(max_length=MAXIMO_DE_AJUSTES)] = {}
 
 
 class PedidoDeEstrutura(Entrada):
@@ -682,6 +702,10 @@ class LinhaImportadaResposta(BaseModel):
     fatura: str | None
     # Parcela reconhecida, parcelas geradas ou já lançadas.
     observacao: str | None
+    # De onde veio a categoria: ARQUIVO (coluna do extrato), HISTORICO (o
+    # mesmo estabelecimento, antes), REGRA (palavra da descrição), PADRAO ou
+    # AJUSTE (escolhida na conferência).
+    origem_da_categoria: str | None = None
 
 
 class ImportacaoResposta(BaseModel):
@@ -719,6 +743,7 @@ class ImportacaoResposta(BaseModel):
                     erro=resultado.erro,
                     fatura=f"{resultado.fatura[0]:04d}-{resultado.fatura[1]:02d}" if resultado.fatura else None,
                     observacao=resultado.observacao,
+                    origem_da_categoria=resultado.origem_da_categoria,
                 )
                 for resultado in resultados
             ],
@@ -732,11 +757,17 @@ class LinhaDoArquivoResposta(BaseModel):
 
 class EstruturaResposta(BaseModel):
     """Começo do arquivo em células e o mapeamento sugerido (null quando as
-    colunas não foram reconhecidas pelo nome)."""
+    colunas não foram reconhecidas)."""
 
     delimitador: str
     linhas: list[LinhaDoArquivoResposta]
     mapeamento: MapeamentoDoExtrato | None
+    # CABECALHO (pelos nomes das colunas) ou CONTEUDO (pelas células, sem
+    # cabeçalho conhecido); null sem mapeamento.
+    origem: Literal["CABECALHO", "CONTEUDO"] | None = None
+    # Informações do mapeamento a conferir (duas colunas com o mesmo nome,
+    # células que não conferem). Vazio: a tela segue sem pedir nada.
+    duvidas: list[str] = []
 
 
 # --- Relatórios (saída) ----------------------------------------------------------

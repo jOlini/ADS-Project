@@ -255,11 +255,13 @@ def test_simular_mostra_o_que_entraria_sem_gravar(ana):
         "data": "2026-09-05",
         "descricao": "Salário",
         "valor_centavos": 680000,
-        "categoria_id": ana.categorias["Outras receitas"],
+        # "Salário" na descrição: a regra põe na categoria Salário.
+        "categoria_id": ana.categorias["Salário"],
         "lancamento_id": None,
         "erro": None,
         "fatura": None,
         "observacao": None,
+        "origem_da_categoria": "REGRA",
     }
     assert ana.get("/lancamentos").json() == []
     assert ana.saldos() == {"Corrente": 10000}
@@ -274,10 +276,10 @@ def test_importar_lanca_receitas_e_despesas_e_move_o_saldo(ana):
     assert ana.saldos() == {"Corrente": 10000 + 680000 - 185000 - 1250 - 1250}
     salario = ana.get(f"/lancamentos/{corpo['linhas'][0]['lancamento_id']}").json()
     assert salario["tipo"] == "RECEITA"
-    assert salario["categoria_id"] == ana.categorias["Outras receitas"]
+    assert salario["categoria_id"] == ana.categorias["Salário"]
     aluguel = ana.get(f"/lancamentos/{corpo['linhas'][1]['lancamento_id']}").json()
     assert (aluguel["tipo"], aluguel["valor_centavos"]) == ("DESPESA", 185000)
-    assert aluguel["categoria_id"] == ana.categorias["Outras despesas"]
+    assert aluguel["categoria_id"] == ana.categorias["Moradia"]
 
 
 def test_importar_de_novo_nao_duplica_nada(ana):

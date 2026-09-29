@@ -10,10 +10,14 @@ crédito é uma conta de dívida: painel, faturas, compras e pagamento ficam em
 /cartoes.
 """
 
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 
+from app.erros import ErroIndisponivel
 from app.financeiro import cartoes
 from app.financeiro.acesso import cliente_autenticado, espaco_do_cliente, obter_livro_caixa
 from app.financeiro.modelos import (
@@ -511,6 +515,28 @@ def listar_pessoas(espaco: Espaco = Depends(espaco_do_cliente), servico: Servico
 
 # --- Importação de extrato ----------------------------------------------------
 
+# Importações ao mesmo tempo no servidor inteiro. Cada uma lê até 500 mil
+# caracteres e mil linhas numa thread do servidor (rota síncrona, fora do laço
+# de eventos); o teto impede que muitas juntas tomem todas as threads e
+# deixem o resto da API sem resposta. Quem passa do teto espera um pouco e,
+# sem vaga, recebe 503 com Retry-After.
+IMPORTACOES_AO_MESMO_TEMPO = 4
+ESPERA_POR_VAGA = 5
+_vagas_de_importacao = threading.BoundedSemaphore(IMPORTACOES_AO_MESMO_TEMPO)
+
+
+@contextmanager
+def vaga_de_importacao() -> Iterator[None]:
+    if not _vagas_de_importacao.acquire(timeout=ESPERA_POR_VAGA):
+        raise ErroIndisponivel(
+            "Muitas importações ao mesmo tempo. Tente de novo em instantes.", {"Retry-After": str(ESPERA_POR_VAGA)}
+        )
+    try:
+        yield
+    finally:
+        _vagas_de_importacao.release()
+
+
 
 @rotas_livro_caixa.post(
     "/{espaco_id}/importacoes",
@@ -525,17 +551,22 @@ def importar_extrato(
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
     """Sem `mapeamento`, as colunas são reconhecidas pelo nome (data, descrição e valor
-    com sinal; ou entrada e saída separadas; ou valor com coluna D/C), separadas por
-    `;`, `,`, tabulação ou `|`. Com `mapeamento`, valem as colunas indicadas (ver
-    `/importacoes/estrutura`). Cada linha vira uma receita ou despesa na conta
-    escolhida. Linha já importada antes é pulada (`JA_IMPORTADA`), e linha ilegível
-    volta com o motivo (`INVALIDA`), sem barrar as outras. Com `simular: true`, nada é
-    gravado e as linhas que entrariam voltam como `NOVA`.
+    com sinal; ou entrada e saída separadas; ou valor com coluna D/C) ou, sem cabeçalho
+    conhecido, pelo conteúdo, separadas por `;`, `,`, tabulação ou `|`. Com `mapeamento`,
+    valem as colunas indicadas (ver `/importacoes/estrutura`). Cada linha vira uma receita
+    ou despesa na conta escolhida, na categoria da coluna do arquivo, do histórico do mesmo
+    estabelecimento, da regra pela descrição ou na padrão (`origem_da_categoria`).
+    `ajustes` troca a descrição e a categoria de linhas, pelo número da linha. Linha já
+    importada antes é pulada (`JA_IMPORTADA`), e linha ilegível volta com o motivo
+    (`INVALIDA`), sem barrar as outras. Com `simular: true`, nada é gravado e as linhas que
+    entrariam voltam como `NOVA`. Arquivo que não é CSV (planilha, PDF, binário) é `400`;
+    sem vaga para mais uma importação no servidor, `503` com `Retry-After`.
 
     Na fatura de um cartão, a compra com a parcela no fim da descrição ("LOJA 03/12")
     gera as parcelas vincendas nas próximas faturas (`parcelas_futuras`), e a parcela
     que já estava lá é só confirmada. Cada linha diz a `fatura` em que entra."""
-    resultados, parcelas_futuras = servico.importar(espaco, dados, cliente.uid)
+    with vaga_de_importacao():
+        resultados, parcelas_futuras = servico.importar(espaco, dados, cliente.uid)
     return ImportacaoResposta.de(resultados, simulacao=dados.simular, parcelas_futuras=parcelas_futuras)
 
 
@@ -550,12 +581,16 @@ def estrutura_do_extrato(
     espaco: Espaco = Depends(espaco_do_cliente),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
-    """As primeiras linhas do arquivo já separadas em células e, quando os nomes das
-    colunas são reconhecidos, o `mapeamento` pronto para `/importacoes`. Com `mapeamento`
-    nulo, a tela pede que a pessoa indique as colunas."""
-    resultado = servico.estrutura(dados)
+    """As primeiras linhas do arquivo já separadas em células e, quando as colunas são
+    reconhecidas (pelo nome ou pelo conteúdo), o `mapeamento` pronto para `/importacoes`,
+    a `origem` e as `duvidas` (o que conferir). Com `mapeamento` nulo, a tela pede que a
+    pessoa indique as colunas."""
+    with vaga_de_importacao():
+        resultado = servico.estrutura(dados)
     return EstruturaResposta(
         delimitador=resultado.delimitador,
         linhas=[LinhaDoArquivoResposta(numero=linha.numero, celulas=linha.celulas) for linha in resultado.linhas],
         mapeamento=MapeamentoDoExtrato(**vars(resultado.mapeamento)) if resultado.mapeamento else None,
+        origem=resultado.origem,
+        duvidas=list(resultado.duvidas),
     )
