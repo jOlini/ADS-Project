@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Campo from './Campo';
+import CampoDeResponsavel from './CampoDeResponsavel';
 import SeletorDeMeio from './SeletorDeMeio';
 import Seletor from './Seletor';
 import SeletorDeData from './SeletorDeData';
@@ -13,13 +14,13 @@ import { editarLancamento } from '../servicos/livroCaixa';
 // procurar o valor que não pode mudar.
 function avisoDoLancamento(lancamento) {
   if (lancamento.estorno_de) {
-    return 'Estorno: só a descrição e o meio mudam, porque ele espelha o lançamento original.';
+    return 'Estorno: só a descrição, o responsável e o meio mudam, porque ele espelha o lançamento original.';
   }
   if (lancamento.estornado_por) {
-    return 'Lançamento estornado: só a descrição e o meio mudam, porque o estorno espelha este valor.';
+    return 'Lançamento estornado: só a descrição, o responsável e o meio mudam, porque o estorno espelha este valor.';
   }
   if (lancamento.compra_id) {
-    return `Parcela ${lancamento.parcela} de ${lancamento.parcelas}: a descrição e a categoria mudam nas ${lancamento.parcelas} parcelas. Para mudar data ou valor, exclua a compra e lance de novo.`;
+    return `Parcela ${lancamento.parcela} de ${lancamento.parcelas}: a descrição, a categoria e o responsável mudam nas ${lancamento.parcelas} parcelas. Para mudar data ou valor, exclua a compra e lance de novo.`;
   }
   return '';
 }
@@ -29,7 +30,7 @@ function avisoDoLancamento(lancamento) {
 // lançamento deixa mudar (regras/edicao.js), e só o que mudou vai à API.
 // linha é a linha do extrato (paraExtrato), com o lançamento em original.
 // aoSalvar recebe o lançamento salvo (ou null quando nada mudou).
-export default function FormularioDeEdicao({ espacoId, linha, categorias, aoSalvar, aoCancelar, aoMudarOcupado }) {
+export default function FormularioDeEdicao({ espacoId, linha, categorias, pessoasConhecidas = [], aoSalvar, aoCancelar, aoMudarOcupado }) {
   const toast = useToast();
   const lancamento = linha.original;
   const campos = camposEditaveis(lancamento, { noCartao: linha.noCartao });
@@ -100,6 +101,12 @@ export default function FormularioDeEdicao({ espacoId, linha, categorias, aoSalv
       {campos.categoria && (
         <Campo elemento={Seletor} rotulo="Categoria" name="categoria_id" placeholder="Escolha a categoria" opcoes={opcoesDeCategoria}
           value={formulario.categoria_id} onChange={(evento) => mudar('categoria_id', evento.target.value)} erro={erros.categoria_id} />
+      )}
+
+      {campos.responsavel && (
+        <CampoDeResponsavel valor={formulario.responsavel} aoMudar={(nome) => mudar('responsavel', nome)}
+          erro={erros.responsavel} pessoasConhecidas={pessoasConhecidas}
+          dica={lancamento.compra_id ? `Vale para as ${lancamento.parcelas} parcelas. Vazio, fica com você.` : undefined} />
       )}
 
       {campos.meio && (

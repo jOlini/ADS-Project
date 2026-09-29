@@ -96,6 +96,12 @@ describe('compra no cartão', () => {
     expect(corpoDaCompra({ ...compra, parcelas: '1', divisao }).divisao).toEqual([{ pessoa: 'Ana', valor_centavos: 10000 }]);
     expect(corpoDaCompra({ ...compra, divisao }).divisao).toBeUndefined();
   });
+
+  it('manda o responsável também na compra parcelada', () => {
+    expect(corpoDaCompra({ ...compra, responsavel: ' Carla ' }).responsavel).toBe('Carla');
+    expect(corpoDaCompra({ ...compra, responsavel: '' })).not.toHaveProperty('responsavel');
+    expect(validarCompra({ ...compra, responsavel: 'a'.repeat(61) }).responsavel).toMatch(/no máximo 60/);
+  });
 });
 
 describe('pagamento da fatura', () => {

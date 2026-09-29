@@ -58,6 +58,13 @@ export default function Extrato({ dias, mostrarSaldo = true, acoes, selecao }) {
             <small>
               {[lancamento.categoria, lancamento.conta, lancamento.meio].filter(Boolean).join(' · ')}
               {lancamento.estornado && <span className="etiqueta">Estornado</span>}
+              {lancamento.responsavel && (
+                <span className="etiqueta responsavel" title={`Responsável: ${lancamento.responsavel}`}>
+                  <Icone nome="usuario" tamanho={12} />
+                  <span className="apenas-leitor">Responsável: </span>
+                  {lancamento.responsavel}
+                </span>
+              )}
             </small>
             {lancamento.pessoas?.length > 0 && (
               <small className="racha" title={textoDoRacha(lancamento.pessoas)}>

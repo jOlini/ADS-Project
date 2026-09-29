@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import AvisoComAtalho from './AvisoComAtalho';
 import Campo from './Campo';
+import CampoDeResponsavel from './CampoDeResponsavel';
 import DivisaoEntrePessoas from './DivisaoEntrePessoas';
 import Seletor from './Seletor';
 import SeletorDeData from './SeletorDeData';
@@ -14,8 +15,9 @@ import { comprarNoCartao } from '../servicos/livroCaixa';
 
 // Formulário da "Nova compra" no cartão (dentro do modal): à vista ou
 // parcelada. O valor é o total da compra; a API cria uma despesa por parcela,
-// cada uma numa fatura, e o total ocupa o limite desde já. Racha entre
-// pessoas só na compra à vista. aoComprar recebe as parcelas criadas.
+// cada uma numa fatura, e o total ocupa o limite desde já. O responsável vale
+// para todas as parcelas; racha entre pessoas só na compra à vista.
+// aoComprar recebe as parcelas criadas.
 export default function FormularioDeCompra({ espacoId, cartao, categorias, pessoasConhecidas, aoComprar, aoCancelar, aoMudarOcupado }) {
   const toast = useToast();
   const [formulario, setFormulario] = useState(compraVazia);
@@ -96,8 +98,12 @@ export default function FormularioDeCompra({ espacoId, cartao, categorias, pesso
           value={formulario.categoria_id} onChange={(evento) => mudar('categoria_id', evento.target.value)} erro={erros.categoria_id} />
         <Campo elemento={Seletor} rotulo="Parcelas" name="parcelas" opcoes={OPCOES_DE_PARCELAS}
           value={formulario.parcelas} onChange={(evento) => mudar('parcelas', evento.target.value)} erro={erros.parcelas}
-          dica={total ? textoDasParcelas(total, parcelas) : undefined} />
+          dica={total ? textoDasParcelas(total, parcelas) : undefined} reservarDica />
       </div>
+
+      <CampoDeResponsavel valor={formulario.responsavel} aoMudar={(nome) => mudar('responsavel', nome)}
+        erro={erros.responsavel} pessoasConhecidas={pessoasConhecidas}
+        dica="Quem fez a compra, em todas as parcelas. Vazio, fica com você." />
 
       {categoriasDeDespesa.length === 0 && (
         <AvisoComAtalho compacto atalho={{ para: '/categorias?cadastrar=DESPESA', rotulo: 'Criar categoria', icone: 'categorias' }}>

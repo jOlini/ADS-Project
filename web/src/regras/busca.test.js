@@ -27,6 +27,13 @@ describe('combinaComABusca', () => {
     expect(combinaComABusca(CHURRASCO, 'churrasco carla')).toBe(false);
   });
 
+  it('acha pelo responsável, sem divisão', () => {
+    const farmacia = { ...ALUGUEL, descricao: 'Farmácia', responsavel: 'Lúcia' };
+
+    expect(combinaComABusca(farmacia, 'lucia farmacia')).toBe(true);
+    expect(combinaComABusca(ALUGUEL, 'lucia')).toBe(false);
+  });
+
   it('acha pela categoria e pela conta', () => {
     expect(combinaComABusca(ALUGUEL, 'moradia')).toBe(true);
     expect(combinaComABusca(ALUGUEL, 'corrente')).toBe(true);

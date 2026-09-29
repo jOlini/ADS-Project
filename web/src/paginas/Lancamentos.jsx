@@ -109,6 +109,7 @@ export default function Lancamentos() {
   const acoes = useAcoesDoExtrato({
     espacoId,
     categorias,
+    pessoasConhecidas: cadastros.dados?.pessoas,
     aoMudar: () => {
       cadastros.recarregar();
       extrato.recarregar();

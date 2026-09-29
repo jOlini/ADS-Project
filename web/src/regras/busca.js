@@ -1,6 +1,6 @@
 // Busca rápida do extrato, sem interface: acha lançamentos pela descrição,
-// pelo valor ou pela pessoa da divisão (e também pela categoria e pela
-// conta). Cada palavra digitada precisa aparecer em algum desses campos:
+// pelo valor, pelo responsável ou pela pessoa da divisão (e também pela
+// categoria e pela conta). Cada palavra digitada precisa aparecer em algum desses campos:
 // "churrasco bruno" acha o churrasco dividido com o Bruno.
 import { valorParaCampo } from './dinheiro';
 import { normalizarTexto } from './texto';
@@ -21,7 +21,13 @@ function combinaComOValor(lancamento, termo) {
 
 function textoDoLancamento(lancamento) {
   return normalizarTexto(
-    [lancamento.descricao, lancamento.categoria, lancamento.conta, ...(lancamento.pessoas ?? []).map((parte) => parte.pessoa)].join(' '),
+    [
+      lancamento.descricao,
+      lancamento.categoria,
+      lancamento.conta,
+      lancamento.responsavel,
+      ...(lancamento.pessoas ?? []).map((parte) => parte.pessoa),
+    ].join(' '),
   );
 }
 

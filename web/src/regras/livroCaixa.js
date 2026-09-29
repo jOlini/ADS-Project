@@ -5,6 +5,7 @@
 import { lerValor } from './dinheiro';
 import { dataExiste } from './datas';
 import { camposDaDivisao, corpoDaDivisao, validarDivisao } from './divisao';
+import { erroDoResponsavel, responsavelParaApi } from './responsavel';
 
 // Tipos de conta onde o dinheiro está. O cartão de crédito também é uma
 // conta na API (CARTAO_CREDITO), mas de dívida: tem cadastro, extrato e
@@ -131,6 +132,7 @@ export function paraExtrato(lancamentos, contas, categorias, { pontoDeVista } = 
       conta,
       valor: partidaDaConta?.valor_centavos ?? 0,
       pessoas: (lancamento.divisao ?? []).map((parte) => ({ pessoa: parte.pessoa, valor: parte.valor_centavos })),
+      responsavel: lancamento.responsavel ?? null,
       estorno: Boolean(lancamento.estorno_de),
       estornado: Boolean(lancamento.estornado_por),
       parcela: lancamento.compra_id ? { numero: lancamento.parcela, total: lancamento.parcelas } : null,
@@ -184,7 +186,7 @@ export function estaNoMes(iso, { ano, mes }) {
 
 // ---------------------------------------------------------- Formulários
 
-export const ORDEM_DO_LANCAMENTO = ['descricao', 'valor', 'data', 'conta_id', 'categoria_id', 'conta_destino_id', 'meio'];
+export const ORDEM_DO_LANCAMENTO = ['descricao', 'valor', 'data', 'conta_id', 'categoria_id', 'conta_destino_id', 'responsavel', 'meio'];
 
 // Ordem dos campos do formulário de lançamento, com os da divisão no fim.
 export function ordemDoLancamento(formulario) {
@@ -241,6 +243,11 @@ export function validarLancamento(formulario) {
     erros.categoria_id = 'Escolha a categoria.';
   }
 
+  const erroDoNome = erroDoResponsavel(formulario.responsavel, formulario.tipo);
+  if (erroDoNome) {
+    erros.responsavel = erroDoNome;
+  }
+
   if (temDivisao(formulario)) {
     Object.assign(erros, validarDivisao(formulario.divisao, valor || null));
   }
@@ -265,6 +272,10 @@ export function corpoDoLancamento(formulario) {
   }
   if (temDivisao(formulario)) {
     corpo.divisao = corpoDaDivisao(formulario.divisao);
+  }
+  const responsavel = formulario.tipo === 'TRANSFERENCIA' ? null : responsavelParaApi(formulario.responsavel);
+  if (responsavel) {
+    corpo.responsavel = responsavel;
   }
   if (formulario.meio) {
     corpo.meio = formulario.meio;

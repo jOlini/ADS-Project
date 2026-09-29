@@ -18,7 +18,9 @@ function itensDaLinha(linha, { aoEditar, aoEstornar, aoExcluir }) {
     {
       id: 'editar',
       rotulo: 'Editar',
-      descricao: linha.parcela ? 'Renomeia ou muda a categoria da compra inteira.' : 'Renomeia ou corrige valor, data, categoria e meio.',
+      descricao: linha.parcela
+        ? 'Renomeia ou muda a categoria e o responsável da compra inteira.'
+        : 'Renomeia ou corrige valor, data, categoria, responsável e meio.',
       icone: 'editar',
       aoEscolher: () => aoEditar(linha),
     },
@@ -74,7 +76,7 @@ function consequenciasDoLote(linhas) {
 // de cada ação. Devolve os itens do menu de uma linha, removerEmLote(linhas)
 // e os diálogos, que a página desenha uma vez. aoMudar recarrega a tela;
 // removerEmLote chama aoConcluir (limpar a seleção) quando dá certo.
-export function useAcoesDoExtrato({ espacoId, categorias = [], aoMudar }) {
+export function useAcoesDoExtrato({ espacoId, categorias = [], pessoasConhecidas = [], aoMudar }) {
   const toast = useToast();
   const [aEditar, setAEditar] = useState(null);
   const [editando, setEditando] = useState(false);
@@ -168,6 +170,7 @@ export function useAcoesDoExtrato({ espacoId, categorias = [], aoMudar }) {
             espacoId={espacoId}
             linha={aEditar}
             categorias={categorias}
+            pessoasConhecidas={pessoasConhecidas}
             aoSalvar={aposEditar}
             aoCancelar={() => aposEditar(null)}
             aoMudarOcupado={setEditando}

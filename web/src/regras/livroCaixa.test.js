@@ -49,9 +49,25 @@ describe('paraExtrato', () => {
 
     expect(linha).toEqual({
       id: 'l1', data: '2026-09-19', descricao: 'Supermercado', tipo: 'despesa', categoria: 'Mercado', cor: 'mercado',
-      conta: 'Conta corrente', valor: -21437, pessoas: [], estorno: false, estornado: false, parcela: null, noCartao: false,
-      meio: '', original: expect.objectContaining({ id: 'l1' }),
+      conta: 'Conta corrente', valor: -21437, pessoas: [], responsavel: null, estorno: false, estornado: false, parcela: null,
+      noCartao: false, meio: '', original: expect.objectContaining({ id: 'l1' }),
     });
+  });
+
+  it('traz o responsável do lançamento', () => {
+    const [linha] = paraExtrato(
+      [
+        lancamento({
+          id: 'l2', tipo: 'DESPESA', data: '2026-09-19', descricao: 'Farmácia', valor_centavos: 5000, conta_id: 'c1',
+          categoria_id: 'k1', responsavel: 'Bruno',
+          partidas: [{ conta_id: 'c1', categoria_id: null, valor_centavos: -5000 }, { conta_id: null, categoria_id: 'k1', valor_centavos: 5000 }],
+        }),
+      ],
+      CONTAS,
+      CATEGORIAS,
+    );
+
+    expect(linha.responsavel).toBe('Bruno');
   });
 
   it('traz as pessoas do racha com a parte de cada uma', () => {
@@ -264,6 +280,21 @@ describe('corpoDoLancamento', () => {
     expect(corpoDoLancamento(comRacha).divisao).toEqual([{ pessoa: 'Ana', valor_centavos: 10000 }]);
     expect(corpoDoLancamento({ ...DESPESA_VALIDA, divisao: [] })).not.toHaveProperty('divisao');
     expect(corpoDoLancamento({ ...comRacha, tipo: 'TRANSFERENCIA', conta_destino_id: 'c2' })).not.toHaveProperty('divisao');
+  });
+
+  it('manda o responsável limpo, sem divisão, e nunca na transferência', () => {
+    const doBruno = { ...DESPESA_VALIDA, responsavel: '  Bruno ' };
+
+    expect(corpoDoLancamento(doBruno)).toMatchObject({ responsavel: 'Bruno' });
+    expect(corpoDoLancamento(doBruno)).not.toHaveProperty('divisao');
+    expect(corpoDoLancamento({ ...DESPESA_VALIDA, responsavel: ' ' })).not.toHaveProperty('responsavel');
+    expect(corpoDoLancamento({ ...doBruno, tipo: 'TRANSFERENCIA', conta_destino_id: 'c2' })).not.toHaveProperty('responsavel');
+  });
+
+  it('aponta responsável com nome longo demais', () => {
+    expect(validarLancamento({ ...DESPESA_VALIDA, responsavel: 'a'.repeat(61) })).toEqual({
+      responsavel: 'Use no máximo 60 caracteres.',
+    });
   });
 });
 

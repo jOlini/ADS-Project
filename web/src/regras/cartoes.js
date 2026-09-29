@@ -6,6 +6,7 @@
 import { formatarData, hojeIso } from './datas';
 import { formatarBRL, lerValor, valorParaCampo } from './dinheiro';
 import { corpoDaDivisao, validarDivisao } from './divisao';
+import { erroDoResponsavel, responsavelParaApi } from './responsavel';
 
 // Mesmos limites da API.
 export const MAXIMO_DE_PARCELAS = 48;
@@ -74,7 +75,7 @@ export function textoDasParcelas(total, parcelas) {
 
 // ------------------------------------------------------------ Compra
 
-export const ORDEM_DA_COMPRA = ['descricao', 'valor', 'data', 'categoria_id', 'parcelas'];
+export const ORDEM_DA_COMPRA = ['descricao', 'valor', 'data', 'categoria_id', 'parcelas', 'responsavel'];
 
 export const compraVazia = () => ({
   descricao: '',
@@ -82,6 +83,7 @@ export const compraVazia = () => ({
   data: hojeIso(),
   categoria_id: '',
   parcelas: '1',
+  responsavel: '',
   divisao: [],
 });
 
@@ -116,6 +118,10 @@ export function validarCompra(formulario) {
   if (!Number.isInteger(parcelas) || parcelas < 1 || parcelas > MAXIMO_DE_PARCELAS) {
     erros.parcelas = 'Escolha o número de parcelas.';
   }
+  const erroDoNome = erroDoResponsavel(formulario.responsavel);
+  if (erroDoNome) {
+    erros.responsavel = erroDoNome;
+  }
   // Racha só na compra à vista (a API recusa nas parceladas).
   if (aVista(formulario) && formulario.divisao?.length > 0) {
     Object.assign(erros, validarDivisao(formulario.divisao, valor || null));
@@ -133,6 +139,11 @@ export function corpoDaCompra(formulario) {
   };
   if (aVista(formulario) && formulario.divisao?.length > 0) {
     corpo.divisao = corpoDaDivisao(formulario.divisao);
+  }
+  // O responsável vale para todas as parcelas.
+  const responsavel = responsavelParaApi(formulario.responsavel);
+  if (responsavel) {
+    corpo.responsavel = responsavel;
   }
   return corpo;
 }
