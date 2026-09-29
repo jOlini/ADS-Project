@@ -56,6 +56,14 @@ describe('desenharArvore', () => {
     expect(cheia.broto).toBeNull();
   });
 
+  it('a árvore completa tem pelo menos três maçãs, em pontas diferentes', () => {
+    for (const semente of [1, 7, 42, 2026, 31337]) {
+      const { frutos } = desenharArvore(montarGalhos(semente), 1);
+      expect(frutos.length).toBeGreaterThanOrEqual(3);
+      expect(new Set(frutos.map((fruto) => fruto.id)).size).toBe(frutos.length);
+    }
+  });
+
   it('fica dentro do desenho, acima do chão', () => {
     const cheia = desenharArvore(galhos, 1);
     for (const segmento of cheia.segmentos) {
