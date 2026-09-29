@@ -256,8 +256,28 @@ button.compacto {
   border-color: var(--erro);
 }
 
+/* A linha de erro de cada pessoa fica reservada embaixo dos campos dela (como
+   no .campo): errar ou corrigir uma parte não empurra as pessoas de baixo.
+   O espaço entre as pessoas passa a ser essa linha, sem vão extra. */
+.partes {
+  gap: 0;
+}
+
+.parte {
+  row-gap: var(--espaco-1);
+}
+
 .parte .erro-do-campo {
   grid-column: 1 / -1;
+  min-height: var(--altura-da-mensagem);
+  align-items: flex-start;
+}
+
+/* O erro do conjunto (partes somando mais que o total) também tem a linha
+   dele desde a primeira pessoa. */
+.divisao > .erro-da-divisao {
+  min-height: var(--altura-da-mensagem);
+  margin-top: calc(var(--espaco-4) * -1);
 }
 
 .resumo-da-divisao {
@@ -301,6 +321,56 @@ button.sugestao {
 
 button.sugestao:hover:not(:disabled) {
   background: var(--lateral);
+}
+
+/* ------------------------------------------- Responsável do lançamento */
+
+/* Campo com os atalhos de pessoas já usadas embaixo. A lista de atalhos não
+   muda enquanto a pessoa digita (componentes/CampoDeResponsavel.tsx): só o
+   atalho escolhido troca de cor, sem mexer no tamanho de nada. */
+.campo-de-responsavel {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.rotulo-opcional {
+  color: var(--suave);
+  font-weight: var(--peso-regular);
+}
+
+.atalhos-de-pessoa {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-3);
+}
+
+button.sugestao[aria-pressed='true'] {
+  color: var(--marca-forte);
+  background: var(--marca-suave);
+  border-color: var(--marca);
+}
+
+button.sugestao > .icone {
+  flex: none;
+}
+
+/* O responsável na linha do extrato, ao lado da categoria. */
+.etiqueta.responsavel {
+  display: inline-flex;
+  gap: var(--espaco-2);
+  align-items: center;
+  max-width: 14ch;
+  overflow: hidden;
+  color: var(--texto);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: -3px;
+}
+
+.etiqueta.responsavel > .icone {
+  flex: none;
+  color: var(--suave);
 }
 
 .caixa-de-marcar.compacta b {

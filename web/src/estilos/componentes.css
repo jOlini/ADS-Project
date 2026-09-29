@@ -485,9 +485,22 @@ button:is(.dia-do-calendario, .mes-da-grade, .ano-da-grade):disabled {
 
 /* ------------------------------------------------------- Menu de ações */
 
+/* O menu é uma lista curta de ações (o "+ Novo" tem quatro, cada uma com a
+   frase dela): mostra todas de uma vez, sem o teto de altura das listas
+   longas do seletor, que cortava a última e punha uma barra de rolagem. Só
+   rola por dentro se a janela não tiver altura para ele (--espaco-disponivel,
+   medido pelo flutuante.js). */
 .menu-flutuante {
   width: var(--largura-menu);
   max-width: calc(100vw - var(--espaco-8));
+  max-height: var(--espaco-disponivel, calc(100vh - var(--espaco-8)));
+  gap: 0;
+  padding: var(--espaco-3);
+  scrollbar-width: none;
+}
+
+.menu-flutuante::-webkit-scrollbar {
+  display: none;
 }
 
 button.item-do-menu {

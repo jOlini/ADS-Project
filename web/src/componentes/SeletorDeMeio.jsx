@@ -28,7 +28,8 @@ export default function SeletorDeMeio({ valor, aoMudar, erro, opcional = false }
           </button>
         ))}
       </div>
-      {erro && <span className="erro-do-campo">{erro}</span>}
+      {/* Linha reservada, como a do Campo: o erro não empurra nada. */}
+      <span className="erro-do-campo">{erro}</span>
     </div>
   );
 }

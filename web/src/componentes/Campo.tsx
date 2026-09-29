@@ -6,6 +6,10 @@ import type { TipoDeMascara } from '../regras/mascaras';
 interface PropsDoCampo {
   rotulo: ReactNode;
   dica?: ReactNode;
+  // A dica que aparece e some com o que a pessoa digita (o valor de cada
+  // parcela, que depende do total): a linha dela fica reservada, vazia até
+  // haver texto, como a do erro.
+  reservarDica?: boolean;
   erro?: ReactNode;
   // Controle no lugar do <input>: Seletor, SeletorDeData.
   elemento?: ElementType;
@@ -26,7 +30,16 @@ interface PropsDoCampo {
 // A linha da mensagem de erro existe sempre, vazia até haver um erro: mostrar
 // ou tirar a mensagem não empurra os campos de baixo nem desalinha o vizinho
 // da mesma linha (estilos em index.css, .campo).
-export default function Campo({ rotulo, dica, erro, elemento = 'input', mascara, digitos, ...propsDoControle }: PropsDoCampo) {
+export default function Campo({
+  rotulo,
+  dica,
+  reservarDica = false,
+  erro,
+  elemento = 'input',
+  mascara,
+  digitos,
+  ...propsDoControle
+}: PropsDoCampo) {
   const id = useId();
   const idDoRotulo = `${id}-rotulo`;
   const idDaDica = `${id}-dica`;
@@ -62,8 +75,8 @@ export default function Campo({ rotulo, dica, erro, elemento = 'input', mascara,
         {...propsDoControle}
         {...mascarado}
       />
-      {dica && (
-        <span id={idDaDica} className="dica-do-campo">
+      {(dica || reservarDica) && (
+        <span id={idDaDica} className={`dica-do-campo${reservarDica ? ' reservada' : ''}`}>
           {dica}
         </span>
       )}

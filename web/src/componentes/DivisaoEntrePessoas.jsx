@@ -10,6 +10,11 @@ import { MAXIMO_DE_PESSOAS, parteVazia, pessoasParaSugerir, repartirIgualmente, 
 // vez, contando ou não com a parte de quem lançou; o que as partes não
 // cobrem aparece como "Sua parte". Os inputs usam o name "divisao.N.campo",
 // o mesmo da validação, para o foco ir ao primeiro erro.
+//
+// Nada aqui muda de altura com o que a pessoa digita (o valor total, uma
+// parte, um erro): o resumo existe desde a primeira pessoa, com "—" até haver
+// total, e as linhas de erro de cada pessoa e do conjunto ficam reservadas,
+// como a do Campo. Assim os campos em volta não pulam.
 export default function DivisaoEntrePessoas({ partes, aoMudar, total, erros = {}, pessoasConhecidas = [] }) {
   const idDoTitulo = useId();
   const [comMinhaParte, setComMinhaParte] = useState(true);
@@ -82,11 +87,9 @@ export default function DivisaoEntrePessoas({ partes, aoMudar, total, erros = {}
                     aria-label={`Tirar ${parte.pessoa.trim() || `a pessoa ${indice + 1}`} da divisão`}>
                     <Icone nome="fechar" tamanho={16} />
                   </button>
-                  {(erroDaPessoa || erroDoValor) && (
-                    <span className="erro-do-campo" role="alert">
-                      {[erroDaPessoa, erroDoValor].filter(Boolean).join(' ')}
-                    </span>
-                  )}
+                  <span className="erro-do-campo" role="alert">
+                    {[erroDaPessoa, erroDoValor].filter(Boolean).join(' ')}
+                  </span>
                 </li>
               );
             })}
@@ -103,17 +106,16 @@ export default function DivisaoEntrePessoas({ partes, aoMudar, total, erros = {}
             <span>
               Partes <b>{formatarBRL(soma)}</b>
             </span>
-            {sobra !== null && (
-              <span>
-                {sobra < 0 ? 'Passou do total em' : 'Sua parte'} <b>{formatarBRL(Math.abs(sobra))}</b>
-              </span>
-            )}
+            <span>
+              {sobra !== null && sobra < 0 ? 'Passou do total em' : 'Sua parte'}{' '}
+              <b>{sobra === null ? '—' : formatarBRL(Math.abs(sobra))}</b>
+            </span>
           </p>
         </>
       )}
 
-      {erros.divisao && (
-        <span className="erro-do-campo" role="alert">
+      {(partes.length > 0 || erros.divisao) && (
+        <span className="erro-do-campo erro-da-divisao" role="alert">
           {erros.divisao}
         </span>
       )}
