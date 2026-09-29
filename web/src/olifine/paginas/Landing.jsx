@@ -264,7 +264,8 @@ const BENEFICIOS = [
 ];
 
 // O que protege a conta hoje, dito sem exagero: cada item existe no código
-// (ARCHITECTURE.md, seção 4).
+// (ARCHITECTURE.md, seção 4). Nada de "ponta a ponta" nem "nível bancário":
+// o servidor lê os dados para calcular os relatórios, e não há certificação.
 const SEGURANCA = [
   {
     icone: 'cadeado',
@@ -566,8 +567,8 @@ export default function Landing() {
         <section className="lp-secao lp-seguranca" id="seguranca" aria-labelledby="lp-seguranca-titulo">
           <Contornos className="seguranca" />
           <div className="lp-seguranca-texto">
-            <h2 id="lp-seguranca-titulo">Segurança de nível bancário.</h2>
-            <p>Criptografia ponta a ponta e total controle sobre a privacidade dos seus dados.</p>
+            <h2 id="lp-seguranca-titulo">Seus dados protegidos. A decisão, sempre sua.</h2>
+            <p>Conexão criptografada, cada acesso conferido e total controle sobre a privacidade das suas informações.</p>
           </div>
           <div className="lp-seguranca-grade">
             {SEGURANCA.map((item) => (
