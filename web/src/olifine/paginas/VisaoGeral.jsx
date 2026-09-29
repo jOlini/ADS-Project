@@ -10,6 +10,7 @@ import Modal from '../../componentes/Modal';
 import { useCarga } from '../../componentes/useCarga';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
 import { formatarData, hojeIso } from '../../regras/datas';
+import { donoDasMetas } from '../../regras/espacos';
 import { normalizarTexto } from '../../regras/texto';
 import {
   contasBancarias,
@@ -132,7 +133,7 @@ export default function VisaoGeral() {
     [espacoId, hojeReal],
   );
   const livro = useCarga(buscar);
-  const { metas } = useMetas(usuario?.uid, { exemplo });
+  const { metas } = useMetas(donoDasMetas(usuario?.uid, espaco?.dados), { exemplo });
 
   const visao = useMemo(() => {
     if (exemplo) {

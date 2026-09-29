@@ -16,15 +16,18 @@ const {
   MENSAGEM_SEM_API,
   MENSAGEM_SESSAO_ENCERRADA,
   apiConfigurada,
-  espacoPessoal,
+  criarEspaco,
   estornar,
+  excluirEspaco,
   estruturaDoExtrato,
   excluir,
   lancar,
+  listarEspacos,
   listarLancamentos,
   listarPessoas,
   relatorioCategorias,
   relatorioMensal,
+  renomearEspaco,
 } = await import('./livroCaixa');
 
 function resposta(status, corpo) {
@@ -45,9 +48,9 @@ describe('API do livro-caixa', () => {
   it('manda o ID token do Firebase no cabeçalho Authorization', async () => {
     fetch.mockResolvedValue(resposta(200, [{ id: 'e1', tipo: 'PF' }]));
 
-    const espaco = await espacoPessoal();
+    const espacos = await listarEspacos();
 
-    expect(espaco).toEqual({ id: 'e1', tipo: 'PF' });
+    expect(espacos).toEqual([{ id: 'e1', tipo: 'PF' }]);
     expect(fetch).toHaveBeenCalledWith('http://api.teste/espacos', {
       method: 'GET',
       headers: { Authorization: 'Bearer token-do-firebase' },
@@ -58,7 +61,7 @@ describe('API do livro-caixa', () => {
   it('troca a falha de rede ao renovar o token pela mensagem da API fora do ar', async () => {
     usuario.getIdToken.mockRejectedValue(Object.assign(new Error('Firebase: Error (auth/network-request-failed).'), { code: 'auth/network-request-failed' }));
 
-    const erro = await espacoPessoal().catch((falha) => falha);
+    const erro = await listarEspacos().catch((falha) => falha);
 
     expect(erro).toBeInstanceOf(ErroDaApi);
     expect(erro).toMatchObject({ status: 0, message: MENSAGEM_SEM_API });
@@ -68,7 +71,7 @@ describe('API do livro-caixa', () => {
   it('encerra a sessão quando o Firebase recusa renovar o token', async () => {
     usuario.getIdToken.mockRejectedValue(Object.assign(new Error('Firebase: Error (auth/user-token-expired).'), { code: 'auth/user-token-expired' }));
 
-    const erro = await espacoPessoal().catch((falha) => falha);
+    const erro = await listarEspacos().catch((falha) => falha);
 
     expect(erro).toMatchObject({ status: 401, message: MENSAGEM_SESSAO_ENCERRADA });
   });
@@ -83,6 +86,29 @@ describe('API do livro-caixa', () => {
     expect(opcoes.method).toBe('POST');
     expect(opcoes.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(opcoes.body)).toEqual({ tipo: 'DESPESA', valor_centavos: 21437 });
+  });
+
+  it('cria, renomeia e exclui espaço, com o nome limpo antes de sair', async () => {
+    fetch.mockResolvedValueOnce(resposta(201, { id: 'f1', tipo: 'FAMILIA' }));
+    fetch.mockResolvedValueOnce(resposta(200, { id: 'f1', nome: 'Casa' }));
+    fetch.mockResolvedValueOnce(resposta(204, null));
+
+    await criarEspaco({ tipo: 'FAMILIA', nome: ' <b>Casa</b> ' });
+    await renomearEspaco('f/1', 'Casa');
+    const excluido = await excluirEspaco('f1');
+
+    const [[urlCriar, criar], [urlRenomear, renomear], [urlExcluir, excluir]] = fetch.mock.calls;
+    expect([urlCriar, criar.method, JSON.parse(criar.body)]).toEqual([
+      'http://api.teste/espacos',
+      'POST',
+      { tipo: 'FAMILIA', nome: 'bCasa/b' },
+    ]);
+    expect([urlRenomear, renomear.method, JSON.parse(renomear.body)]).toEqual([
+      'http://api.teste/espacos/f%2F1',
+      'PATCH',
+      { nome: 'Casa' },
+    ]);
+    expect([urlExcluir, excluir.method, excluido]).toEqual(['http://api.teste/espacos/f1', 'DELETE', null]);
   });
 
   it('monta o filtro de período e codifica os ids na URL', async () => {
@@ -132,19 +158,19 @@ describe('API do livro-caixa', () => {
   it('401 vira pedido para entrar de novo', async () => {
     fetch.mockResolvedValue(resposta(401, { detail: 'Sessão inválida ou expirada. Entre de novo.' }));
 
-    await expect(espacoPessoal()).rejects.toMatchObject({ status: 401, message: MENSAGEM_SESSAO_ENCERRADA });
+    await expect(listarEspacos()).rejects.toMatchObject({ status: 401, message: MENSAGEM_SESSAO_ENCERRADA });
   });
 
   it('sem resposta do servidor, avisa que a API pode estar fora do ar', async () => {
     fetch.mockRejectedValue(new TypeError('Failed to fetch'));
 
-    await expect(espacoPessoal()).rejects.toMatchObject({ status: 0, message: MENSAGEM_SEM_API });
+    await expect(listarEspacos()).rejects.toMatchObject({ status: 0, message: MENSAGEM_SEM_API });
   });
 
   it('sem sessão no Firebase, nem chama a API', async () => {
     auth.currentUser = null;
 
-    await expect(espacoPessoal()).rejects.toMatchObject({ status: 401 });
+    await expect(listarEspacos()).rejects.toMatchObject({ status: 401 });
     expect(fetch).not.toHaveBeenCalled();
   });
 

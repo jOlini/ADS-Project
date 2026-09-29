@@ -1,17 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useToast } from './toast/useToast';
 import { firebaseConfigurado } from '../firebase';
 import { mensagemDeErro } from '../regras/erros';
+import { escolherEspacoAtivo } from '../regras/espacos';
 import { emailConfirmado } from '../regras/sessao';
 import { buscarDadosPessoais, conferirConfirmacao, observarSessao, sair } from '../servicos/contas';
-import { apiConfigurada, espacoPessoal } from '../servicos/livroCaixa';
+import { guardarEspacoAtivo, lerEspacoAtivo } from '../servicos/espacoAtivo';
+import { apiConfigurada, listarEspacos } from '../servicos/livroCaixa';
 
 const CARREGANDO = { carregando: true, dados: null, erro: '' };
 
 // Moldura de todas as rotas, sem nada visível. A sessão, os dados pessoais
-// (Firestore) e o espaço do livro-caixa (API) são buscados aqui uma vez e
-// chegam às páginas pelo contexto da rota. A barra lateral não mora aqui: fica
+// (Firestore) e os espaços do livro-caixa (API) são buscados aqui uma vez e
+// chegam às páginas pelo contexto da rota: "espaco" é o espaço ativo (o
+// pessoal, a família ou a empresa escolhidos no topo), "espacos" a lista, e
+// trocarEspaco e recarregarEspacos mudam os dois. A barra lateral não mora aqui: fica
 // na AreaDoCliente, que só a monta com a sessão confirmada, e o login e o
 // cadastro ocupam a tela inteira (cada página desenha a sua vitrine).
 export default function Layout() {
@@ -23,7 +27,19 @@ export default function Layout() {
   // (o reload() muda o emailVerified por dentro) e o React não perceberia.
   const [confirmado, setConfirmado] = useState(false);
   const [pessoa, setPessoa] = useState(CARREGANDO);
-  const [espaco, setEspaco] = useState(CARREGANDO);
+  const [espacos, setEspacos] = useState(CARREGANDO);
+  const [ativoId, setAtivoId] = useState(null);
+
+  // Lista nova (primeiro acesso, espaço criado ou excluído): abre o preferido,
+  // se ele existe, e guarda a escolha para a próxima visita.
+  const aplicarLista = useCallback((uid, lista, preferido) => {
+    const ativo = escolherEspacoAtivo(lista, preferido);
+    setEspacos({ carregando: false, dados: lista, erro: '' });
+    setAtivoId(ativo?.id ?? null);
+    if (ativo) {
+      guardarEspacoAtivo(uid, ativo.id);
+    }
+  }, []);
 
   // Perfil (Firestore) e espaço (API): só para a conta com o e-mail confirmado.
   const carregarDaConta = useCallback((atual) => {
@@ -33,12 +49,12 @@ export default function Layout() {
       (erro) => setPessoa({ carregando: false, dados: null, erro: mensagemDeErro(erro.code) }),
     );
     if (apiConfigurada) {
-      espacoPessoal().then(
-        (dados) => setEspaco({ carregando: false, dados, erro: '' }),
-        (erro) => setEspaco({ carregando: false, dados: null, erro: erro.message }),
+      listarEspacos().then(
+        (lista) => aplicarLista(atual.uid, lista, lerEspacoAtivo(atual.uid)),
+        (erro) => setEspacos({ carregando: false, dados: null, erro: erro.message }),
       );
     }
-  }, []);
+  }, [aplicarLista]);
 
   useEffect(() => {
     if (!firebaseConfigurado) {
@@ -49,7 +65,8 @@ export default function Layout() {
       setConfirmado(emailConfirmado(atual));
       if (!atual) {
         setPessoa(CARREGANDO);
-        setEspaco(CARREGANDO);
+        setEspacos(CARREGANDO);
+        setAtivoId(null);
         return;
       }
       if (emailConfirmado(atual)) {
@@ -79,7 +96,37 @@ export default function Layout() {
     navigate('/login', { replace: true });
   }
 
+  // O espaço ativo no mesmo formato de antes ({ carregando, dados, erro }):
+  // as páginas leem espaco.dados.id e não sabem que existem outros.
+  const espaco = useMemo(() => {
+    if (espacos.carregando || espacos.erro) {
+      return espacos;
+    }
+    return { carregando: false, dados: espacos.dados.find((item) => item.id === ativoId) ?? null, erro: '' };
+  }, [espacos, ativoId]);
+
+  function trocarEspaco(id) {
+    setAtivoId(id);
+    guardarEspacoAtivo(usuario.uid, id);
+  }
+
+  // Depois de criar, renomear ou excluir: busca a lista de novo e abre o
+  // espaço pedido (o recém-criado), ou continua no atual.
+  async function recarregarEspacos(abrir = ativoId) {
+    aplicarLista(usuario.uid, await listarEspacos(), abrir);
+  }
+
   // O botão Sair fica na barra lateral (AreaDoCliente) e chega por aqui.
-  const contexto = { usuario, confirmado, pessoa, espaco, sairDaConta, conferirEmail };
+  const contexto = {
+    usuario,
+    confirmado,
+    pessoa,
+    espaco,
+    espacos: espacos.dados ?? [],
+    trocarEspaco,
+    recarregarEspacos,
+    sairDaConta,
+    conferirEmail,
+  };
   return <Outlet context={contexto} />;
 }

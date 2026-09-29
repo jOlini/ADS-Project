@@ -76,10 +76,24 @@ async function chamar(caminho, { metodo = 'GET', corpo } = {}) {
 
 const doEspaco = (espacoId, resto = '') => `/espacos/${encodeURIComponent(espacoId)}${resto}`;
 
-// No primeiro acesso, a API cria o espaço pessoal com as categorias iniciais.
-export async function espacoPessoal() {
-  const espacos = await chamar('/espacos');
-  return espacos.find((espaco) => espaco.tipo === 'PF') ?? espacos[0] ?? null;
+// Os espaços da pessoa, o pessoal primeiro. No primeiro acesso, a API cria o
+// espaço pessoal com as categorias iniciais.
+export function listarEspacos() {
+  return chamar('/espacos');
+}
+
+// Espaço de família ou de empresa: { tipo: 'FAMILIA' | 'PJ', nome }.
+export function criarEspaco(espaco) {
+  return chamar('/espacos', { metodo: 'POST', corpo: espaco });
+}
+
+export function renomearEspaco(espacoId, nome) {
+  return chamar(doEspaco(espacoId), { metodo: 'PATCH', corpo: { nome } });
+}
+
+// Só o espaço vazio sai (a API responde 409 com o motivo).
+export function excluirEspaco(espacoId) {
+  return chamar(doEspaco(espacoId), { metodo: 'DELETE' });
 }
 
 export function listarContas(espacoId) {
