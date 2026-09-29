@@ -8,6 +8,7 @@ import Esqueleto from '../componentes/Esqueleto';
 import Extrato from '../componentes/Extrato';
 import FormularioDeLancamento from '../componentes/FormularioDeLancamento';
 import Icone from '../componentes/Icone';
+import SimboloDoVazio from '../olifine/componentes/SimboloDoVazio';
 import ImportarExtrato from '../componentes/ImportarExtrato';
 import Menu from '../componentes/Menu';
 import Modal from '../componentes/Modal';
@@ -286,9 +287,7 @@ export default function Lancamentos() {
             />
           ) : (
             <div className="vazio">
-              <span className="simbolo" aria-hidden="true">
-                <Icone nome={filtrado ? 'busca' : 'lancamentos'} tamanho={20} />
-              </span>
+              <SimboloDoVazio icone={filtrado ? 'busca' : 'lancamentos'} semente={5} />
               <h3>{filtrado ? 'Nada encontrado' : `Nenhum lançamento em ${nomeDoMes(mes)}`}</h3>
               <p>
                 {filtrado

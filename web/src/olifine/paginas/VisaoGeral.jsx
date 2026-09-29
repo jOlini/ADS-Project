@@ -31,10 +31,12 @@ import {
   relatorioMensal,
 } from '../../servicos/livroCaixa';
 import Arvore from '../componentes/Arvore';
+import FolhasEmVolta from '../componentes/FolhasEmVolta';
 import GraficoDeSaldo from '../componentes/GraficoDeSaldo';
 import Icone from '../../componentes/Icone';
 import Rosca from '../componentes/Rosca';
 import SaldoConsolidado from '../componentes/SaldoConsolidado';
+import SimboloDoVazio from '../componentes/SimboloDoVazio';
 import {
   CARTOES_DE_EXEMPLO,
   CONTAS_DE_EXEMPLO,
@@ -284,7 +286,9 @@ export default function VisaoGeral() {
 
   return (
     <div className="of-visao">
-      <header className="of-cabecalho">
+      <header className="of-cabecalho com-folhas">
+        {/* As folhas ao vento da landing, em miniatura, atrás das boas-vindas. */}
+        <FolhasEmVolta arranjo="cabecalho" />
         <div>
           <h1>{dados ? `Olá, ${dados.nome}!` : 'Olá!'}</h1>
           <p>
@@ -762,9 +766,7 @@ function VazioDaVisao({ semContas, real, aoVerExemplo, aoCadastrarConta }) {
   if (semContas) {
     return (
       <div className="vazio">
-        <span className="simbolo" aria-hidden="true">
-          <Icone nome="contas" tamanho={20} />
-        </span>
+        <SimboloDoVazio icone="contas" semente={17} />
         <h3>Comece pelas suas contas</h3>
         <p>Cadastre onde o seu dinheiro está (conta corrente, poupança, carteira) com o saldo de hoje. O gráfico acompanha o saldo a partir daí.</p>
         <button type="button" onClick={aoCadastrarConta}>
@@ -779,9 +781,7 @@ function VazioDaVisao({ semContas, real, aoVerExemplo, aoCadastrarConta }) {
   }
   return (
     <div className="vazio">
-      <span className="simbolo" aria-hidden="true">
-        <Icone nome="crescimento" tamanho={20} />
-      </span>
+      <SimboloDoVazio icone="crescimento" semente={43} />
       <h3>Seu saldo, dia a dia</h3>
       <p>
         Contas e lançamentos ficam na API do livro-caixa, que não está ligada a esta versão do site. Veja a tela com

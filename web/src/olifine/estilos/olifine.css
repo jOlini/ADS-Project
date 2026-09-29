@@ -2340,6 +2340,192 @@ a.of-regar-convite-link:hover {
   }
 }
 
+/* ------------------------------------------------ Folhas em volta (3D) */
+
+/* As folhas e moedas da landing dentro do app (componentes/FolhasEmVolta.tsx):
+   a folha é a lente do F do monograma (dois cantos redondos em diagonal, com
+   a nervura), a moeda é a dourada da árvore completa. Só transform e
+   opacity animam. */
+.of-folhas-3d {
+  position: absolute;
+  pointer-events: none;
+  perspective: 640px;
+}
+
+.of-folhas-3d i {
+  position: absolute;
+  width: var(--tamanho);
+  height: var(--tamanho);
+}
+
+.of-folhas-3d i.folha {
+  border-radius: 100% 0;
+  background:
+    linear-gradient(135deg, transparent calc(50% - 0.6px), rgb(255 255 255 / 0.4) 50%, transparent calc(50% + 0.6px)),
+    linear-gradient(135deg, #64bf8d, #2b7857 70%);
+}
+
+.of-folhas-3d i.moeda {
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 32%, #f6e0a0, #e3bb5f 42%, #b0873b 74%);
+  box-shadow: inset 0 0 0 1.5px rgb(176 135 59 / 0.9);
+}
+
+/* Cabeçalho da Visão geral: folhas subindo e virando no próprio eixo à
+   direita do "Olá", atrás do texto, apagando nas pontas. */
+.of-cabecalho.com-folhas {
+  position: relative;
+  isolation: isolate;
+}
+
+.of-folhas-3d.cabecalho {
+  inset: -18px 0 -6px;
+  z-index: -1;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000 34%, #000 88%, transparent);
+}
+
+.of-folhas-3d.cabecalho i {
+  left: var(--x);
+  top: var(--y);
+  opacity: 0;
+  animation: of-folha-sobe var(--duracao) linear var(--atraso) infinite;
+}
+
+@keyframes of-folha-sobe {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 34px, var(--z)) rotateZ(var(--giro)) rotateY(0deg) rotateX(18deg);
+  }
+  16%,
+  80% {
+    opacity: 0.62;
+  }
+  50% {
+    transform: translate3d(16px, -34px, var(--z)) rotateZ(calc(var(--giro) + 110deg)) rotateY(180deg) rotateX(-12deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-6px, -104px, var(--z)) rotateZ(calc(var(--giro) + 220deg)) rotateY(360deg) rotateX(18deg);
+  }
+}
+
+/* Estado vazio: uma órbita inclinada em volta do símbolo. */
+.vazio .simbolo {
+  position: relative;
+}
+
+.of-folhas-3d.vazio {
+  /* Raio pequeno o bastante para a órbita não passar do respiro do .vazio. */
+  --raio-da-orbita: 32px;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  perspective: 360px;
+  transform-style: preserve-3d;
+}
+
+.of-folhas-3d.vazio i {
+  top: calc(var(--tamanho) / -2);
+  left: calc(var(--tamanho) / -2);
+  opacity: 0.85;
+  animation: of-folha-orbita var(--duracao) linear var(--atraso) infinite;
+}
+
+@keyframes of-folha-orbita {
+  from {
+    transform: rotateX(-16deg) rotateY(var(--x)) translate3d(0, var(--y), var(--raio-da-orbita)) rotateZ(var(--giro)) rotateY(0deg);
+  }
+  to {
+    transform: rotateX(-16deg) rotateY(calc(var(--x) + 360deg)) translate3d(0, var(--y), var(--raio-da-orbita))
+      rotateZ(calc(var(--giro) + 180deg)) rotateY(360deg);
+  }
+}
+
+/* Meta completa: folhas e moedas saem da árvore, giram e caem, uma vez. */
+.of-folhas-3d.colheita {
+  top: 46%;
+  left: 50%;
+  z-index: 1;
+  width: 0;
+  height: 0;
+  perspective: 800px;
+}
+
+.of-folhas-3d.colheita i {
+  top: calc(var(--tamanho) / -2);
+  left: calc(var(--tamanho) / -2);
+  animation: of-colheita var(--duracao) cubic-bezier(0.18, 0.7, 0.3, 1) var(--atraso) both;
+}
+
+@keyframes of-colheita {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.3) rotateZ(var(--giro)) rotateY(0deg);
+  }
+  12% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 1;
+    transform: translate3d(var(--x), var(--y), var(--z)) scale(1) rotateZ(calc(var(--giro) + 200deg)) rotateY(300deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(var(--x) * 1.15), calc(var(--y) + 170px), var(--z)) scale(0.9)
+      rotateZ(calc(var(--giro) + 360deg)) rotateY(540deg);
+  }
+}
+
+/* Modal da meta completa: a árvore com as maçãs no meio da festa. */
+.of-conquista {
+  display: grid;
+  gap: var(--espaco-8);
+  justify-items: center;
+  text-align: center;
+}
+
+.of-conquista-palco {
+  position: relative;
+  width: min(260px, 100%);
+}
+
+.of-conquista p {
+  max-width: 40ch;
+  color: var(--suave);
+  text-wrap: pretty;
+}
+
+.of-conquista p b {
+  color: var(--texto);
+  white-space: nowrap;
+}
+
+.of-conquista .acoes-do-formulario {
+  justify-self: stretch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .of-folhas-3d i {
+    animation: none;
+  }
+
+  .of-folhas-3d.cabecalho i {
+    opacity: 0.5;
+    transform: translate3d(0, 0, var(--z)) rotateZ(var(--giro));
+  }
+
+  .of-folhas-3d.vazio i {
+    transform: rotateX(-16deg) rotateY(var(--x)) translate3d(0, var(--y), var(--raio-da-orbita)) rotateZ(var(--giro));
+  }
+
+  .of-folhas-3d.colheita i {
+    opacity: 0.9;
+    transform: translate3d(calc(var(--x) * 0.7), calc(var(--y) * 0.7), 0) rotateZ(var(--giro));
+  }
+}
+
 /* ------------------------------------------------------------ Metas */
 
 .of-metas-grade {

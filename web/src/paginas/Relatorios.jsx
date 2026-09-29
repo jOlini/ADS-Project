@@ -3,6 +3,7 @@ import { Link, useOutletContext } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import Esqueleto from '../componentes/Esqueleto';
 import GraficoMensal from '../componentes/GraficoMensal';
+import SimboloDoVazio from '../olifine/componentes/SimboloDoVazio';
 import Icone from '../componentes/Icone';
 import { useCarga } from '../componentes/useCarga';
 import { formatarBRL, formatarComSinal } from '../regras/dinheiro';
@@ -161,9 +162,7 @@ export default function Relatorios() {
 
           {semMovimento ? (
             <section className="cartao vazio rel-vazio">
-              <span className="simbolo" aria-hidden="true">
-                <Icone nome="relatorios" tamanho={20} />
-              </span>
+              <SimboloDoVazio icone="relatorios" semente={89} />
               <h3>Nenhum lançamento neste período</h3>
               <p>Os relatórios aparecem assim que houver receitas ou despesas lançadas entre {trecho}.</p>
               <Link to="/lancamentos" className="botao">

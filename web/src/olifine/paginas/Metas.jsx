@@ -11,6 +11,7 @@ import { formatarBRL, lerValor } from '../../regras/dinheiro';
 import { formatarData, hojeIso } from '../../regras/datas';
 import { donoDasMetas } from '../../regras/espacos';
 import Arvore from '../componentes/Arvore';
+import FolhasEmVolta from '../componentes/FolhasEmVolta';
 import Icone from '../../componentes/Icone';
 import {
   aportesRapidos,
@@ -251,6 +252,10 @@ export default function Metas() {
   const [criando, setCriando] = useState(false);
   const [excluindo, setExcluindo] = useState(null);
   const [regas, setRegas] = useState({});
+  // Meta que acabou de completar: abre a festa da colheita, com o desfazer.
+  // Os dados ficam depois de fechar, para o modal não sumir vazio na saída.
+  const [conquista, setConquista] = useState(null);
+  const [festa, setFesta] = useState(false);
 
   // Vindo da Visão geral com #id, abre aquela meta.
   const [hashVisto, setHashVisto] = useState(location.hash);
@@ -275,12 +280,21 @@ export default function Metas() {
     const depois = faseDaMeta({ ...meta, aportes: [...meta.aportes, aporte] });
     const desfazer = { rotulo: 'Desfazer', aoClicar: () => desfazerAporte(meta.id, aporte.id) };
     if (depois.id === 'frutos') {
-      toast.sucesso(`${meta.nome} chegou a ${formatarBRL(meta.alvo)}.`, { titulo: 'Meta completa: hora da colheita de maçãs!', acao: desfazer });
+      // O momento de festa: no lugar do toast, o modal da colheita (com o
+      // mesmo desfazer), as folhas e as moedas saindo da árvore.
+      setConquista({ meta, aporte });
+      setFesta(true);
     } else if (depois.id !== antes.id) {
       toast.sucesso(`+ ${formatarBRL(valor)} em ${meta.nome}.`, { titulo: `Nova fase: ${depois.nome}!`, acao: desfazer });
     } else {
       toast.sucesso(`+ ${formatarBRL(valor)} em ${meta.nome}.`, { titulo: 'Árvore regada', acao: desfazer });
     }
+  }
+
+  function desfazerConquista() {
+    desfazerAporte(conquista.meta.id, conquista.aporte.id);
+    toast.info(`O último aporte saiu de ${conquista.meta.nome}.`, { titulo: 'Aporte desfeito' });
+    setFesta(false);
   }
 
   function plantar(dados) {
@@ -412,6 +426,36 @@ export default function Metas() {
 
       <Modal aberta={criando} titulo="Nova meta" descricao="A meta fica salva neste navegador até você sair da conta." aoFechar={() => setCriando(false)}>
         <FormularioDeMeta aoCriar={plantar} aoCancelar={() => setCriando(false)} />
+      </Modal>
+
+      <Modal
+        aberta={festa}
+        titulo="Meta completa!"
+        descricao={conquista ? `${conquista.meta.nome} chegou a ${formatarBRL(conquista.meta.alvo)}.` : ''}
+        aoFechar={() => setFesta(false)}
+      >
+        {conquista && (
+          <div className="of-conquista">
+            <div className="of-conquista-palco">
+              <FolhasEmVolta arranjo="colheita" semente={sementeDaMeta(conquista.meta.id)} />
+              <Arvore semente={sementeDaMeta(conquista.meta.id)} progresso={1} compacta
+                rotulo={`Árvore da meta ${conquista.meta.nome}, completa e com maçãs.`} />
+            </div>
+            <p>
+              Cada aporte regou a árvore e ela deu maçãs: <b>{formatarBRL(conquista.meta.alvo)}</b> guardados para{' '}
+              {conquista.meta.nome}. Hora da colheita.
+            </p>
+            <div className="acoes-do-formulario">
+              <button type="button" className="secundario" onClick={desfazerConquista}>
+                Desfazer o último aporte
+              </button>
+              <button type="button" data-foco-inicial onClick={() => setFesta(false)}>
+                <Icone nome="broto" tamanho={16} />
+                Colher e continuar
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Confirmacao
