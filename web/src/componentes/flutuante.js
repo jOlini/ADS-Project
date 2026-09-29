@@ -1,20 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { posicaoDoPainel } from '../regras/posicaoFlutuante';
 
 // Peças comuns do que flutua preso a um botão: a lista do Seletor, o
-// calendário e o menu de ações.
-
-// Em px: distância mínima da borda da janela, folga entre a âncora e o
-// painel e a menor altura aceitável antes de o painel rolar por dentro.
-const MARGEM = 8;
-const AFASTAMENTO = 4;
-const ALTURA_MINIMA = 120;
+// calendário e o menu de ações. A conta da posição fica em
+// regras/posicaoFlutuante.ts.
 
 // Enquanto a posição não foi medida, o painel existe (para ter tamanho) mas
 // não aparece. Opacidade, e não visibility: um elemento invisível não recebe
 // foco, e o calendário e o menu põem o foco dentro deles ao abrir. O passo
 // acima e os 98% são o ponto de partida da animação de chegada
 // (estilos/movimento.css): medido, o painel desce até o lugar dele.
-export const ESCONDIDO = { top: 0, left: 0, opacity: 0, pointerEvents: 'none', transform: 'translateY(-4px) scale(0.98)' };
+export const ESCONDIDO = { top: 0, bottom: 'auto', left: 0, opacity: 0, pointerEvents: 'none', transform: 'translateY(-4px) scale(0.98)' };
 
 // Saída: o painel fica onde estava e some voltando para o botão, mais
 // depressa do que chegou. Em ms, o mesmo --tempo dos tokens.
@@ -68,7 +64,8 @@ function useMaisRecente(valor) {
 }
 
 // Posição (position: fixed) de um painel preso à âncora: abaixo dela, ou
-// acima quando falta espaço embaixo. Fixed escapa da rolagem do extrato e do
+// acima quando falta espaço embaixo (preso pela borda de baixo, encostado no
+// campo, qualquer que seja o teto de altura do CSS). Fixed escapa da rolagem do extrato e do
 // corpo dos modais, que cortariam um painel absoluto. Rolar a página fora do
 // painel chama aoRolarFora (os componentes fecham o painel em vez de deixá-lo
 // solto longe da âncora). alinhar: 'inicio' (borda esquerda com a da âncora)
@@ -88,18 +85,20 @@ export function usePosicaoFlutuante(ancora, painel, aberto, { alinhar = 'inicio'
       if (!caixa || !elemento) {
         return;
       }
-      const largura = Math.max(elemento.offsetWidth, larguraDaAncora ? caixa.width : 0);
-      const altura = elemento.scrollHeight;
-      const embaixo = window.innerHeight - caixa.bottom - MARGEM - AFASTAMENTO;
-      const emCima = caixa.top - MARGEM - AFASTAMENTO;
-      const paraCima = altura > embaixo && emCima > embaixo;
-      const esquerda = alinhar === 'fim' ? caixa.right - largura : caixa.left;
+      // A janela sem as barras de rolagem: é nela que o fixed se posiciona.
+      const janela = { largura: document.documentElement.clientWidth, altura: document.documentElement.clientHeight };
+      const posicao = posicaoDoPainel(caixa, { largura: elemento.offsetWidth, altura: elemento.scrollHeight }, janela, {
+        alinhar,
+        larguraDaAncora,
+      });
       // O CSS usa --espaco-disponivel como teto de altura (com rolagem dentro).
       setEstilo({
-        top: paraCima ? Math.max(MARGEM, caixa.top - AFASTAMENTO - Math.min(altura, emCima)) : caixa.bottom + AFASTAMENTO,
-        left: Math.min(Math.max(MARGEM, esquerda), window.innerWidth - largura - MARGEM),
-        minWidth: larguraDaAncora ? caixa.width : undefined,
-        '--espaco-disponivel': `${Math.max(paraCima ? emCima : embaixo, ALTURA_MINIMA)}px`,
+        top: posicao.top,
+        bottom: posicao.bottom,
+        left: posicao.left,
+        minWidth: posicao.minWidth,
+        transformOrigin: posicao.paraCima ? 'bottom' : 'top',
+        '--espaco-disponivel': `${posicao.espacoDisponivel}px`,
       });
     }
     function rolou(evento) {

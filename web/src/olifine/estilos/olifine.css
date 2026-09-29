@@ -776,10 +776,13 @@ a.of-kpi-link:hover {
   font-size: var(--fonte-apoio);
 }
 
-.of-painel-cabecalho .abas button[aria-pressed='true'] {
+.of-painel-cabecalho .abas button[aria-pressed='true'],
+.of-painel-cabecalho .abas button[aria-pressed='true']:hover:not(:disabled) {
+  /* Nos painéis, a aba marcada fica em menta, mais leve; a borda na cor da
+     marca garante o contraste com o trilho (menta sozinha dá 1,02:1). */
   color: var(--of-sobre-menta);
   background: var(--of-menta);
-  box-shadow: none;
+  box-shadow: inset 0 0 0 1.5px var(--marca);
 }
 
 .of-ver-mais {
@@ -808,6 +811,175 @@ a.of-kpi-link:hover {
   color: var(--suave);
   font-size: var(--fonte-apoio);
   font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------ Saldo por conta */
+
+/* Disponível (o dinheiro para usar) e investido (o patrimônio aplicado), lado a
+   lado; a barra divide o patrimônio nas duas cores e cada conta mostra a parte
+   dela no grupo. Verde para o que está à mão, esmeralda para o aplicado. */
+.of-painel-saldos {
+  /* Esmeralda puxada para a cor do texto: escura no tema claro, clara o
+     bastante no escuro para a barra do investido não sumir no fundo. */
+  --cor-disponivel: var(--of-verde);
+  --cor-investido: color-mix(in srgb, var(--of-esmeralda) 70%, var(--texto));
+  grid-column: 1 / -1;
+}
+
+/* Resumo e divisão à esquerda, a lista das contas à direita; um embaixo do
+   outro quando o painel fica estreito. */
+.of-saldos-corpo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--espaco-12);
+  align-items: start;
+}
+
+.of-saldos-lado {
+  display: grid;
+  gap: var(--espaco-8);
+}
+
+.of-saldos-resumo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Os dois totais lado a lado, separados por um fio, sem caixa dentro do
+   painel (o painel já é o cartão). */
+.of-saldo-grupo {
+  display: grid;
+  gap: var(--espaco-2);
+  align-content: start;
+  min-width: 0;
+}
+
+.of-saldo-grupo + .of-saldo-grupo {
+  padding-left: var(--espaco-10);
+  border-left: var(--borda);
+}
+
+.of-saldo-grupo-titulo {
+  display: flex;
+  gap: var(--espaco-3);
+  align-items: center;
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-semi);
+}
+
+.of-saldo-grupo.disponivel .of-saldo-grupo-titulo .icone {
+  color: var(--cor-disponivel);
+}
+
+.of-saldo-grupo.investido .of-saldo-grupo-titulo .icone {
+  color: var(--cor-investido);
+}
+
+.of-saldo-grupo b {
+  overflow-wrap: anywhere;
+  font-size: 1.375rem;
+  font-weight: var(--peso-forte);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.of-saldo-grupo small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-saldos-divisao {
+  display: block;
+  height: 8px;
+  border-radius: var(--raio-pilula);
+  background: linear-gradient(
+    90deg,
+    var(--cor-disponivel) 0 calc(100% - var(--investido)),
+    var(--cor-investido) calc(100% - var(--investido)) 100%
+  );
+}
+
+.of-saldos-lista {
+  display: grid;
+  gap: var(--espaco-4);
+}
+
+.of-saldos-lista-titulo {
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+}
+
+.of-saldos-lista ul {
+  display: grid;
+  gap: var(--espaco-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.of-saldos-lista li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--espaco-2) var(--espaco-6);
+  align-items: baseline;
+}
+
+.of-saldos-nome {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--espaco-4);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.of-saldos-nome b {
+  overflow: hidden;
+  font-weight: var(--peso-semi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-saldos-nome small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-saldos-valor {
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.of-saldos-valor.negativo {
+  color: var(--of-saida);
+}
+
+.of-saldos-lista .of-progresso {
+  grid-column: 1 / -1;
+}
+
+.of-progresso.investido i {
+  background: var(--cor-investido);
+}
+
+@container (max-width: 720px) {
+  .of-saldos-corpo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 380px) {
+  .of-saldos-resumo {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--espaco-8);
+  }
+
+  .of-saldo-grupo + .of-saldo-grupo {
+    padding-left: 0;
+    border-left: 0;
+  }
 }
 
 /* ------------------------------------------------------ Cartões de crédito */
@@ -2008,7 +2180,8 @@ button.of-chip:hover:not(:disabled) {
   }
 
   .of-kpi-saldo .of-kpi-rotulo,
-  .of-kpi-saldo .of-kpi-rodape {
+  .of-kpi-saldo .of-kpi-rodape,
+  .of-kpi-saldo .of-kpi-origem {
     color: rgb(255 255 255 / 0.82);
   }
 

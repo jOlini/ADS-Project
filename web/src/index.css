@@ -504,12 +504,18 @@ button.link:hover:not(:disabled) {
   padding: var(--espaco-8) var(--espaco-10) var(--espaco-6);
 }
 
+/* Abas (grupo de botões com aria-pressed). A selecionada é cheia, na cor da
+   marca, sobre um trilho com borda: o estado marcado se vê pela cor e pela
+   forma, nos dois temas e dentro dos modais (branco sobre branco, antes, dava
+   1,05:1). Contrastes (WCAG 1.4.11 e 1.4.3): marca sobre o trilho 4,9:1 no
+   claro e 9:1 no escuro; texto da aba marcada 5,4:1 e 9:1. */
 .abas {
   display: flex;
   gap: var(--espaco-1);
   padding: var(--fresta);
   border-radius: var(--raio-pequeno);
-  background: var(--fundo);
+  background: var(--lateral);
+  box-shadow: inset 0 0 0 var(--espessura) var(--linha);
 }
 
 .abas button {
@@ -524,13 +530,19 @@ button.link:hover:not(:disabled) {
 
 .abas button:hover:not(:disabled) {
   color: var(--texto);
-  background: transparent;
+  background: color-mix(in srgb, var(--superficie) 70%, transparent);
 }
 
-.abas button[aria-pressed='true'] {
-  color: var(--texto);
-  background: var(--superficie);
-  box-shadow: var(--sombra);
+.abas button[aria-pressed='true'],
+.abas button[aria-pressed='true']:hover:not(:disabled) {
+  color: var(--sobre-marca);
+  background: var(--marca);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--marca-forte) 35%, transparent);
+}
+
+.abas button:focus-visible {
+  outline: none;
+  box-shadow: var(--anel-de-foco);
 }
 
 /* Abas que ocupam a largura toda (tipo do lançamento no formulário). */
@@ -1540,5 +1552,95 @@ button.toast-fechar:hover:not(:disabled) {
 
   .toast-progresso {
     opacity: 0;
+  }
+}
+
+/* Toque: os alvos com medida própria (fora dos tokens) também chegam a
+   44 × 44 px, e o link de texto solto ("Esqueci minha senha", voltar, a
+   marca no topo) ganha altura de toque sem mudar de tamanho de letra. */
+@media (pointer: coarse) {
+  /* html na frente: vence as regras do topo da OliFine, que vêm depois. */
+  html button.of-sino,
+  html .of-topo-acoes button.alternador-de-tema,
+  html button.of-avatar-botao {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  html button.of-avatar-botao {
+    display: grid;
+    place-items: center;
+  }
+
+  /* Botão de texto discreto que vira só ícone no celular ("Editar"). */
+  button.discreto-botao {
+    min-width: 44px;
+  }
+
+  summary {
+    min-height: 44px;
+  }
+
+  .esqueci-a-senha,
+  a.voltar,
+  a.of-ver-mais,
+  a.marca {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* A marca só aparece no topo do celular (olifine.css); aqui só a altura. */
+  .of-topo-marca {
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+/* Celular estreito: o nome da conta, da categoria ou do lançamento quebra em
+   até duas linhas em vez de virar "Poupa…" ao lado do valor e da caixa de
+   marcar. Achado da auditoria de responsividade (Impeccable). */
+@media (max-width: 480px) {
+  .item .descricao b,
+  .lancamento .descricao b {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    overflow-wrap: break-word;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  /* Conta com caixa de marcar, valor e Editar: o ícone da conta (igual em
+     todas as linhas) sai e o saldo desce para baixo do nome, que fica com a
+     largura toda entre a caixa e o Editar. */
+  .item.com-selecao:has(> .valor) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'marcar nome acao'
+      'marcar valor acao';
+    row-gap: var(--espaco-1);
+  }
+
+  .item.com-selecao:has(> .valor) > .marca-da-categoria {
+    display: none;
+  }
+
+  .item.com-selecao:has(> .valor) > .marcar-linha {
+    grid-area: marcar;
+  }
+
+  .item.com-selecao:has(> .valor) > .descricao {
+    grid-area: nome;
+  }
+
+  .item.com-selecao:has(> .valor) > .valor {
+    grid-area: valor;
+  }
+
+  .item.com-selecao:has(> .valor) > :last-child:not(.valor) {
+    grid-area: acao;
   }
 }

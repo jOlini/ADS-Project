@@ -354,3 +354,20 @@
   --of-agua: #79bcd9;
   --cor-da-rolagem: #33443d;
 }
+
+/* ------------------------------------------------------------ Toque
+
+   Celular e tablet (ponteiro grosso, o dedo): todo alvo de toque com pelo
+   menos 44 × 44 px (botão só com ícone, botão compacto, aba) e a caixa de
+   marcar com 24 px. Com mouse, as medidas de cima continuam: a tela densa do
+   computador não cresce à toa. Auditoria de responsividade (Impeccable),
+   DA-080 no cofre. */
+@media (pointer: coarse) {
+  :root {
+    --altura-botao-compacto: 44px;
+    --altura-aba: 44px;
+    --tamanho-icone-botao: 44px;
+    --tamanho-icone-botao-compacto: 40px;
+    --tamanho-caixa-de-marcar: 24px;
+  }
+}
