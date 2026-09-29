@@ -56,6 +56,10 @@ class RepositorioLivroCaixa(Protocol):
 
     def inserir_espaco(self, espaco: Espaco) -> Espaco: ...
 
+    def atualizar_espaco(self, espaco: Espaco) -> Espaco: ...
+
+    def excluir_espaco(self, id: str) -> bool: ...
+
     def listar_contas(self, espaco_id: str) -> list[Conta]: ...
 
     def buscar_conta(self, espaco_id: str, id: str) -> Conta | None: ...
@@ -183,6 +187,19 @@ class LivroCaixaMongo:
             raise EspacoPessoalJaExiste() from erro
         espaco.id = str(resultado.inserted_id)
         return espaco
+
+    def atualizar_espaco(self, espaco: Espaco) -> Espaco:
+        self._espacos.update_one({"_id": _object_id(espaco.id)}, {"$set": {"nome": espaco.nome}})
+        return espaco
+
+    def excluir_espaco(self, id: str) -> bool:
+        """Apaga o espaço e as categorias dele. Quem chama já conferiu que não
+        há contas nem lançamentos (servicos.excluir_espaco)."""
+        oid = _object_id(id)
+        if not oid:
+            return False
+        self._categorias.delete_many({"espaco_id": id})
+        return self._espacos.delete_one({"_id": oid}).deleted_count == 1
 
     # --- Contas ---
 
