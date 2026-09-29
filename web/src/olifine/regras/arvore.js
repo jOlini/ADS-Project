@@ -9,6 +9,8 @@ const PROFUNDIDADE = 5;
 // Progresso em que cada nível de galho começa a nascer, e quanto dura.
 const NASCE = [0, 0.14, 0.3, 0.46, 0.62, 0.78];
 const DURACAO = 0.22;
+// Maçãs da árvore completa, no mínimo.
+const FRUTOS_MINIMOS = 3;
 
 // Gerador de números previsível (mulberry32): mesma semente, mesma árvore.
 function gerador(semente) {
@@ -133,6 +135,18 @@ export function desenharArvore(galhos, progresso) {
     }
     if (galho.fruto && p >= 1) {
       frutos.push({ id: galho.id, x: fim.x, y: fim.y + 6 });
+    }
+  }
+
+  // A árvore completa tem pelo menos três maçãs, espalhadas pelas pontas: na
+  // colheita umas caem e outras ficam na copa (a semente decide quantas a
+  // mais ela tem).
+  if (p >= 1 && frutos.length < FRUTOS_MINIMOS) {
+    const pontas = segmentos.filter((segmento) => segmento.nivel === PROFUNDIDADE && !frutos.some((fruto) => fruto.id === segmento.id));
+    const passo = Math.max(1, Math.floor(pontas.length / FRUTOS_MINIMOS));
+    for (let indice = 0; indice < pontas.length && frutos.length < FRUTOS_MINIMOS; indice += passo) {
+      const ponta = pontas[indice];
+      frutos.push({ id: ponta.id, x: ponta.fim.x, y: ponta.fim.y + 6 });
     }
   }
 
