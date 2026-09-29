@@ -236,6 +236,7 @@
   /* ---------------------------------------------------- Medidas de componente */
 
   --altura-controle: 46px; /* campo de texto, seletor */
+  --altura-da-mensagem: 1.25rem; /* linha reservada ao erro de um campo */
   --altura-botao: 44px;
   --altura-botao-compacto: 36px;
   --altura-aba: 30px;
@@ -263,6 +264,8 @@
   --largura-dialogo: min(460px, 100vw - 32px);
   --largura-modal: min(560px, 100vw - 32px);
   --largura-modal-larga: min(880px, 100vw - 32px);
+  /* Conferência da importação: a tabela com descrição e categoria editáveis. */
+  --largura-modal-extra: min(1120px, 100vw - 32px);
   --largura-menu: 272px;
   --largura-calendario: 312px;
   --largura-nome-do-mes: 11.5rem;
@@ -272,7 +275,7 @@
   --largura-coluna-do-arquivo: 9.5rem; /* coluna na prévia do CSV */
   --largura-celula-do-arquivo: 14rem;
   --largura-botao-de-confirmar: 11rem;
-  --altura-previa-da-importacao: min(22rem, 45dvh);
+  --altura-previa-da-importacao: min(30rem, 55dvh);
   --altura-lista-flutuante: 288px;
   --largura-cartao-visual: 272px; /* cartão na carteira */
   --largura-plastico-no-painel: 300px; /* cartão no topo da tela dele */

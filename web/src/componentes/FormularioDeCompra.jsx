@@ -80,11 +80,11 @@ export default function FormularioDeCompra({ espacoId, cartao, categorias, pesso
 
   return (
     <form onSubmit={enviar} noValidate>
-      <Campo rotulo="Descrição" name="descricao" autoComplete="off" maxLength={120} placeholder="Ex.: Supermercado" data-foco-inicial
+      <Campo rotulo="Descrição" name="descricao" mascara="texto" autoComplete="off" maxLength={120} placeholder="Ex.: Supermercado" data-foco-inicial
         value={formulario.descricao} onChange={(evento) => mudar('descricao', evento.target.value)} erro={erros.descricao} />
 
       <div className="duas-colunas">
-        <Campo rotulo="Valor total (R$)" name="valor" inputMode="decimal" autoComplete="off" placeholder="0,00"
+        <Campo rotulo="Valor total (R$)" name="valor" mascara="moeda" autoComplete="off" placeholder="0,00"
           value={formulario.valor} onChange={(evento) => mudar('valor', evento.target.value)} erro={erros.valor} />
         <Campo elemento={SeletorDeData} rotulo="Data da compra" name="data"
           value={formulario.data} onChange={(evento) => mudar('data', evento.target.value)} erro={erros.data} />

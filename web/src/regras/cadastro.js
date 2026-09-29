@@ -1,6 +1,7 @@
 // Validação do formulário de cadastro, separada da interface para ser
 // testada sem renderizar componente (mesma ideia da antiga validacao.js).
 import { dataExiste, hojeIso } from './datas';
+import { limparTexto } from './sanitizacao';
 
 // O Firebase Authentication recusa senha com menos de 6 caracteres
 // (auth/weak-password). Validar antes poupa uma ida à rede.
@@ -26,11 +27,13 @@ export function validarCadastro(dados, agora = new Date()) {
     erros.senha = `A senha precisa de pelo menos ${TAMANHO_MINIMO_SENHA} caracteres.`;
   }
 
-  if (!nome?.trim()) {
+  // Vale o que sobra depois da limpeza (regras/sanitizacao.ts): "<>" sozinho
+  // não é um nome.
+  if (!limparTexto(nome)) {
     erros.nome = 'Informe o nome.';
   }
 
-  if (!sobrenome?.trim()) {
+  if (!limparTexto(sobrenome)) {
     erros.sobrenome = 'Informe o sobrenome.';
   }
 

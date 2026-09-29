@@ -16,6 +16,7 @@ import {
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { PREFIXO_DO_APP } from '../regras/dadosLocais';
+import { limparTexto } from '../regras/sanitizacao';
 import { gravarJson, lerJson, limparDadosLocais } from './dadosLocais';
 import { linkDeConfirmacaoPelaApi, linkDeNovaSenhaPelaApi } from './emailsDaConta';
 
@@ -46,11 +47,13 @@ export async function cadastrar({ email, senha, nome, sobrenome, dataNascimento 
   const { user } = await createUserWithEmailAndPassword(auth, email.trim(), senha);
 
   // 2. Grava o restante dos dados no Firestore, com o uid devolvido pelo Auth.
+  // Nome e sobrenome vão limpos (sem tag, fórmula nem caractere invisível),
+  // como o texto livre que vai para a API (regras/sanitizacao.ts).
   try {
     await setDoc(doc(db, COLECAO, user.uid), {
       uid: user.uid,
-      nome: nome.trim(),
-      sobrenome: sobrenome.trim(),
+      nome: limparTexto(nome),
+      sobrenome: limparTexto(sobrenome),
       dataNascimento,
       criadoEm: serverTimestamp(),
     });

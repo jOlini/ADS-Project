@@ -7,6 +7,7 @@
 // apiConfigurada é false e as telas do livro-caixa mostram o aviso.
 import { auth } from '../firebase';
 import { enderecoDaApi } from './enderecoDaApi';
+import { limparCorpo } from '../regras/sanitizacao';
 
 // Aberta pela rede local, a página chama a API no IP de onde veio; pelo túnel,
 // no proxy do Vite.
@@ -56,7 +57,9 @@ async function chamar(caminho, { metodo = 'GET', corpo } = {}) {
         Authorization: `Bearer ${token}`,
         ...(corpo ? { 'Content-Type': 'application/json' } : {}),
       },
-      body: corpo ? JSON.stringify(corpo) : undefined,
+      // Nome, descrição e pessoa saem limpos (sem tag, fórmula nem caractere
+      // invisível); a API limpa de novo, com a mesma regra.
+      body: corpo ? JSON.stringify(limparCorpo(corpo)) : undefined,
     });
   } catch {
     // Rede fora, API desligada ou CORS recusado: o navegador não diz qual.

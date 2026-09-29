@@ -91,7 +91,7 @@ export default function FormularioDePagamento({ espacoId, cartao, contas, aoPaga
         value={formulario.conta_id} onChange={(evento) => mudar('conta_id', evento.target.value)} erro={erros.conta_id} />
 
       <div className="duas-colunas">
-        <Campo rotulo="Valor pago (R$)" name="valor" inputMode="decimal" autoComplete="off" placeholder="0,00"
+        <Campo rotulo="Valor pago (R$)" name="valor" mascara="moeda" autoComplete="off" placeholder="0,00"
           value={formulario.valor} onChange={(evento) => mudar('valor', evento.target.value)} erro={erros.valor} />
         <Campo elemento={SeletorDeData} rotulo="Data do pagamento" name="data"
           value={formulario.data} onChange={(evento) => mudar('data', evento.target.value)} erro={erros.data} />
