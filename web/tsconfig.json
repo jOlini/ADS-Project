@@ -1,0 +1,26 @@
+{
+  // TypeScript entra aos poucos (DA-076 no cofre): os módulos novos ou refeitos
+  // são .ts e passam pelo "npm run typecheck"; os .js e .jsx antigos são lidos
+  // (allowJs) para dar tipo a quem os importa, mas não são conferidos (checkJs
+  // desligado) até serem migrados. Quem transforma o código é o Vite: o tsc só
+  // confere, não gera arquivo.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}
