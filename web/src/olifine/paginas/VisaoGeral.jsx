@@ -10,7 +10,16 @@ import Modal from '../../componentes/Modal';
 import { useCarga } from '../../componentes/useCarga';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
 import { formatarData, hojeIso } from '../../regras/datas';
-import { contasBancarias, estaNoMes, lancamentosDasContas, mesDe, paraExtrato, saldoTotal } from '../../regras/livroCaixa';
+import { normalizarTexto } from '../../regras/texto';
+import {
+  contasBancarias,
+  estaNoMes,
+  lancamentosDasContas,
+  mesDe,
+  paraExtrato,
+  rotuloDoTipoDeConta,
+  saldoTotal,
+} from '../../regras/livroCaixa';
 import {
   apiConfigurada,
   listarCartoes,
@@ -32,6 +41,7 @@ import {
   SALDO_DE_EXEMPLO,
 } from '../dados/exemplo';
 import { iconeDaLinha } from '../regras/icones';
+import { parteInvestida, separarSaldos } from '../regras/saldos';
 import { guardado, porcentagem, progresso, proximaFase, resumoDasMetas, sementeDaMeta } from '../regras/metas';
 import { somarDias } from '../regras/serie';
 import { leituraDaVariacao, textoDaVariacao } from '../regras/tendencia';
@@ -154,9 +164,15 @@ export default function VisaoGeral() {
         meses: relatorio?.meses ?? null,
         hoje: hojeReal,
       }),
-      contas: contasBancarias(contas)
-        .filter((conta) => conta.ativa || conta.saldo_centavos !== 0)
-        .map((conta) => ({ nome: conta.nome, saldo: conta.saldo_centavos })),
+      // Contas com dinheiro (o cartão é dívida, com painel próprio), para o
+      // saldo por conta: separarSaldos tira a desativada zerada.
+      contas: contasBancarias(contas).map((conta) => ({
+        id: conta.id,
+        nome: conta.nome,
+        tipo: conta.tipo,
+        saldo: conta.saldo_centavos,
+        ativa: conta.ativa,
+      })),
     };
   }, [exemplo, livro.dados, hojeReal]);
 
@@ -204,6 +220,9 @@ export default function VisaoGeral() {
     futuras: cartoes.reduce((soma, cartao) => soma + cartao.parcelamentos_futuros_centavos, 0),
   };
   const contasAtivas = cadastros ? contasBancarias(cadastros.contas).filter((conta) => conta.ativa) : [];
+  // Disponível (corrente, carteira, poupança) x investido (regras/saldos.ts).
+  const saldos = comNumeros ? separarSaldos(visao.contas) : null;
+  const investida = saldos ? parteInvestida(saldos) : null;
 
   const opcoesDoNovo = [
     {
@@ -285,6 +304,11 @@ export default function VisaoGeral() {
             Saldo total
           </p>
           <p className="of-kpi-valor">{comNumeros ? formatarBRL(visao.saldo) : 'R$ —'}</p>
+          {saldos && (
+            <p className="of-kpi-origem">
+              {formatarBRL(saldos.disponivel.total)} disponível · {formatarBRL(saldos.investido.total)} investido
+            </p>
+          )}
           {comNumeros ? (
             <SeloDeTendencia variacao={visao.variacao.saldo} referencia={`${mesAnterior}`} />
           ) : (
@@ -531,6 +555,8 @@ export default function VisaoGeral() {
           )}
         </section>
 
+        <SaldoPorConta saldos={saldos} investida={investida} real={real} />
+
         {cartoes.length > 0 && (
           <section className="cartao of-painel of-painel-cartoes" aria-labelledby="titulo-dos-cartoes">
             <div className="of-painel-cabecalho">
@@ -610,6 +636,104 @@ export default function VisaoGeral() {
         </Modal>
       )}
     </div>
+  );
+}
+
+// Saldo de cada conta, com o disponível (o dinheiro para usar: corrente,
+// carteira e poupança) separado do investido (o patrimônio aplicado). A barra
+// de cima mostra a divisão; cada conta tem a parte dela no seu grupo.
+function SaldoPorConta({ saldos, investida, real }) {
+  const grupos = saldos
+    ? [
+        { id: 'disponivel', titulo: 'Disponível para usar', icone: 'contas', grupo: saldos.disponivel, legenda: 'corrente, carteira e poupança' },
+        {
+          id: 'investido',
+          titulo: 'Investido',
+          icone: 'crescimento',
+          grupo: saldos.investido,
+          legenda: investida === null ? 'patrimônio aplicado' : `${investida}% do patrimônio`,
+        },
+      ]
+    : [];
+  return (
+    <section className="cartao of-painel of-painel-saldos" aria-labelledby="titulo-saldos">
+      <div className="of-painel-cabecalho">
+        <h2 id="titulo-saldos">Saldo por conta</h2>
+        {real && saldos && (
+          <Link to="/contas" className="of-ver-mais">
+            Ver contas
+            <Icone nome="proximo" tamanho={14} />
+          </Link>
+        )}
+      </div>
+      {saldos ? (
+        <div className="of-saldos-corpo">
+          <div className="of-saldos-lado">
+          <div className="of-saldos-resumo">
+            {grupos.map(({ id, titulo, icone, grupo, legenda }) => (
+              <div key={id} className={`of-saldo-grupo ${id}`}>
+                <span className="of-saldo-grupo-titulo">
+                  <Icone nome={icone} tamanho={16} />
+                  {titulo}
+                </span>
+                <b>{formatarBRL(grupo.total)}</b>
+                <small>{legenda}</small>
+              </div>
+            ))}
+          </div>
+          {investida !== null && (
+            <span
+              className="of-saldos-divisao"
+              role="img"
+              aria-label={`${100 - investida}% disponível e ${investida}% investido`}
+              style={{ '--investido': `${investida}%` }}
+            />
+          )}
+          {saldos.investido.contas.length === 0 && (
+            <p className="of-discreto">
+              Tem dinheiro aplicado? Uma conta do tipo Investimento separa o patrimônio do que está disponível para usar.
+              {real && (
+                <>
+                  {' '}
+                  <Link to="/contas?cadastrar=conta">Cadastrar conta</Link>
+                </>
+              )}
+            </p>
+          )}
+          </div>
+          <div className="of-saldos-lado">
+          {grupos
+            .filter(({ grupo }) => grupo.contas.length > 0)
+            .map(({ id, grupo }) => (
+              <div key={id} className="of-saldos-lista">
+                <h3 className="of-saldos-lista-titulo">{id === 'disponivel' ? 'Contas' : 'Investimentos'}</h3>
+                <ul>
+                  {grupo.contas.map((conta) => (
+                    <li key={conta.id ?? conta.nome}>
+                      <span className="of-saldos-nome">
+                        <b>{conta.nome}</b>
+                        {/* O tipo só quando o nome não é o próprio tipo ("Conta corrente"). */}
+                        {normalizarTexto(conta.nome) !== normalizarTexto(rotuloDoTipoDeConta(conta.tipo)) && (
+                          <small>{rotuloDoTipoDeConta(conta.tipo)}</small>
+                        )}
+                      </span>
+                      <span className={`of-saldos-valor${conta.saldo < 0 ? ' negativo' : ''}`}>{formatarBRL(conta.saldo)}</span>
+                      <span className={`of-progresso ${id}`} aria-hidden="true">
+                        <i style={{ '--p': `${Math.round(conta.fatia * 100)}%` }} />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="of-discreto">
+          Com as contas cadastradas, o saldo de cada uma aparece aqui, com o disponível separado do investido.
+        </p>
+      )}
+    </section>
   );
 }
 

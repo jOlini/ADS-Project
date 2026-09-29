@@ -39,10 +39,11 @@
   border: var(--borda);
 }
 
-.rel-filtros .abas button[aria-pressed='true'] {
+.rel-filtros .abas button[aria-pressed='true'],
+.rel-filtros .abas button[aria-pressed='true']:hover:not(:disabled) {
   color: var(--of-sobre-menta);
   background: var(--of-menta);
-  box-shadow: none;
+  box-shadow: inset 0 0 0 1.5px var(--marca);
 }
 
 .rel-trecho {

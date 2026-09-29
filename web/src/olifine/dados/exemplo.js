@@ -8,10 +8,13 @@ import { COR_DA_CATEGORIA } from '../../regras/exemplo';
 
 export const HOJE_DE_EXEMPLO = '2026-09-26';
 
+// A soma (o saldo de hoje) fecha com os meses de exemplo; o investimento é
+// parte do que antes era só poupança, para a Visão geral mostrar os dois lados.
 export const CONTAS_DE_EXEMPLO = [
-  { nome: 'Conta corrente', saldo: 621240 },
-  { nome: 'Poupança', saldo: 2860000 },
-  { nome: 'Carteira', saldo: 45795 },
+  { nome: 'Conta corrente', tipo: 'CORRENTE', saldo: 621240 },
+  { nome: 'Poupança', tipo: 'POUPANCA', saldo: 860000 },
+  { nome: 'Carteira', tipo: 'CARTEIRA', saldo: 45795 },
+  { nome: 'Tesouro Selic', tipo: 'INVESTIMENTO', saldo: 2000000 },
 ];
 
 export const SALDO_DE_EXEMPLO = CONTAS_DE_EXEMPLO.reduce((soma, conta) => soma + conta.saldo, 0);
