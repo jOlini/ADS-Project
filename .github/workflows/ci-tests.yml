@@ -54,6 +54,11 @@ jobs:
       - name: Rodar o lint (oxlint)
         run: npm run lint
 
+      # Os módulos em TypeScript (.ts/.tsx) passam pelo tsc, só conferindo os
+      # tipos; quem gera o código é o Vite. Os .js antigos entram aos poucos.
+      - name: Conferir os tipos (TypeScript)
+        run: npm run typecheck
+
       # --run força o modo de execução única. Sem ele o Vitest entra em modo
       # observador e o job ficaria pendurado até estourar o tempo limite.
       - name: Rodar os testes unitários

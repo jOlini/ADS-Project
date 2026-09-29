@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import Icone from './Icone';
+import { propsDaMascara } from './mascara';
 import { formatarBRL } from '../regras/dinheiro';
 import { MAXIMO_DE_PESSOAS, parteVazia, pessoasParaSugerir, repartirIgualmente, somaDaDivisao } from '../regras/divisao';
 
@@ -66,17 +67,16 @@ export default function DivisaoEntrePessoas({ partes, aoMudar, total, erros = {}
                     autoComplete="off"
                     maxLength={60}
                     value={parte.pessoa}
-                    onChange={(evento) => mudarParte(indice, 'pessoa', evento.target.value)}
+                    {...propsDaMascara('texto', { onChange: (evento) => mudarParte(indice, 'pessoa', evento.target.value) })}
                   />
                   <input
                     name={`divisao.${indice}.valor`}
                     aria-label={`Parte de ${parte.pessoa.trim() || `pessoa ${indice + 1}`} (R$)`}
                     aria-invalid={Boolean(erroDoValor)}
-                    inputMode="decimal"
                     placeholder="0,00"
                     autoComplete="off"
                     value={parte.valor}
-                    onChange={(evento) => mudarParte(indice, 'valor', evento.target.value)}
+                    {...propsDaMascara('moeda', { onChange: (evento) => mudarParte(indice, 'valor', evento.target.value) })}
                   />
                   <button type="button" className="botao-icone" onClick={() => remover(indice)}
                     aria-label={`Tirar ${parte.pessoa.trim() || `a pessoa ${indice + 1}`} da divisão`}>

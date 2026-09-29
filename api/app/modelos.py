@@ -5,7 +5,9 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, StringConstraints
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, EmailStr, StringConstraints
+
+from app.sanitizacao import texto_limpo
 
 
 class Perfil(StrEnum):
@@ -37,7 +39,8 @@ def _caber_no_bcrypt(senha: str) -> str:
     return senha
 
 
-Nome = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+# Limpo antes do tamanho (app/sanitizacao.py): sem tag, fórmula nem invisível.
+Nome = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100), BeforeValidator(texto_limpo)]
 Senha = Annotated[str, StringConstraints(min_length=8, max_length=64), AfterValidator(_caber_no_bcrypt)]
 
 

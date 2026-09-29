@@ -7,7 +7,7 @@ OliFine (projeto Pessoal Finance, ADS-Project) — ambiente local com um comando
     python subir-app.py prod                produção local: build otimizado no nginx, API da imagem, saída enxuta
     python subir-app.py status              o que está no ar, os endereços e o que falta configurar
     python subir-app.py verificar           confere a configuração inteira e aponta o que falta
-    python subir-app.py testes              lint, testes e build da API e do front-end, como o CI
+    python subir-app.py testes              lint, tipos, testes e build da API e do front-end, como o CI
     python subir-app.py logs [serviço]      acompanha os logs (api, web, mongo, vite ou todos)
     python subir-app.py alertas             manda uma mensagem de teste para cada canal do Discord
     python subir-app.py tunnel start|stop   abre ou fecha um endereço público temporário (Cloudflare)
@@ -2052,6 +2052,8 @@ def comando_testes() -> int:
     etapas = [
         ("API (pytest)", [str(python_do_venv()), "-m", "pytest", "-q"], PASTA_API),
         ("Front-end: lint (oxlint)", [npm, "run", "lint"], PASTA_WEB),
+        # Os módulos em TypeScript (.ts/.tsx) passam pelo tsc, só conferindo.
+        ("Front-end: tipos (TypeScript)", [npm, "run", "typecheck"], PASTA_WEB),
         ("Front-end: testes (Vitest)", [npm, "test", "--", "--run"], PASTA_WEB),
         # O CI também gera o build: um import quebrado passa nos testes e só falha aqui.
         ("Front-end: build (Vite)", [npm, "run", "build"], PASTA_WEB),
@@ -2158,7 +2160,7 @@ MENU = [
     ("prod", f"Produção local: build otimizado no nginx ({PORTA_PROD}), saída enxuta"),
     ("status", "O que está no ar, endereços e pendências"),
     ("verificar", "Configuração, DNS, Pages, Firebase e Discord (só leitura)"),
-    ("testes", "Lint, testes e build, como o CI"),
+    ("testes", "Lint, tipos, testes e build, como o CI"),
     ("logs", "Acompanhar os logs da API (Ctrl+C sai)"),
     ("tunnel start", "Abrir um endereço público temporário"),
     ("tunnel stop", "Fechar o endereço público"),
@@ -2208,7 +2210,7 @@ def main(argv: list[str] | None = None) -> int:
         "verificar", help="Confere a configuração (arquivos, DNS, Pages, Firebase, Discord) e aponta o que falta."
     )
     verificar.add_argument("--sem-rede", action="store_true", help="Só as verificações locais, sem internet.")
-    subcomandos.add_parser("testes", help="Roda lint, testes e build da API e do front-end, como o CI.")
+    subcomandos.add_parser("testes", help="Roda lint, tipos, testes e build da API e do front-end, como o CI.")
     logs = subcomandos.add_parser("logs", help="Acompanha os logs de um serviço (Ctrl+C sai).")
     logs.add_argument("servico", nargs="?", default="api", choices=["api", "web", "mongo", "vite", "todos"],
                       help="api (padrão), web (nginx do prod), mongo, vite (dev) ou todos os containers.")

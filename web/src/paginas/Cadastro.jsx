@@ -89,9 +89,9 @@ export default function Cadastro() {
               dica={`Pelo menos ${TAMANHO_MINIMO_SENHA} caracteres.`}
               value={dados.senha} onChange={alterar} erro={erros.senha} />
             <div className="duas-colunas">
-              <Campo rotulo="Nome" name="nome" autoComplete="given-name" maxLength={100}
+              <Campo rotulo="Nome" name="nome" mascara="texto" autoComplete="given-name" maxLength={100}
                 value={dados.nome} onChange={alterar} erro={erros.nome} />
-              <Campo rotulo="Sobrenome" name="sobrenome" autoComplete="family-name" maxLength={100}
+              <Campo rotulo="Sobrenome" name="sobrenome" mascara="texto" autoComplete="family-name" maxLength={100}
                 value={dados.sobrenome} onChange={alterar} erro={erros.sobrenome} />
             </div>
             <Campo elemento={SeletorDeData} rotulo="Data de nascimento" name="dataNascimento" autoComplete="bday"

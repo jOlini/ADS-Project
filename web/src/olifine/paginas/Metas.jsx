@@ -55,9 +55,9 @@ function FormularioDeMeta({ aoCriar, aoCancelar }) {
 
   return (
     <form className="of-formulario-da-meta" onSubmit={criar} noValidate>
-      <Campo rotulo="Nome da meta" name="nome" value={formulario.nome} onChange={mudar('nome')} erro={erros.nome}
+      <Campo rotulo="Nome da meta" name="nome" mascara="texto" value={formulario.nome} onChange={mudar('nome')} erro={erros.nome}
         maxLength={TAMANHO_MAXIMO_DO_NOME} placeholder="Ex.: Reserva de emergência" autoFocus />
-      <Campo rotulo="Quanto você quer juntar" name="alvo" inputMode="decimal" value={formulario.alvo}
+      <Campo rotulo="Quanto você quer juntar" name="alvo" mascara="moeda" value={formulario.alvo}
         onChange={mudar('alvo')} erro={erros.alvo} placeholder="R$ 0,00" />
       <Campo rotulo="Prazo (opcional)" elemento={SeletorDeData} name="prazo" value={formulario.prazo}
         onChange={mudar('prazo')} erro={erros.prazo} min={hoje}
@@ -191,7 +191,7 @@ function Estufa({ meta, rega, aoRegar, aoExcluir }) {
                 ))}
               </div>
               <form className="of-regar-outro" onSubmit={regarOutro} noValidate>
-                <Campo rotulo="Outro valor" name="aporte" inputMode="decimal" value={outro}
+                <Campo rotulo="Outro valor" name="aporte" mascara="moeda" value={outro}
                   onChange={(evento) => setOutro(evento.target.value)} erro={erro} placeholder="R$ 0,00" />
                 <button type="submit">
                   <Icone nome="gota" tamanho={16} />

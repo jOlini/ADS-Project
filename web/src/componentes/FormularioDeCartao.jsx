@@ -74,10 +74,10 @@ export default function FormularioDeCartao({ espacoId, emEdicao = null, aoSalvar
 
   return (
     <form onSubmit={enviar} noValidate>
-      <Campo rotulo="Nome" name="nome" autoComplete="off" maxLength={60} placeholder="Ex.: Cartão do banco" data-foco-inicial
+      <Campo rotulo="Nome" name="nome" mascara="texto" autoComplete="off" maxLength={60} placeholder="Ex.: Cartão do banco" data-foco-inicial
         value={formulario.nome} onChange={(evento) => mudar('nome', evento.target.value)} erro={erros.nome} />
 
-      <Campo rotulo="Limite (R$)" name="limite" inputMode="decimal" autoComplete="off" placeholder="0,00"
+      <Campo rotulo="Limite (R$)" name="limite" mascara="moeda" autoComplete="off" placeholder="0,00"
         value={formulario.limite} onChange={(evento) => mudar('limite', evento.target.value)} erro={erros.limite} />
 
       <div className="duas-colunas">

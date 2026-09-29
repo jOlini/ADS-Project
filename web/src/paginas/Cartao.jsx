@@ -407,7 +407,7 @@ export default function Cartao() {
           aoMudarOcupado={setModalOcupado} />
       </Modal>
 
-      <Modal aberta={modal === 'importar'} titulo="Importar fatura" largura="larga" aoFechar={fecharModal} ocupado={modalOcupado}
+      <Modal aberta={modal === 'importar'} titulo="Importar fatura" largura="extra" aoFechar={fecharModal} ocupado={modalOcupado}
         descricao={`Traga a fatura de ${painel.nome} exportada pelo banco. Nada é gravado antes de você conferir.`}>
         <ImportarExtrato
           espacoId={espacoId}

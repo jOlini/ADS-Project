@@ -12,14 +12,16 @@ const ORDEM_DOS_ERROS = ['arquivo', 'data', 'descricao', 'valor', 'credito', 'de
 
 // Tela de colunas da importação: o começo do arquivo numa tabela e, em cima
 // de cada coluna, o que ela é (Data, Descrição, Valor, Entrada, Saída, D/C,
-// Categoria ou Ignorar). Aparece quando a API não reconhece o formato pelo
-// nome das colunas, ou quando a pessoa quer ajustar o que foi reconhecido.
+// Categoria ou Ignorar). Aparece quando a API não reconhece o formato, quando
+// ficou dúvida (duvidas: as informações a conferir, marcadas na coluna) ou
+// quando a pessoa quer ajustar o que foi reconhecido.
 export default function MapeamentoDeColunas({
   linhas,
   delimitador,
   cabecalho,
   papeis,
   inverterSinal,
+  duvidas = [],
   erros = {},
   ocupado = false,
   aoMudarDelimitador,
@@ -71,7 +73,7 @@ export default function MapeamentoDeColunas({
                     value={papeis[coluna] ?? ''}
                     opcoes={PAPEIS_DAS_COLUNAS}
                     disabled={ocupado}
-                    className={papeis[coluna] ? 'com-papel' : undefined}
+                    className={[papeis[coluna] && 'com-papel', duvidas.includes(papeis[coluna]) && 'em-duvida'].filter(Boolean).join(' ') || undefined}
                     onChange={(evento) => aoMudarPapel(coluna, evento.target.value)}
                   />
                 </th>

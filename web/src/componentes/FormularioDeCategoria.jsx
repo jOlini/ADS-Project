@@ -58,7 +58,7 @@ export default function FormularioDeCategoria({ espacoId, emEdicao = null, tipoI
 
   return (
     <form onSubmit={enviar} noValidate>
-      <Campo rotulo="Nome" name="nome" autoComplete="off" maxLength={60} placeholder="Ex.: Pets" data-foco-inicial
+      <Campo rotulo="Nome" name="nome" mascara="texto" autoComplete="off" maxLength={60} placeholder="Ex.: Pets" data-foco-inicial
         value={formulario.nome} onChange={(evento) => mudar('nome', evento.target.value)} erro={erros.nome} />
 
       {emEdicao ? (

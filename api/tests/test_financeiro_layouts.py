@@ -109,11 +109,16 @@ def test_sinal_do_tipo(texto, sinal):
 SEM_CABECALHO = "2026-09-01|Compra na feira|30,00|D\n2026-09-02|Reembolso|30,00|C\n"
 
 
-def test_arquivo_sem_cabecalho_nao_e_reconhecido_mas_le_com_mapeamento():
+def test_arquivo_sem_cabecalho_e_reconhecido_pelo_conteudo():
+    # Data, texto, número sem sinal e a coluna D/C que dá o sinal.
     mapeamento = Mapeamento("|", 0, data=0, descricao=1, valor=2, tipo=3)
 
-    assert detectar(SEM_CABECALHO) is None
-    assert valores(SEM_CABECALHO, mapeamento) == ([("Compra na feira", -3000), ("Reembolso", 3000)], [])
+    assert detectar(SEM_CABECALHO) == mapeamento
+    assert valores(SEM_CABECALHO) == ([("Compra na feira", -3000), ("Reembolso", 3000)], [])
+
+
+def test_arquivo_sem_data_nem_numero_nao_e_reconhecido():
+    assert detectar("Nome;Cidade\nAna;Recife\nBruno;Natal\n") is None
 
 
 def test_mapeamento_pode_inverter_o_sinal():
@@ -169,11 +174,19 @@ def test_estrutura_traz_as_primeiras_linhas_e_o_mapeamento_reconhecido():
     assert resultado.mapeamento == Mapeamento(";", 3, data=0, descricao=1, valor=2)
 
 
-def test_estrutura_sem_colunas_reconhecidas_adivinha_o_separador():
+def test_estrutura_sem_cabecalho_adivinha_o_separador_e_as_colunas():
     resultado = estrutura(SEM_CABECALHO)
 
-    assert (resultado.delimitador, resultado.mapeamento) == ("|", None)
+    assert resultado.delimitador == "|"
+    assert (resultado.origem, resultado.duvidas) == ("CONTEUDO", ())
+    assert resultado.mapeamento == Mapeamento("|", 0, data=0, descricao=1, valor=2, tipo=3)
     assert resultado.linhas[0].celulas == ["2026-09-01", "Compra na feira", "30,00", "D"]
+
+
+def test_estrutura_sem_colunas_reconhecidas_adivinha_o_separador():
+    resultado = estrutura("Nome|Cidade|Estado\nAna|Recife|PE\nBruno|Natal|RN\n")
+
+    assert (resultado.delimitador, resultado.mapeamento, resultado.origem) == ("|", None, None)
 
 
 def test_estrutura_aceita_o_separador_escolhido_e_corta_a_amostra():

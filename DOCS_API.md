@@ -386,7 +386,8 @@ sequenceDiagram
 | **Token forjado ou adulterado** | Atacante altera o payload, usa `"alg": "none"` ou força bruta numa chave fraca | Algoritmo fixo em HS256; `JWT_SECRET` com no mínimo 32 bytes, checado na subida; `iss` e `exp` obrigatórios | `tokens.py`, `config.py` |
 | **Enumeração de usuários** | Mensagem ou tempo de resposta do login revela quais e-mails têm conta | Mesma mensagem para e-mail inexistente e senha errada; BCrypt roda contra hash fictício quando o e-mail não existe | `servicos.py`, `main.py` |
 | **Mass assignment** | Enviar `"senha_hash"` ou `"id"` no JSON para gravar valor escolhido | DTOs de entrada separados da entidade, com `extra="forbid"` (campo desconhecido = `400`) | `modelos.py` |
-| **Injeção NoSQL** | Enviar `{"$ne": null}` no lugar de um e-mail para burlar a consulta | Pydantic exige texto nos campos; consultas pymongo montadas com valores tipados; ID validado como ObjectId | `modelos.py`, `repositorio.py` |
+| **Injeção NoSQL** | Enviar `{"$ne": null}` no lugar de um e-mail (ou de um nome) para burlar a consulta | Pydantic exige texto nos campos (objeto no lugar de texto = `400`); consultas pymongo montadas com valores tipados; ID validado como ObjectId; `test_sanitizacao.py` tenta `$ne`, `$where` e `$gt`. Injeção de SQL não se aplica: não há banco SQL | `modelos.py`, `repositorio.py` |
+| **XSS armazenado no texto livre** | Nome de conta ou descrição com `<img onerror=...>` gravado e mostrado depois em outra tela (painel, e-mail, relatório) | Todo texto livre (nome, descrição, pessoa do racha, nome do usuário) passa por uma limpeza antes do limite de tamanho: sem `<` e `>`, sem caractere de controle, de largura zero ou que inverte a direção do texto, sem `=`, `+`, `-` e `@` no começo. A tela limpa com a mesma regra antes de enviar e barra `<` e `>` já na digitação | `sanitizacao.py`, `web/src/regras/sanitizacao.ts` |
 | **Força bruta no login** | Script testa milhares de senhas no `POST /auth/login`, o único endpoint público | Trava de 15 minutos por e-mail + endereço (5 erros) e por endereço (20 erros), com `429` e `Retry-After`; o `429` e o `tentativas_restantes` do `401` saem iguais para e-mail existente e inexistente | `limites.py`, `rotas.py` |
 | **Script injetado na documentação (`/docs`)** | CDN comprometida ou script inline rouba o token colado em "Authorize" | Swagger UI de versão fixa com Subresource Integrity (o navegador recusa arquivo alterado); inicialização num arquivo da própria API; CSP própria sem `unsafe-inline` e com a CDN limitada ao caminho da versão; ReDoc desligado | `documentacao.py` |
 | **Conta do cliente com e-mail alheio** | Alguém cria conta no Firebase com o e-mail de outra pessoa e usa o livro-caixa | O livro-caixa exige `email_verified: true` no ID token (`403` sem ele); a área do cliente só abre depois do link de confirmação | `firebase.py`, `financeiro/acesso.py` |
@@ -397,7 +398,8 @@ sequenceDiagram
 | **Negação de serviço por corpo gigante** | Enviar centenas de MB no login (público) para esgotar a memória | Corpo acima de 2 MB recusado com `413`: pelo `Content-Length` antes de ler, ou contando os bytes no envio em partes | `limites.py` |
 | **XSS no painel** | Nome de usuário com `<script>` executa no navegador do administrador e rouba o token | Dados inseridos com `textContent`, nunca `innerHTML`; CSP `default-src 'self'; object-src 'none'; base-uri 'none'` bloqueia script embutido | `painel.js`, `seguranca.py` |
 | **Clickjacking e recursos do navegador** | Site embute o painel num `<iframe>` invisível e induz cliques; script injetado usa câmera ou localização | `X-Frame-Options: DENY` e `frame-ancestors 'none'`; `Permissions-Policy` desligando câmera, microfone, localização e pagamento; `Cross-Origin-Opener-Policy: same-origin`; `Strict-Transport-Security` quando a requisição chega por HTTPS | `seguranca.py` |
-| **Injeção de fórmula no CSV importado** | Extrato com `=HYPERLINK(...)` ou `=cmd\|...` na descrição vira fórmula ao voltar para uma planilha | Descrição e categoria do arquivo perdem `=`, `+`, `-` e `@` do começo antes de gravar | `financeiro/importacao.py` |
+| **Injeção de fórmula no CSV importado** | Extrato com `=HYPERLINK(...)` ou `=cmd\|...` na descrição vira fórmula ao voltar para uma planilha | Descrição e categoria de cada célula passam pela mesma limpeza do texto livre (sem `=`, `+`, `-` e `@` do começo, também os de largura cheia) antes de gravar | `financeiro/celulas.py`, `sanitizacao.py` |
+| **Arquivo malicioso ou pesado na importação** | Planilha, PDF ou binário renomeado para `.csv`; aspas que nunca fecham para o leitor juntar o arquivo inteiro numa célula; muitas importações ao mesmo tempo para ocupar o servidor | A tela confere extensão, tipo e o começo dos bytes antes de enviar; a API recusa assinatura de planilha, PDF, página da web e byte de controle (`400` no campo `csv`), limita a célula a 5 mil caracteres, o texto a 500 mil e as linhas a mil, e aceita no máximo 4 importações ao mesmo tempo (`503` com `Retry-After` para a quinta) | `financeiro/importacao.py`, `financeiro/rotas.py`, `web/src/regras/arquivoDoExtrato.ts` |
 | **CORS aberto e CSRF** | Site malicioso chama a API usando o navegador da vítima | CORS com lista explícita de origens (vazia por padrão); token no cabeçalho `Authorization`, sem cookie, então não há credencial enviada automaticamente | `main.py`, `config.py` |
 | **Vazamento de detalhes em erros** | Stack trace ou mensagem interna revela estrutura do sistema | Erros padronizados em Problem Details, com mensagens próprias em português; falha não prevista vira `500` genérico, com o detalhe só no log | `erros.py` |
 | **Segredos no repositório** | Chave JWT ou senha publicada no GitHub | `.env` no `.gitignore`; `.env.example` só com valores fictícios; segredos do CI em GitHub Secrets | `.gitignore`, `api/.env.example` |
@@ -710,7 +712,11 @@ das saídas e a das entradas. Cada linha vira uma receita (valor positivo) ou um
 mesmo caminho de um lançamento digitado (partidas dobradas, centavos, limites de descrição e valor).
 
 - **Formatos reconhecidos sozinhos** (pelo nome das colunas, sem diferença de acento, caixa ou pontuação), com
-  até 10 linhas de dados da conta antes do cabeçalho e colunas separadas por `;`, `,`, tabulação ou `|`:
+  até 10 linhas de dados da conta antes do cabeçalho e colunas separadas por `;`, `,`, tabulação ou `|`. Os nomes
+  seguem o que Nubank, Itaú, Bradesco, Banco do Brasil, Santander, Caixa, Inter, C6, BTG, XP, Sicoob, Sicredi,
+  PicPay e Mercado Pago exportam; um nome que só **contém** a palavra também serve ("Valor da transação"), e
+  palavras que desqualificam tiram a coluna ("Saldo (R$)" e "Valor (US$)" não são o valor; "Data do balancete"
+  só vale sem outra data):
 
   | Formato | Exemplo de cabeçalho |
   |---|---|
@@ -719,14 +725,22 @@ mesmo caminho de um lançamento digitado (partidas dobradas, centavos, limites d
   | Valor sem sinal com coluna D/C | `Data Mov.;Histórico;Valor;Deb/Cred` · `"Data","Lançamento","Valor","Tipo Lançamento"` (Entrada/Saída) |
   | Fatura de cartão em inglês (compra positiva) | `date,title,amount`: o sinal é invertido, e a compra vira saída |
 
+  **Sem cabeçalho conhecido, pelo conteúdo:** a coluna em que quase tudo é data é a data; a de números é o valor
+  (a que acompanha o valor linha a linha é o saldo e fica de fora); duas colunas de números que se revezam são
+  entrada e saída; a de texto mais variado é a descrição. As linhas de dados da conta antes dos lançamentos ficam
+  de fora sozinhas.
+
   Uma coluna "Tipo" que não diz débito ou crédito (ex.: "Pix", "TED") é ignorada, e o sinal vem do valor. Data
   `DD/MM/AAAA` (também com `-` ou `.` e ano de dois dígitos, lido como 20AA) ou `AAAA-MM-DD`; valor `1.234,56`
   (ou `1234.56`), com `-` antes ou depois do número, ou `D`/`C` depois dele (`80,00 D`). Até 1000 linhas e
   500 mil caracteres por importação.
 - **Formato não reconhecido: as colunas indicadas pela pessoa.** `POST /importacoes/estrutura` devolve as
   primeiras 15 linhas do arquivo já separadas em células (com o separador adivinhado, ou o escolhido em
-  `delimitador`) e, quando reconhece o formato, o `mapeamento` pronto. Sem `mapeamento`, a tela mostra a amostra
-  e a pessoa diz o que é cada coluna; a importação recebe o `mapeamento`:
+  `delimitador`) e, quando reconhece o formato, o `mapeamento` pronto, a `origem` (`CABECALHO` ou `CONTEUDO`) e as
+  `duvidas` (informações a conferir: duas colunas "Valor", coluna de data em que quase nada é data, entrada e
+  saída sem sinal). Com o mapeamento e sem dúvida, a tela vai direto para a conferência dos lançamentos; com
+  dúvida, mostra as colunas preenchidas e marca o que conferir; sem `mapeamento`, a pessoa diz o que é cada
+  coluna. A importação recebe o `mapeamento`:
 
   | Campo do `mapeamento` | Significado |
   |---|---|
@@ -740,15 +754,31 @@ mesmo caminho de um lançamento digitado (partidas dobradas, centavos, limites d
 
   Mapeamento incoerente é `400` com o erro em `mapeamento.<informação>` (ex.: `mapeamento.valor`: "Indique a
   coluna do valor, ou as de entrada e saída.").
-- **Coluna de categoria:** a linha vai para a categoria **ativa** do espaço com aquele nome (sem diferença de
-  acento ou caixa) e do tipo certo; sem nome conhecido, para a categoria padrão das saídas ou das entradas. A
-  resposta traz o `categoria_id` de cada linha.
+- **Categoria automática** ([`categorizacao.py`](api/app/financeiro/categorizacao.py)), sempre uma categoria
+  **ativa** do espaço e do tipo da linha, nesta ordem: (1) `ARQUIVO`, a coluna de categoria com o nome de uma
+  categoria (sem diferença de acento ou caixa); (2) `HISTORICO`, o mesmo estabelecimento lançado antes quase
+  sempre na mesma categoria (`PADARIA DOCE PAO 12/09` e `Padaria Doce Pão` são o mesmo lugar); (3) `REGRA`, uma
+  palavra conhecida da descrição (Uber, farmácia, luz, iFood, Netflix, salário) aponta um assunto, e o assunto, a
+  categoria da pessoa pelo nome ("Alimentação" ou, sem ela, "Mercado"); a expressão mais longa vence ("Mercado
+  Livre" é loja, "Mercado Pago" não diz nada); (4) `PADRAO`, a categoria escolhida para as saídas ou as entradas.
+  A resposta traz o `categoria_id` e a `origem_da_categoria` de cada linha.
+- **Edição na conferência:** `ajustes` troca a descrição e a categoria de linhas, pelo número da linha
+  (`{"12": {"descricao": "Mercadinho do Zé", "categoria_id": "<id>"}}`); a origem passa a `AJUSTE`. A descrição
+  editada passa pela mesma limpeza e pelos mesmos limites; a categoria precisa ser ativa e do tipo da linha
+  (`400` em `ajustes.<linha>.categoria_id`). A chave da linha continua a do arquivo: a mesma linha, editada ou
+  não, não entra duas vezes. Na fatura de um cartão, a parcela continua lida da descrição do arquivo, para a
+  fatura seguinte reconhecer as parcelas geradas.
 - **Linha ruim não barra o arquivo:** volta como `INVALIDA`, com o motivo, e as outras entram. Linhas de saldo
   (`SALDO ANTERIOR`, `SALDO DO DIA`) são recusadas: não são lançamentos.
 - **Injeção de fórmula (CSV injection):** o arquivo vem de fora, então a descrição e a categoria perdem os
   caracteres `=`, `+`, `-` e `@` do começo antes de gravar (`=HYPERLINK("http://...")` vira
-  `HYPERLINK("http://...")`). Assim o texto nunca vira fórmula se voltar a uma planilha. O sinal do valor é lido
-  na coluna do valor e não passa por essa limpeza.
+  `HYPERLINK("http://...")`); os sinais `<` e `>` e os caracteres invisíveis também saem. Assim o texto nunca vira
+  fórmula se voltar a uma planilha. O sinal do valor é lido na coluna do valor e não passa por essa limpeza.
+- **Arquivo que não é CSV:** planilha do Excel (`.xlsx`, `.xls`), PDF, `.rtf`, página da web ou arquivo com byte
+  de controle é recusado antes de qualquer leitura, com o que fazer ("No banco, exporte o extrato em CSV."). Uma
+  célula maior que 5 mil caracteres (aspas que nunca fecham) torna o arquivo inválido, em vez de ir inteira para
+  a memória. No máximo 4 importações rodam ao mesmo tempo no servidor; a quinta espera até 5 segundos e, sem
+  vaga, recebe `503` com `Retry-After`.
 - **Idempotência por linha:** cada linha ganha uma chave SHA-256 da conta, da data, do valor, da descrição
   (sem acento, caixa ou espaços extras) e da ocorrência dela no arquivo (duas compras iguais no mesmo dia são
   duas linhas). A chave é calculada pela API, nunca enviada pelo cliente (campo extra = `400`). Importar o mesmo
@@ -786,16 +816,17 @@ Content-Type: application/json
   "parcelas_futuras": 0,
   "linhas": [
     { "linha": 2, "situacao": "IMPORTADA", "data": "2026-09-05", "descricao": "Salário",
-      "valor_centavos": 680000, "categoria_id": "<Outras receitas>", "lancamento_id": "66f0...", "erro": null,
-      "fatura": null, "observacao": null },
+      "valor_centavos": 680000, "categoria_id": "<Salário>", "lancamento_id": "66f0...", "erro": null,
+      "fatura": null, "observacao": null, "origem_da_categoria": "REGRA" },
     { "linha": 3, "situacao": "IMPORTADA", "data": "2026-09-05", "descricao": "Aluguel",
-      "valor_centavos": -185000, "categoria_id": "<Outras despesas>", "lancamento_id": "66f1...", "erro": null,
-      "fatura": null, "observacao": null }
+      "valor_centavos": -185000, "categoria_id": "<Moradia>", "lancamento_id": "66f1...", "erro": null,
+      "fatura": null, "observacao": null, "origem_da_categoria": "REGRA" }
   ]
 }
 ```
 
-Com as colunas indicadas (arquivo sem cabeçalho, separado por `|`, com a coluna D/C e a de categoria):
+Arquivo sem cabeçalho, separado por `|`: as colunas saem do conteúdo (data, texto, número sem sinal e a coluna
+D/C). A de categoria a pessoa indica, se quiser, e a importação recebe o `mapeamento` completo:
 
 ```http
 POST /espacos/{espaco_id}/importacoes/estrutura
@@ -811,7 +842,10 @@ Content-Type: application/json
     { "numero": 1, "celulas": ["2026-09-01", "Feira de sábado", "30,00", "D", "Mercado"] },
     { "numero": 2, "celulas": ["2026-09-02", "Reembolso", "30,00", "C", "Outras receitas"] }
   ],
-  "mapeamento": null
+  "mapeamento": { "delimitador": "|", "cabecalho": 0, "data": 0, "descricao": 1, "valor": 2, "credito": null,
+                  "debito": null, "tipo": 3, "categoria": null, "inverter_sinal": false },
+  "origem": "CONTEUDO",
+  "duvidas": []
 }
 ```
 
@@ -822,8 +856,9 @@ Content-Type: application/json
                   "categoria": 4, "inverter_sinal": false } }
 ```
 
-`400` por campo quando o arquivo inteiro não serve (`csv`: colunas não reconhecidas e sem `mapeamento`, sem
-lançamentos, mais de 1000 linhas), quando o `mapeamento` é incoerente ou quando o destino não vale (`conta_id`,
+`400` por campo quando o arquivo inteiro não serve (`csv`: não é CSV, colunas não reconhecidas e sem
+`mapeamento`, sem lançamentos, mais de 1000 linhas), quando o `mapeamento` é incoerente, quando um ajuste não
+vale (`ajustes.<linha>.categoria_id`) ou quando o destino não vale (`conta_id`,
 `categoria_despesa_id`, `categoria_receita_id`: não encontrada, desativada ou do tipo errado). A conta de outra
 pessoa responde "Conta não encontrada.", como no lançamento.
 
@@ -894,7 +929,10 @@ do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
 - **Testes automatizados:** `api/tests/test_firebase.py` (validação do ID token e o `403` sem e-mail confirmado), `test_financeiro_regras.py`
   (partidas, estorno e coerência), `test_financeiro_api.py` (rotas, isolamento, saldos e estorno),
   `test_financeiro_importacao.py` (leitura do CSV, chave por linha e importação sem duplicar),
-  `test_financeiro_layouts.py` (formatos de vários bancos, mapeamento das colunas e começo do arquivo) e
+  `test_financeiro_layouts.py` (formatos de vários bancos, mapeamento das colunas e começo do arquivo),
+  `test_financeiro_reconhecimento.py` (cabeçalho de cada banco, colunas pelo conteúdo, arquivo que não é CSV),
+  `test_financeiro_categorizacao.py` (categoria pela coluna, pelo histórico e pelas regras, ajustes e o teto de
+  importações), `test_sanitizacao.py` (XSS, fórmula, invisíveis e operador do MongoDB) e
   `test_financeiro_racha_e_exclusao.py` (divisão entre pessoas, exclusão e importação com colunas indicadas) e
   `test_financeiro_cartoes.py` (ciclo da fatura, parcelas, painel do cartão, compra, pagamento e fatura em CSV).
   Os ID tokens de teste são assinados por uma chave RSA gerada na hora, no lugar das chaves do Google.

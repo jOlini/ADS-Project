@@ -3,10 +3,15 @@
 Cada banco exporta de um jeito: ponto e vírgula ou vírgula, cabeçalho na
 primeira linha ou depois dos dados da conta, valor com sinal, colunas
 separadas de entrada e saída, ou valor sem sinal ao lado de uma coluna D/C.
-O Mapeamento diz onde está cada informação. detectar() tenta montá-lo pelos
-nomes das colunas (COLUNAS, comparados sem acento e sem pontuação); quando
-não consegue, a tela mostra o começo do arquivo (estrutura()) e a pessoa
-indica as colunas.
+O Mapeamento diz onde está cada informação. reconhecer() o monta pelos
+nomes das colunas ou, sem cabeçalho conhecido, pelo conteúdo das células
+(reconhecimento.py), e diz o que ficou em dúvida; quando não consegue, a tela
+mostra o começo do arquivo (estrutura()) e a pessoa indica as colunas.
+
+Antes de qualquer leitura, conferir_arquivo() recusa o que não é texto de CSV
+(planilha, PDF, binário), e o leitor para em células maiores que
+TAMANHO_MAXIMO_DA_CELULA: o arquivo nunca vai inteiro para a memória numa
+célula só.
 
 Idempotência: cada linha ganha uma chave calculada a partir da conta, da
 data, do valor, da descrição e da ocorrência (a 2ª linha igual no mesmo
@@ -18,13 +23,26 @@ chave já existe e a linha é pulada.
 import csv
 import hashlib
 import io
-import re
-import unicodedata
 from collections import Counter
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import date
 
-from app.financeiro.modelos import LIMITE_EM_CENTAVOS
+from app.financeiro.celulas import (  # noqa: F401 (MENSAGEM_* e as leituras também são usadas por quem importa daqui)
+    MENSAGEM_DATA,
+    MENSAGEM_VALOR,
+    ler_data,
+    ler_valor,
+    limpar_celula,
+    normalizar,
+    sinal_do_tipo,
+)
+from app.financeiro.reconhecimento import (  # noqa: F401 (COLUNAS e Mapeamento continuam importáveis daqui)
+    COLUNAS,
+    Mapeamento,
+    Reconhecimento,
+    pelo_cabecalho,
+    pelo_conteudo,
+)
 
 # Limite de uma importação (o tamanho do texto fica em modelos.NovaImportacao).
 # O extrato de um mês cabe com folga; mais que isso pede um período menor.
@@ -38,91 +56,33 @@ LINHAS_ANTES_DO_CABECALHO = 10
 TAMANHO_DA_CELULA_NA_AMOSTRA = 80
 
 DELIMITADORES = (";", ",", "\t", "|")
+# Linhas lidas para reconhecer as colunas: as dez em que o cabeçalho pode
+# estar e as de dados que conferem (ou dão, sem cabeçalho) cada coluna.
+LINHAS_PARA_RECONHECER = LINHAS_ANTES_DO_CABECALHO + 30
 
-# Nomes de coluna aceitos para cada informação, já normalizados (minúsculas,
-# sem acento, pontuação trocada por espaço): "Valor (R$)" vira "valor r",
-# "Histórico" vira "historico", "D/C" vira "d c". A ordem é a preferência:
-# num arquivo com "Título" e "Descrição", a descrição vence.
-COLUNAS: dict[str, tuple[str, ...]] = {
-    "data": (
-        "data",
-        "data lancamento",
-        "data do lancamento",
-        "data da transacao",
-        "data movimento",
-        "data mov",
-        "dt lancamento",
-        "date",
-    ),
-    "valor": ("valor", "valor r", "valor rs", "valor em r", "quantia", "amount", "value"),
-    "credito": ("credito", "credito r", "creditos", "valor credito", "entrada", "entradas", "entrada r"),
-    "debito": ("debito", "debito r", "debitos", "valor debito", "saida", "saidas", "saida r"),
-    "descricao": (
-        "descricao",
-        "historico",
-        "lancamento",
-        "descricao do lancamento",
-        "detalhes",
-        "estabelecimento",
-        "titulo",
-        "description",
-        "title",
-        "memo",
-    ),
-    "tipo": (
-        "d c",
-        "c d",
-        "deb cred",
-        "cred deb",
-        "debito credito",
-        "credito debito",
-        "natureza",
-        "tipo lancamento",
-        "tipo de lancamento",
-        "tipo transacao",
-        "tipo",
-    ),
-    "categoria": ("categoria", "category"),
-}
+# Célula maior que isso não é de extrato (a descrição fica em 120). O leitor
+# de CSV para no limite em vez de guardar na memória uma "célula" do tamanho
+# do arquivo inteiro (aspas sem fechar, arquivo que não é CSV).
+TAMANHO_MAXIMO_DA_CELULA = 5_000
+csv.field_size_limit(TAMANHO_MAXIMO_DA_CELULA)
+
+# O começo de arquivos que não são CSV, para a mensagem dizer o que fazer.
+TRECHO_CONFERIDO = 4096
+ASSINATURAS: tuple[tuple[str, str], ...] = (
+    ("pk\x03\x04", "Este arquivo é uma planilha do Excel (.xlsx) ou um .zip. No banco, exporte o extrato em CSV."),
+    ("%pdf", "Este arquivo é um PDF. No banco, exporte o extrato em CSV."),
+    ("{\\rtf", "Este arquivo é um documento formatado (.rtf). No banco, exporte o extrato em CSV."),
+    ("<!doctype", "Este arquivo é uma página da web, não um CSV. No banco, exporte o extrato em CSV."),
+    ("<html", "Este arquivo é uma página da web, não um CSV. No banco, exporte o extrato em CSV."),
+)
+MENSAGEM_BINARIO = "Este arquivo não é um texto CSV. No banco, exporte o extrato em CSV."
 
 MENSAGEM_SEM_FORMATO = "Não reconheci as colunas do arquivo. Indique onde estão a data, a descrição e o valor."
-MENSAGEM_DATA = "Data inválida. Use DD/MM/AAAA ou AAAA-MM-DD."
-MENSAGEM_VALOR = "Valor inválido. Use o formato 1.234,56, com - nas saídas."
 
-_DATA_BR = re.compile(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})$")
-_DATA_ISO = re.compile(r"^(\d{4})-(\d{2})-(\d{2})")
-_CONTROLE = re.compile(r"[\x00-\x1f\x7f]")
 
 
 class ExtratoIlegivel(ValueError):
     """O arquivo inteiro não serve (sem colunas reconhecidas, vazio, grande demais)."""
-
-
-@dataclass(frozen=True)
-class Mapeamento:
-    """Onde está cada informação no arquivo. Colunas contam a partir de 0.
-    cabecalho é o número da linha do cabeçalho (1 = primeira); 0 quando o
-    arquivo não tem cabeçalho e os lançamentos começam na linha 1.
-
-    O valor vem de uma coluna só (valor, com sinal ou ao lado da coluna tipo,
-    que diz D ou C) ou de duas (credito e debito). inverter_sinal serve para a
-    fatura de cartão, em que a compra vem positiva."""
-
-    delimitador: str
-    cabecalho: int
-    data: int
-    descricao: int
-    valor: int | None = None
-    credito: int | None = None
-    debito: int | None = None
-    tipo: int | None = None
-    categoria: int | None = None
-    inverter_sinal: bool = False
-
-    def colunas(self) -> dict[str, int]:
-        """{informação: coluna} só das informações indicadas."""
-        papeis = ("data", "descricao", "valor", "credito", "debito", "tipo", "categoria")
-        return {papel: getattr(self, papel) for papel in papeis if getattr(self, papel) is not None}
 
 
 @dataclass(frozen=True)
@@ -137,8 +97,12 @@ class LinhaDoArquivo:
 class Estrutura:
     delimitador: str
     linhas: list[LinhaDoArquivo]
-    # Preenchido quando detectar() reconheceu as colunas.
+    # Preenchido quando as colunas foram reconhecidas (reconhecer()).
     mapeamento: Mapeamento | None
+    # "CABECALHO" ou "CONTEUDO"; None sem mapeamento.
+    origem: str | None = None
+    # Informações do mapeamento que a pessoa deve conferir (reconhecimento.py).
+    duvidas: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -159,35 +123,65 @@ class LinhaRecusada:
     erro: str
 
 
-def normalizar(texto: str) -> str:
-    sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
-    return re.sub(r"[^a-z0-9]+", " ", sem_acento.lower()).strip()
-
-
 # --- Formato do arquivo --------------------------------------------------------
 
 
-def detectar(texto: str, delimitador: str | None = None) -> Mapeamento | None:
-    """Mapeamento montado pelos nomes das colunas, ou None se nenhuma das
-    primeiras linhas tiver data, descrição e valor (ou crédito e débito)."""
+def reconhecer(texto: str, delimitador: str | None = None) -> Reconhecimento | None:
+    """Colunas reconhecidas pelo cabeçalho (uma das primeiras dez linhas) ou,
+    sem cabeçalho conhecido, pelo conteúdo das células (reconhecimento.py).
+    None quando nem um nem outro dá data, descrição e valor."""
     texto = _sem_bom(texto)
     for tentativa in (delimitador,) if delimitador else DELIMITADORES:
         try:
-            linhas = _primeiras_linhas(texto, tentativa, LINHAS_ANTES_DO_CABECALHO)
+            linhas = _primeiras_linhas(texto, tentativa, LINHAS_PARA_RECONHECER)
         except csv.Error:
             continue
         for numero, celulas in linhas:
-            if mapeamento := _mapear_pelo_nome(texto, tentativa, numero, celulas):
-                return mapeamento
-    return None
+            if numero > LINHAS_ANTES_DO_CABECALHO:
+                break
+            if achado := pelo_cabecalho(linhas, tentativa, numero, celulas):
+                return achado
+    escolhido = delimitador or _adivinhar_delimitador(texto)
+    try:
+        linhas = _primeiras_linhas(texto, escolhido, LINHAS_PARA_RECONHECER)
+    except csv.Error as erro:
+        # Nenhum separador lê o começo do arquivo (aspas sem fechar, célula
+        # maior que TAMANHO_MAXIMO_DA_CELULA): não é um CSV.
+        raise ExtratoIlegivel("O arquivo não é um CSV válido.") from erro
+    return pelo_conteudo(linhas, escolhido) if linhas else None
+
+
+def detectar(texto: str, delimitador: str | None = None) -> Mapeamento | None:
+    """Mapeamento reconhecido sem ajuda: pelo cabeçalho, ou pelo conteúdo sem
+    nada em dúvida. None quando é preciso a pessoa indicar as colunas."""
+    achado = reconhecer(texto, delimitador)
+    if achado is None or (achado.origem == "CONTEUDO" and achado.duvidas):
+        return None
+    return achado.mapeamento
+
+
+def conferir_arquivo(texto: str) -> None:
+    """Recusa (ExtratoIlegivel) o que não é texto de CSV antes de ler qualquer
+    linha: planilha do Excel, PDF, página da web ou arquivo binário renomeado
+    para .csv. A tela confere o começo do arquivo também, mas a requisição
+    pode chegar sem ela."""
+    inicio = _sem_bom(texto)[:TRECHO_CONFERIDO]
+    for assinatura, mensagem in ASSINATURAS:
+        if inicio.lstrip().lower().startswith(assinatura):
+            raise ExtratoIlegivel(mensagem)
+    controles = sum(1 for caractere in inicio if caractere < " " and caractere not in "\t\r\n")
+    if "\x00" in texto or controles > len(inicio) * 0.01:
+        raise ExtratoIlegivel(MENSAGEM_BINARIO)
 
 
 def estrutura(texto: str, delimitador: str | None = None) -> Estrutura:
     """O começo do arquivo separado em células, para a pessoa conferir ou
-    indicar as colunas, e o mapeamento automático quando ele existe."""
+    indicar as colunas, e o mapeamento reconhecido quando ele existe (com a
+    origem e o que ficou em dúvida)."""
+    conferir_arquivo(texto)
     texto = _sem_bom(texto)
-    mapeamento = detectar(texto, delimitador)
-    escolhido = mapeamento.delimitador if mapeamento else (delimitador or _adivinhar_delimitador(texto))
+    achado = reconhecer(texto, delimitador)
+    escolhido = achado.mapeamento.delimitador if achado else (delimitador or _adivinhar_delimitador(texto))
     try:
         linhas = _primeiras_linhas(texto, escolhido, AMOSTRA_DE_LINHAS)
     except csv.Error as erro:
@@ -199,7 +193,9 @@ def estrutura(texto: str, delimitador: str | None = None) -> Estrutura:
     ]
     if not amostra:
         raise ExtratoIlegivel("O arquivo está vazio.")
-    return Estrutura(escolhido, amostra, mapeamento)
+    if achado is None:
+        return Estrutura(escolhido, amostra, None)
+    return Estrutura(escolhido, amostra, achado.mapeamento, achado.origem, achado.duvidas)
 
 
 def conferir_mapeamento(mapeamento: Mapeamento) -> dict[str, str]:
@@ -219,58 +215,6 @@ def conferir_mapeamento(mapeamento: Mapeamento) -> dict[str, str]:
             erros.setdefault(papel, "Esta coluna já foi usada para outra informação.")
         vistas.add(coluna)
     return erros
-
-
-def _mapear_pelo_nome(texto: str, delimitador: str, numero: int, celulas: list[str]) -> Mapeamento | None:
-    nomes = [normalizar(celula) for celula in celulas]
-    usadas: set[int] = set()
-    achadas: dict[str, int] = {}
-    for papel, aceitos in COLUNAS.items():
-        for aceito in aceitos:
-            indice = next((i for i, nome in enumerate(nomes) if nome == aceito and i not in usadas), None)
-            if indice is not None:
-                achadas[papel] = indice
-                usadas.add(indice)
-                break
-
-    if "data" not in achadas or "descricao" not in achadas:
-        return None
-    if "valor" in achadas:
-        # Com a coluna do valor, entrada e saída separadas sobram (ex.: "Saída"
-        # como texto do tipo); a coluna D/C só vale se o conteúdo for D/C.
-        achadas.pop("credito", None)
-        achadas.pop("debito", None)
-    elif "credito" not in achadas and "debito" not in achadas:
-        return None
-    else:
-        achadas.pop("tipo", None)
-
-    mapeamento = Mapeamento(
-        delimitador=delimitador,
-        cabecalho=numero,
-        # Fatura de cartão exportada em inglês (date, title, amount): a compra
-        # vem positiva e o pagamento da fatura, negativo.
-        inverter_sinal={"title", "amount"} <= set(nomes),
-        **achadas,
-    )
-    if mapeamento.tipo is not None and not _coluna_de_tipo_valida(texto, mapeamento):
-        mapeamento = replace(mapeamento, tipo=None)
-    return mapeamento
-
-
-def _coluna_de_tipo_valida(texto: str, mapeamento: Mapeamento) -> bool:
-    """A coluna "Tipo" às vezes diz "Pix" ou "Boleto", não D ou C: só entra
-    no mapeamento se as primeiras linhas trouxerem sinal reconhecível."""
-    vistos = 0
-    for _, celulas in _linhas_depois_do_cabecalho(texto, mapeamento):
-        if mapeamento.tipo >= len(celulas) or not celulas[mapeamento.tipo].strip():
-            continue
-        if sinal_do_tipo(celulas[mapeamento.tipo]) is None:
-            return False
-        vistos += 1
-        if vistos == 20:
-            break
-    return vistos > 0
 
 
 def _adivinhar_delimitador(texto: str) -> str:
@@ -321,6 +265,7 @@ def ler_extrato(texto: str, mapeamento: Mapeamento | None = None) -> tuple[list[
     ignorada. Linha de saldo ("SALDO ANTERIOR", "SALDO DO DIA") é recusada:
     não é lançamento, e importá-la inventaria uma receita.
     """
+    conferir_arquivo(texto)
     texto = _sem_bom(texto)
     if mapeamento is None:
         mapeamento = detectar(texto)
@@ -355,7 +300,7 @@ def _ler_linha(numero: int, celulas: list[str], mapeamento: Mapeamento):
     def celula(coluna: int | None) -> str:
         return celulas[coluna] if coluna is not None and coluna < len(celulas) else ""
 
-    descricao = _limpar(celula(mapeamento.descricao))[:TAMANHO_MAXIMO_DA_DESCRICAO]
+    descricao = limpar_celula(celula(mapeamento.descricao))[:TAMANHO_MAXIMO_DA_DESCRICAO]
     if not descricao:
         return LinhaRecusada(numero, "Linha sem descrição.")
     if normalizar(descricao).split(" ")[0] == "saldo":
@@ -373,7 +318,7 @@ def _ler_linha(numero: int, celulas: list[str], mapeamento: Mapeamento):
     if mapeamento.inverter_sinal:
         valor = -valor
 
-    categoria = _limpar(celula(mapeamento.categoria)) or None
+    categoria = limpar_celula(celula(mapeamento.categoria)) or None
     return LinhaDoExtrato(numero, data, descricao, valor, categoria)
 
 
@@ -399,84 +344,6 @@ def _valor_da_linha(celula, mapeamento: Mapeamento) -> tuple[int | None, str | N
     if credito is None or debito is None:
         return None, MENSAGEM_VALOR
     return abs(credito) - abs(debito), None
-
-
-def _limpar(texto: str) -> str:
-    """Texto de uma célula (descrição ou categoria) sem controle, espaço
-    repetido nem começo de fórmula.
-
-    Injeção de fórmula (CSV injection): uma célula que começa com =, +, - ou
-    @ vira fórmula quando o texto volta a uma planilha, e =HYPERLINK(...) ou
-    =cmd|... agem no computador de quem abre. O arquivo vem de fora (banco ou
-    qualquer pessoa), então esses caracteres do começo saem antes de gravar.
-    O valor não passa por aqui: o sinal dele é lido em ler_valor."""
-    return " ".join(_CONTROLE.sub(" ", texto).split()).lstrip("=+-@ ")
-
-
-def sinal_do_tipo(texto: str) -> int | None:
-    """-1 para débito/saída, 1 para crédito/entrada, None se não reconhecer."""
-    bruto = texto.strip()
-    if bruto in ("-", "+"):
-        return -1 if bruto == "-" else 1
-    palavra = normalizar(bruto)
-    if palavra in ("d", "db", "deb") or palavra.startswith(("debito", "saida")):
-        return -1
-    if palavra in ("c", "cr", "cred") or palavra.startswith(("credito", "entrada")):
-        return 1
-    return None
-
-
-def ler_data(texto: str) -> date | None:
-    """DD/MM/AAAA (também com - ou . e ano de dois dígitos, lido como 20AA) ou
-    AAAA-MM-DD, com ou sem a hora depois."""
-    texto = texto.strip()
-    if encontrado := _DATA_BR.match(texto):
-        dia, mes, ano = encontrado.groups()
-        if len(ano) == 2:
-            ano = f"20{ano}"
-    elif encontrado := _DATA_ISO.match(texto):
-        ano, mes, dia = encontrado.groups()
-    else:
-        return None
-    try:
-        return date(int(ano), int(mes), int(dia))
-    except ValueError:
-        return None
-
-
-def ler_valor(texto: str) -> int | None:
-    """Centavos com sinal, ou None. Mesma regra do campo de valor da área do
-    cliente (web/src/regras/dinheiro.js): "1.234,56" e "-80" no jeito
-    brasileiro, ponto decimal só sem ambiguidade ("10.5"; "1.500" é mil e
-    quinhentos). Aceita também o sinal no fim ("80,00-") e a letra D ou C
-    depois do número ("80,00 D"). A conta é feita em texto, sem float."""
-    limpo = re.sub(r"\s", "", texto.replace("R$", "").replace("r$", ""))
-    negativo = limpo[:1] in ("-", "−")
-    if negativo or limpo[:1] == "+":
-        limpo = limpo[1:]
-    elif sufixo := re.fullmatch(r"(.*\d)([-−DdCc])", limpo):
-        limpo, marca = sufixo.groups()
-        negativo = marca in ("-", "−", "D", "d")
-
-    decimais = ""
-    if "," in limpo:
-        partes = limpo.split(",")
-        if len(partes) != 2 or not re.fullmatch(r"\d{1,3}(\.\d{3})*|\d+", partes[0]):
-            return None
-        inteiro, decimais = partes[0].replace(".", ""), partes[1]
-    elif re.fullmatch(r"\d+\.\d{1,2}", limpo):
-        inteiro, decimais = limpo.split(".")
-    elif re.fullmatch(r"\d{1,3}(\.\d{3})+|\d+", limpo):
-        inteiro = limpo.replace(".", "")
-    else:
-        return None
-
-    if not re.fullmatch(r"\d{0,2}", decimais):
-        return None
-    centavos = int(inteiro) * 100 + int(decimais.ljust(2, "0"))
-    if centavos > LIMITE_EM_CENTAVOS:
-        return None
-    return -centavos if negativo else centavos
 
 
 def chaves_de_importacao(conta_id: str, linhas: list[LinhaDoExtrato]) -> list[str]:

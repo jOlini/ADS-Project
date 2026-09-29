@@ -805,6 +805,12 @@ form {
   display: grid;
   gap: var(--espaco-3);
   min-width: 0;
+  /* A linha da mensagem de erro fica reservada embaixo do controle, vazia até
+     haver um erro (componentes/Campo.tsx): mostrar ou tirar a mensagem não
+     empurra os campos de baixo nem desalinha o vizinho da mesma linha. A
+     margem negativa devolve parte do espaço que a linha vazia ocupa, para o
+     formulário não ficar espaçado demais. */
+  margin-bottom: calc(var(--espaco-6) * -1);
 }
 
 .campo label {
@@ -862,6 +868,18 @@ form {
   color: var(--erro);
   font-size: var(--fonte-apoio);
   font-weight: var(--peso-semi);
+}
+
+/* A linha reservada: a altura de uma linha de texto de apoio, com ou sem
+   mensagem. Mensagem longa quebra em duas linhas (raro) e só então cresce. */
+.campo > .erro-do-campo {
+  min-height: var(--altura-da-mensagem);
+  align-items: flex-start;
+}
+
+.campo > .erro-do-campo > .icone {
+  flex: none;
+  margin-top: 0.15em;
 }
 
 .acoes-do-formulario {

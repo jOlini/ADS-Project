@@ -4,6 +4,7 @@ import Icone from './Icone';
 import { useCliqueFora, usePosicaoFlutuante, usePresenca } from './flutuante';
 import { lerDataDigitada, mascararData } from '../regras/calendario';
 import { dataExiste, formatarData } from '../regras/datas';
+import { podeDigitar } from '../regras/mascaras';
 
 // Texto do campo para um valor vindo de fora: ISO vira "dd/mm/aaaa"; o texto
 // incompleto que o próprio campo mandou volta igual.
@@ -95,6 +96,12 @@ export default function SeletorDeData({
         placeholder={placeholder}
         value={texto}
         disabled={disabled}
+        // Letra e símbolo nem aparecem: só dígitos e a barra.
+        onBeforeInput={(evento) => {
+          if (!podeDigitar('data', evento.data)) {
+            evento.preventDefault();
+          }
+        }}
         onChange={digitar}
         onBlur={sair}
         onKeyDown={(evento) => {

@@ -433,6 +433,10 @@ button:is(.dia-do-calendario, .mes-da-grade, .ano-da-grade):disabled {
   width: var(--largura-modal-larga);
 }
 
+.modal.extra {
+  width: var(--largura-modal-extra);
+}
+
 .modal[open] {
   display: flex;
   flex-direction: column;

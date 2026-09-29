@@ -72,7 +72,7 @@ export default function FormularioDeConta({ espacoId, emEdicao = null, aoSalvar,
 
   return (
     <form onSubmit={enviar} noValidate>
-      <Campo rotulo="Nome" name="nome" autoComplete="off" maxLength={60} placeholder="Ex.: Conta do banco" data-foco-inicial
+      <Campo rotulo="Nome" name="nome" mascara="texto" autoComplete="off" maxLength={60} placeholder="Ex.: Conta do banco" data-foco-inicial
         value={formulario.nome} onChange={(evento) => mudar('nome', evento.target.value)} erro={erros.nome} />
 
       <Campo elemento={Seletor} rotulo="Tipo" name="tipo" value={formulario.tipo} opcoes={TIPOS_DE_CONTA}
@@ -84,7 +84,7 @@ export default function FormularioDeConta({ espacoId, emEdicao = null, aoSalvar,
           saldo dos dias passados; para corrigir, lance um ajuste.
         </p>
       ) : (
-        <Campo rotulo="Saldo de hoje (R$)" name="saldoInicial" inputMode="decimal" autoComplete="off" placeholder="0,00"
+        <Campo rotulo="Saldo de hoje (R$)" name="saldoInicial" mascara="moeda-com-sinal" autoComplete="off" placeholder="0,00"
           dica="Quanto já está na conta. Use -150,00 se estiver no vermelho."
           value={formulario.saldoInicial} onChange={(evento) => mudar('saldoInicial', evento.target.value)}
           erro={erros.saldoInicial} />

@@ -202,7 +202,22 @@ def test_estrutura_mostra_o_comeco_do_arquivo_sem_gravar(ana):
             {"numero": 1, "celulas": ["2026-09-01", "Feira de sábado", "30,00", "D", "Mercado"]},
             {"numero": 2, "celulas": ["2026-09-02", "Reembolso do Bruno", "30,00", "C", "Sem nome"]},
         ],
-        "mapeamento": None,
+        # Sem cabeçalho, as colunas saem do conteúdo: data, texto, número sem
+        # sinal e a coluna D/C. A de categoria a pessoa indica, se quiser.
+        "mapeamento": {
+            "delimitador": "|",
+            "cabecalho": 0,
+            "data": 0,
+            "descricao": 1,
+            "valor": 2,
+            "credito": None,
+            "debito": None,
+            "tipo": 3,
+            "categoria": None,
+            "inverter_sinal": False,
+        },
+        "origem": "CONTEUDO",
+        "duvidas": [],
     }
     assert ana.get("/lancamentos").json() == []
 
@@ -237,8 +252,10 @@ def test_importa_com_as_colunas_indicadas_e_a_categoria_do_arquivo(ana):
     assert corpo["importadas"] == 2
     feira, reembolso = corpo["linhas"]
     assert (feira["valor_centavos"], feira["categoria_id"]) == (-3000, ana.categorias["Mercado"])
-    # "Sem nome" não é categoria do espaço: vai para a padrão das entradas.
-    assert (reembolso["valor_centavos"], reembolso["categoria_id"]) == (3000, ana.categorias["Outras receitas"])
+    # "Sem nome" não é categoria do espaço: vale a regra da descrição
+    # ("Reembolso" vai para Receita extra).
+    assert (reembolso["valor_centavos"], reembolso["categoria_id"]) == (3000, ana.categorias["Receita extra"])
+    assert (feira["origem_da_categoria"], reembolso["origem_da_categoria"]) == ("ARQUIVO", "REGRA")
     assert ana.get(f"/lancamentos/{feira['lancamento_id']}").json()["categoria_id"] == ana.categorias["Mercado"]
 
 

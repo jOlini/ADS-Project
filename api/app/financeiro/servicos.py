@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from app.erros import ErroConflito, ErroNaoEncontrado, ErroValidacao
 from app.financeiro import cartoes, importacao, parcelamento, regras, relatorios
+from app.financeiro.categorizacao import AJUSTE, Categorizador
 from app.financeiro.cartoes import PeriodoDaFatura, Referencia, ResumoDaFatura, ResumoDoCartao
 from app.financeiro.modelos import (
     AtualizacaoCategoria,
@@ -46,6 +47,9 @@ TAMANHO_MAXIMO_DA_DESCRICAO = 120
 # Lançamentos de um cartão lidos de uma vez para o painel e a fatura. Um mês
 # de fatura fica muito abaixo; o teto só protege a memória.
 LIMITE_DO_CARTAO = 5000
+# Lançamentos mais recentes que ensinam a categoria de cada estabelecimento
+# na importação (categorizacao.py).
+LIMITE_DO_HISTORICO = 2000
 
 
 def agora() -> datetime:
@@ -482,9 +486,13 @@ class ServicoLivroCaixa:
         é pulada, e linha ilegível volta com o motivo; as outras entram mesmo
         assim. Com dados.simular, nada é gravado.
 
-        Sem dados.mapeamento, as colunas são reconhecidas pelo nome. Com a
-        coluna de categoria, a linha vai para a categoria ativa de mesmo nome;
-        sem nome conhecido, para a categoria padrão do tipo.
+        Sem dados.mapeamento, as colunas são reconhecidas pelo nome (ou pelo
+        conteúdo, sem dúvida). A categoria de cada linha vem da coluna de
+        categoria do arquivo, do histórico do mesmo estabelecimento, das regras
+        pela descrição ou, sem pista, da categoria padrão do tipo
+        (categorizacao.py). dados.ajustes troca a descrição e a categoria de
+        uma linha, como a pessoa editou na conferência; a chave da linha
+        continua a do arquivo (importar de novo não duplica).
 
         Na fatura de um cartão, a linha parcelada ("LOJA 03/12") vira a parcela
         da compra e gera as parcelas vincendas nas próximas faturas; a parcela
@@ -512,6 +520,10 @@ class ServicoLivroCaixa:
             raise ErroValidacao(erros)
 
         categorias = self.repositorio.listar_categorias(espaco.id)
+        erros = self._conferir_ajustes(dados, lidas, categorias)
+        if erros:
+            raise ErroValidacao(erros)
+        categorizador = Categorizador(categorias, self._historico_das_categorias(espaco))
         chaves = importacao.chaves_de_importacao(conta.id, lidas)
         ja_importadas = self.repositorio.chaves_importadas(espaco.id, chaves)
         # Só a compra (saída) na fatura de um cartão tem parcelas a gerar.
@@ -532,8 +544,12 @@ class ServicoLivroCaixa:
         for linha, chave, data, parcela in zip(lidas, chaves, datas, parcelas, strict=True):
             tipo = TipoCategoria.RECEITA if linha.valor_centavos > 0 else TipoCategoria.DESPESA
             padrao = receita if tipo == TipoCategoria.RECEITA else despesa
-            categoria = regras.categoria_pelo_nome(categorias, linha.categoria, tipo) or padrao
-            item = _LinhaAImportar(linha, chave, data, categoria.id)
+            categoria, origem = categorizador.categorizar(linha.descricao, tipo, linha.categoria, padrao)
+            ajuste = dados.ajustes.get(linha.linha)
+            if ajuste and ajuste.categoria_id:
+                categoria, origem = categorizador.por_id(ajuste.categoria_id), AJUSTE
+            descricao = ajuste.descricao if ajuste and ajuste.descricao else linha.descricao
+            item = _LinhaAImportar(linha, chave, data, categoria.id, descricao)
             observacao = None
             if chave in ja_importadas:
                 situacao, lancamento_id = SituacaoDaLinha.JA_IMPORTADA, None
@@ -549,15 +565,51 @@ class ServicoLivroCaixa:
                     linha.linha,
                     situacao,
                     data=linha.data,
-                    descricao=linha.descricao,
+                    descricao=descricao,
                     valor_centavos=linha.valor_centavos,
                     categoria_id=categoria.id,
+                    origem_da_categoria=origem,
                     lancamento_id=lancamento_id,
                     fatura=cartoes.referencia_da_data(conta, data) if conta.cartao else None,
                     observacao=observacao,
                 )
             )
         return sorted(resultados, key=lambda resultado: resultado.linha), futuras
+
+    def _historico_das_categorias(self, espaco: Espaco) -> list[tuple[str, TipoCategoria, str | None]]:
+        """(descrição, tipo, categoria) dos lançamentos recentes de receita e
+        despesa: é com eles que o estabelecimento conhecido volta para a
+        categoria de sempre."""
+        recentes = self.repositorio.listar_lancamentos(espaco.id, None, None, LIMITE_DO_HISTORICO)
+        return [
+            (lancamento.descricao, TipoCategoria(lancamento.tipo.value), lancamento.categoria_id)
+            for lancamento in recentes
+            if lancamento.tipo != TipoLancamento.TRANSFERENCIA and not lancamento.estorno_de
+        ]
+
+    @staticmethod
+    def _conferir_ajustes(
+        dados: NovaImportacao, lidas: list[importacao.LinhaDoExtrato], categorias: list[Categoria]
+    ) -> dict[str, str]:
+        """A categoria escolhida na conferência precisa ser uma categoria ativa
+        do espaço, do tipo da linha (saída em despesa, entrada em receita).
+        Ajuste de uma linha que não virou lançamento não tem efeito."""
+        ativas = {categoria.id: categoria for categoria in categorias if categoria.ativa}
+        tipo_da_linha = {
+            linha.linha: TipoCategoria.RECEITA if linha.valor_centavos > 0 else TipoCategoria.DESPESA for linha in lidas
+        }
+        erros = {}
+        for numero, ajuste in dados.ajustes.items():
+            if not ajuste.categoria_id or numero not in tipo_da_linha:
+                continue
+            categoria = ativas.get(ajuste.categoria_id)
+            if categoria is None:
+                erros[f"ajustes.{numero}.categoria_id"] = "Categoria não encontrada ou desativada."
+            elif categoria.tipo != tipo_da_linha[numero]:
+                erros[f"ajustes.{numero}.categoria_id"] = (
+                    "Saída vai numa categoria de despesa, e entrada, numa de receita."
+                )
+        return erros
 
     def _importar_linha(
         self,
@@ -576,7 +628,7 @@ class ServicoLivroCaixa:
         # pelos mesmos limites de descrição, data e valor.
         novo = NovoLancamento(
             tipo=TipoLancamento.RECEITA if receita else TipoLancamento.DESPESA,
-            descricao=linha.descricao,
+            descricao=item.descricao,
             data=item.data,
             valor_centavos=abs(linha.valor_centavos),
             conta_id=dados.conta_id,
@@ -770,6 +822,10 @@ class _LinhaAImportar:
     chave: str
     data: date
     categoria_id: str
+    # A descrição gravada: a do arquivo ou a que a pessoa editou. A parcela
+    # continua lida da descrição do arquivo (linha.descricao), no formato do
+    # banco, para a fatura seguinte reconhecer as parcelas geradas.
+    descricao: str
 
 
 def _campos_da_parcela(plano: parcelamento.PlanoDaLinha | None, numero: int | None) -> dict:
