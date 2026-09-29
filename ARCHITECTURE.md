@@ -172,6 +172,12 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
 - **Endereço da API:** `VITE_API_URL` no build. Aberto pela rede local, a página chama a API no IP de onde veio;
   pelo túnel da Cloudflare, no proxy do Vite, só em `/espacos` (`servicos/enderecoDaApi.js`, `vite.config.js`).
 - **Sem API** (GitHub Pages): as telas do livro-caixa ficam desligadas e a Visão geral oferece dados de exemplo.
+- **Landing em 3D:** o topo tem um campo de folhas e moedas desenhado em WebGL 1 próprio, sem biblioteca
+  (`olifine/componentes/cenaDoPomar.ts`, cerca de 3 kB comprimido e carregado depois do primeiro quadro), e o
+  celular gira com o ponteiro por CSS 3D. A conta de câmera, toque e distribuição das folhas é pura e testada
+  (`olifine/regras/pomar.ts`); o `CampoDoPomar.tsx` pausa o desenho fora da tela e com a aba escondida, afina o
+  campo em máquina lenta e, pedindo menos movimento, desenha um quadro parado. Sem WebGL, só com desenho por
+  software ou com o contexto perdido, o topo fica com os contornos em SVG.
 - **Caminho da publicação:** `VITE_BASE` no build (`/ADS-Project/` no Pages, `/` num domínio próprio). O React
   Router, os arquivos de `public/` e os links usam o `BASE_URL` gravado pelo Vite; nenhum caminho fica escrito à
   mão (`regras/enderecoDoApp.js`).

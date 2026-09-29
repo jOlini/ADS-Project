@@ -499,7 +499,7 @@ poucos.
 | Front-end | `web/src/regras/arquivoDoExtrato.test.ts` e `conferenciaDaImportacao.test.ts` | Arquivo do extrato (extensão, tipo, planilha ou PDF renomeado, binário, UTF-8, Windows-1252 e UTF-16) e a edição de descrição e categoria na conferência |
 | Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |
 | Front-end | `web/src/servicos/livroCaixa.test.js` e `enderecoDaApi.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar, token que não renova e endereço pela rede local |
-| Front-end | `web/src/olifine/regras/*.test.js` | OliFine: tendência, séries do gráfico de saldo, Visão geral, metas, a árvore que cresce e o simulador de orçamento da landing |
+| Front-end | `web/src/olifine/regras/*.test.js` e `*.test.ts` | OliFine: tendência, séries do gráfico de saldo, Visão geral, metas, a árvore que cresce, o simulador de orçamento e o pomar 3D da landing (câmera, toque no chão, movimento suave, quantas folhas e onde nascem) |
 | Front-end | `web/src/componentes/*.test.js` | Error Boundary, avisos (toasts) e todo nome de ícone usado nas telas com desenho na família própria |
 
 Os mesmos testes rodam no GitHub Actions a cada commit de pull request e a cada push na `main`
