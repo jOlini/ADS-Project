@@ -1,7 +1,8 @@
 /*
- * Landing page da OliFine. Campo esmeralda com ondas no topo, o app
- * de verdade num celular, seções claras entre campos escuros e o fechamento
- * com a chamada. Tokens de estilos/tokens.css; nada aqui vale fora da landing.
+ * Landing page da OliFine. Campo esmeralda com o pomar 3D e ondas no topo, o
+ * app de verdade num celular que gira com o ponteiro, seções claras entre
+ * campos escuros e o fechamento com a chamada. Tokens de estilos/tokens.css;
+ * nada aqui vale fora da landing.
  */
 
 .lp {
@@ -222,44 +223,145 @@
   color: var(--lp-verde-na-esmeralda);
 }
 
+/* O campo 3D do topo (CampoDoPomar): cobre o topo inteiro, atrás do texto e
+   do celular e por baixo das ondas da borda. Aparece num esmaecer quando a
+   cena desenha o primeiro quadro; até lá, e sem WebGL, ficam os contornos em
+   SVG, que se apagam no mesmo ritmo quando o campo chega. */
+.lp-pomar {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1200ms var(--curva-chegada);
+}
+
+.lp-topo[data-pomar='vivo'] .lp-pomar {
+  opacity: 1;
+}
+
+.lp-topo > .lp-contornos {
+  transition: opacity 1200ms var(--curva-chegada);
+}
+
+.lp-topo[data-pomar='vivo'] > .lp-contornos {
+  opacity: 0;
+}
+
+/* Palco 3D do celular. A perspectiva fica no pai; o palco gira com o
+   ponteiro (--pomar-x e --pomar-y, de -1 a 1, escritos pelo CampoDoPomar a
+   cada quadro, já suavizados) e leva junto o celular e os números do mês,
+   cada um numa profundidade: é a paralaxe que dá volume. Sem as variáveis
+   (menos movimento, ou antes do primeiro quadro), fica a pose de repouso. */
 .lp-hero-app {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 170px) auto;
-  gap: 0;
   align-items: center;
   justify-content: end;
   min-height: 600px;
+  perspective: 1600px;
+  perspective-origin: 70% 45%;
+}
+
+.lp-palco {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 170px) auto;
+  align-items: center;
+  transform-style: preserve-3d;
+  transform: rotateX(calc(var(--pomar-y, 0) * 7deg)) rotateY(calc(var(--pomar-x, 0) * 13deg));
+  /* O plano do palco fica à frente da metade do celular que gira para trás
+     e roubaria o clique das abas do gráfico: só o aparelho recebe o ponteiro. */
+  pointer-events: none;
+}
+
+.lp-palco .lp-celular {
+  pointer-events: auto;
+}
+
+/* Sombra do celular no chão: não gira com ele, só escorrega para o lado
+   oposto ao ponteiro, como a sombra de um objeto de verdade. */
+.lp-sombra {
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  width: 300px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(4 22 16 / 0.6), transparent);
+  filter: blur(8px);
+  pointer-events: none;
+  transform: translateX(calc(var(--pomar-x, 0) * -26px));
 }
 
 .lp-chips {
   position: relative;
-  z-index: 2;
   display: grid;
   gap: var(--espaco-24);
   margin-right: -14px;
+  transform-style: preserve-3d;
 }
 
 /* ----------------------------------------------------------- Celular */
 
 .lp-celular {
   position: relative;
-  z-index: 1;
   width: 300px;
   padding: 10px;
   border-radius: 46px;
   background: #0a1612;
-  box-shadow:
-    inset 0 0 0 2px rgb(255 255 255 / 0.08),
-    0 50px 90px -40px rgb(0 0 0 / 0.7);
-  transform: rotate(-3deg);
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.08);
+  transform-style: preserve-3d;
+  transform: rotateY(-15deg) rotateX(5deg) rotateZ(-2deg);
+}
+
+/* Espessura: seis placas com o contorno do aparelho, 2 px uma atrás da
+   outra. De frente somem atrás da tela; girando, formam a lateral, com um
+   brilho no meio como no alumínio. A última leva a sombra. */
+.lp-celular-camada {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #152a22;
+  transform: translateZ(calc(var(--camada) * -2px));
+  pointer-events: none;
+}
+
+.lp-celular-camada:nth-of-type(3),
+.lp-celular-camada:nth-of-type(4) {
+  background: #24453a;
+}
+
+.lp-celular-camada:last-of-type {
+  background: #07110d;
+  box-shadow: 0 50px 90px -40px rgb(0 0 0 / 0.7);
 }
 
 .lp-celular-tela {
+  position: relative;
   overflow: hidden;
   border-radius: 37px;
   background: var(--fundo);
   color: var(--texto);
+}
+
+/* Reflexo do vidro: uma faixa clara que corre pela tela conforme o celular
+   gira (a posição acompanha --pomar-x). */
+.lp-celular-reflexo {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    112deg,
+    transparent 36%,
+    rgb(255 255 255 / 0.16) 46%,
+    rgb(255 255 255 / 0.05) 53%,
+    transparent 62%
+  );
+  background-size: 260% 100%;
+  background-position: calc(55% - var(--pomar-x, 0) * 45%) 0;
+  pointer-events: none;
 }
 
 .lp-celular-status {
@@ -486,11 +588,11 @@
 }
 
 .lp-flutua.despesas {
-  transform: rotate(-4deg);
+  transform: translateZ(90px) rotate(-4deg);
 }
 
 .lp-flutua.receitas {
-  transform: translateX(-18px) rotate(3deg);
+  transform: translateX(-18px) translateZ(56px) rotate(3deg);
 }
 
 .lp-ficticio {
@@ -777,6 +879,8 @@
 .lp-laptop {
   display: grid;
   justify-items: center;
+  perspective: 1800px;
+  perspective-origin: 50% 10%;
 }
 
 .lp-laptop-tela {
@@ -790,6 +894,30 @@
   background: var(--fundo);
   box-shadow: 0 50px 90px -50px rgb(26 36 48 / 0.55);
   font-size: 10px;
+}
+
+/* A tampa do notebook abre conforme a seção entra na tela (animação ligada à
+   rolagem). Sem suporte a animation-timeline, ou pedindo menos movimento, o
+   notebook já aparece aberto. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .lp-laptop-tela {
+      transform-origin: 50% 100%;
+      animation: lp-abre-a-tampa linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 42%;
+    }
+  }
+}
+
+@keyframes lp-abre-a-tampa {
+  from {
+    transform: rotateX(-62deg);
+  }
+
+  to {
+    transform: rotateX(0deg);
+  }
 }
 
 .lp-laptop-base {
@@ -1028,30 +1156,56 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   color: var(--erro);
 }
 
+/* Cortes registrados como porcentagem: o navegador sabe interpolá-los, e a
+   barra anda só com pintura (sem recalcular o layout a cada quadro, como
+   fazia a transição de largura). Sem @property, a barra muda sem animar. */
+@property --lp-corte-1 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+
+@property --lp-corte-2 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+
+@property --lp-corte-3 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+
+/* Três fatias com 2 px de trilho entre elas, como os vãos de antes. */
 .lp-simulador-barra {
-  display: flex;
-  gap: 2px;
   height: 12px;
-  overflow: hidden;
   border-radius: var(--raio-pilula);
-  background: var(--linha);
+  background:
+    linear-gradient(
+      90deg,
+      var(--lp-fixos) 0 var(--lp-corte-1),
+      transparent var(--lp-corte-1) calc(var(--lp-corte-1) + 2px),
+      var(--lp-variaveis) calc(var(--lp-corte-1) + 2px) var(--lp-corte-2),
+      transparent var(--lp-corte-2) calc(var(--lp-corte-2) + 2px),
+      var(--lp-sobra) calc(var(--lp-corte-2) + 2px) var(--lp-corte-3),
+      transparent var(--lp-corte-3)
+    ),
+    var(--linha);
+  transition:
+    --lp-corte-1 var(--tempo-medio) var(--curva),
+    --lp-corte-2 var(--tempo-medio) var(--curva),
+    --lp-corte-3 var(--tempo-medio) var(--curva);
 }
 
-.lp-simulador-barra i {
-  transition: width var(--tempo-medio) var(--curva);
-}
-
-.lp-simulador-barra .fixos,
 .lp-simulador-legenda .fixos::before {
   background: var(--lp-fixos);
 }
 
-.lp-simulador-barra .variaveis,
 .lp-simulador-legenda .variaveis::before {
   background: var(--lp-variaveis);
 }
 
-.lp-simulador-barra .sobra,
 .lp-simulador-legenda .sobra::before {
   background: var(--lp-sobra);
 }
@@ -1379,12 +1533,19 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   }
 
   .lp-hero-app {
-    grid-template-columns: minmax(0, 1fr);
     justify-content: center;
-    justify-items: center;
-    gap: var(--espaco-12);
     min-height: 0;
     padding: var(--espaco-12) 0 var(--espaco-16);
+    perspective: 1200px;
+    perspective-origin: 50% 35%;
+  }
+
+  /* Empilhado, o palco gira menos: o celular ocupa a largura quase toda. */
+  .lp-palco {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: var(--espaco-20);
+    transform: rotateX(calc(var(--pomar-y, 0) * 5deg)) rotateY(calc(var(--pomar-x, 0) * 9deg));
   }
 
   .lp-chips {
@@ -1396,12 +1557,29 @@ button.lp-simulador-refazer:hover:not(:disabled) {
 
   .lp-flutua.despesas,
   .lp-flutua.receitas {
-    transform: none;
+    transform: translateZ(24px);
   }
 
+  .lp-celular {
+    transform: rotateY(-9deg) rotateX(4deg);
+  }
+
+  /* Sombra curta: o plano girado do celular passa à frente dos números
+     quando ele vira, e uma sombra longa atravessaria os cartões. */
+  .lp-celular-camada:last-of-type {
+    box-shadow: 0 22px 34px -20px rgb(0 0 0 / 0.6);
+  }
+
+  .lp-sombra {
+    display: none;
+  }
+
+  /* Empilhado, o aviso vai no fluxo, embaixo dos números: os cartões mais à
+     frente (translateZ) crescem um pouco e encostariam nele. */
   .lp-ficticio {
-    right: auto;
-    bottom: 0;
+    position: static;
+    margin-top: var(--espaco-10);
+    text-align: center;
   }
 
   .lp-beneficios-grade {
