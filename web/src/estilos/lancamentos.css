@@ -502,6 +502,13 @@ button.sugestao:hover:not(:disabled) {
   border-color: var(--suave);
 }
 
+/* Coluna em dúvida (duas "Valor", célula que não confere): a borda de aviso
+   aponta o que conferir, com o texto da dúvida em cima da tabela. */
+.tabela-do-arquivo th .em-duvida button.controle-do-seletor {
+  border-color: var(--aviso);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--aviso) 22%, transparent);
+}
+
 .tabela-do-arquivo td {
   max-width: var(--largura-celula-do-arquivo);
   padding: var(--espaco-4) var(--espaco-5);
@@ -528,6 +535,204 @@ button.sugestao:hover:not(:disabled) {
   font-weight: var(--peso-semi);
 }
 
+.resumo-da-importacao small {
+  display: block;
+  margin-top: var(--espaco-2);
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-regular);
+}
+
+/* Conferência: a tabela do que vai ser gravado, com a descrição e a
+   categoria editáveis nas linhas novas. Rola por dentro (a janela não cresce
+   sem fim) e o cabeçalho fica preso em cima. */
+.conferencia-da-importacao {
+  max-height: var(--altura-previa-da-importacao);
+  overflow: auto;
+  border: var(--borda);
+  border-radius: var(--raio);
+  scrollbar-width: thin;
+  scrollbar-color: var(--cor-da-rolagem) transparent;
+}
+
+.conferencia-da-importacao table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fonte-apoio);
+}
+
+.conferencia-da-importacao th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--espaco-4) var(--espaco-5);
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+  text-align: left;
+  background: var(--fundo);
+  border-bottom: var(--borda);
+}
+
+.conferencia-da-importacao td {
+  padding: var(--espaco-4) var(--espaco-5);
+  vertical-align: top;
+}
+
+.conferencia-da-importacao tr + tr td {
+  border-top: var(--borda);
+}
+
+.conferencia-da-importacao .numero {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.conferencia-da-importacao td.data {
+  width: 7.5rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.conferencia-da-importacao td.categoria {
+  width: 15rem;
+}
+
+.conferencia-da-importacao td small {
+  display: block;
+  margin-top: var(--espaco-2);
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.conferencia-da-importacao td.descricao input {
+  width: 100%;
+  min-width: 0;
+  height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-5);
+  font: inherit;
+  font-size: var(--fonte-rotulo);
+  color: var(--texto);
+  background: var(--superficie);
+  border: var(--borda-forte);
+  border-radius: var(--raio);
+  transition: border-color var(--transicao), box-shadow var(--transicao);
+}
+
+.conferencia-da-importacao td.descricao input:hover {
+  border-color: var(--suave);
+}
+
+.conferencia-da-importacao td.descricao input:focus-visible {
+  outline: none;
+  border-color: var(--marca);
+  box-shadow: var(--anel-de-foco);
+}
+
+.conferencia-da-importacao td.descricao input[aria-invalid='true'] {
+  border-color: var(--erro);
+}
+
+.conferencia-da-importacao td.categoria button.controle-do-seletor {
+  height: var(--altura-botao-compacto);
+  min-height: var(--altura-botao-compacto);
+  font-size: var(--fonte-rotulo);
+}
+
+.conferencia-da-importacao .texto {
+  display: block;
+  font-weight: var(--peso-semi);
+  overflow-wrap: anywhere;
+}
+
+.conferencia-da-importacao .valor.entrada {
+  color: var(--positivo);
+}
+
+/* A pista de onde veio a categoria; a escolhida pela pessoa fica na cor da
+   marca, para ela ver o que mudou. */
+.conferencia-da-importacao .origem-ajuste {
+  color: var(--marca);
+  font-weight: var(--peso-semi);
+}
+
+/* Linha editada: fundo levemente na cor da marca, como a linha marcada numa
+   seleção. */
+.conferencia-da-importacao tr.ajustada {
+  background: var(--fundo-marcado);
+}
+
+.conferencia-da-importacao td small.erro-do-campo {
+  display: flex;
+  color: var(--erro);
+}
+
+/* Já importada ou com erro: fica na lista, apagada, para a pessoa ver que foi
+   pulada e por quê. */
+.conferencia-da-importacao :is(.situacao-ja_importada, .situacao-invalida) :is(.texto, .valor, .data) {
+  color: var(--suave);
+}
+
+/* No celular, cada linha vira um cartão: o rótulo de cada campo vem do
+   data-rotulo, já que o cabeçalho da tabela some. */
+@media (max-width: 640px) {
+  /* Uma rolagem só no celular: a da janela, e não outra dentro da tabela. */
+  .conferencia-da-importacao {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .conferencia-da-importacao thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .conferencia-da-importacao table,
+  .conferencia-da-importacao tbody,
+  .conferencia-da-importacao tr,
+  .conferencia-da-importacao td {
+    display: block;
+    width: auto;
+  }
+
+  .conferencia-da-importacao tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--espaco-3) var(--espaco-5);
+    padding: var(--espaco-5) var(--espaco-6);
+  }
+
+  .conferencia-da-importacao tr + tr {
+    border-top: var(--borda);
+  }
+
+  .conferencia-da-importacao tr + tr td {
+    border-top: 0;
+  }
+
+  .conferencia-da-importacao td {
+    padding: 0;
+  }
+
+  .conferencia-da-importacao td.data {
+    color: var(--suave);
+  }
+
+  .conferencia-da-importacao td.descricao,
+  .conferencia-da-importacao td.categoria {
+    grid-column: 1 / -1;
+  }
+
+  .conferencia-da-importacao td.valor {
+    grid-row: 1;
+    grid-column: 2;
+  }
+}
+
 .formato-reconhecido {
   display: flex;
   gap: var(--espaco-6);
@@ -549,60 +754,6 @@ button.sugestao:hover:not(:disabled) {
   color: var(--suave);
   font-size: var(--fonte-micro);
   font-weight: var(--peso-semi);
-}
-
-.linhas-da-importacao {
-  max-height: var(--altura-previa-da-importacao);
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
-  border: var(--borda);
-  border-radius: var(--raio);
-  scrollbar-width: thin;
-  scrollbar-color: var(--cor-da-rolagem) transparent;
-}
-
-.linhas-da-importacao li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--espaco-1) var(--espaco-6);
-  padding: var(--espaco-4) var(--espaco-6);
-}
-
-.linhas-da-importacao li + li {
-  border-top: var(--borda);
-}
-
-.linhas-da-importacao .descricao {
-  overflow: hidden;
-  font-weight: var(--peso-semi);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.linhas-da-importacao .valor {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.linhas-da-importacao .valor.entrada {
-  color: var(--positivo);
-}
-
-.linhas-da-importacao small {
-  grid-column: 1 / -1;
-  color: var(--suave);
-  font-size: var(--fonte-apoio);
-}
-
-/* Já importada: fica na lista, apagada, para a pessoa ver que foi pulada. */
-.linhas-da-importacao .situacao-ja_importada :is(.descricao, .valor) {
-  color: var(--suave);
-}
-
-.linhas-da-importacao .situacao-invalida small {
-  color: var(--erro);
 }
 
 .importacao .acoes-do-formulario button:last-child {

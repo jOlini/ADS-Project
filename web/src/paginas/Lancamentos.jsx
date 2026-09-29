@@ -321,7 +321,7 @@ export default function Lancamentos() {
         />
       </Modal>
 
-      <Modal aberta={modal === 'importar'} titulo="Importar CSV" largura="larga" aoFechar={fecharModal} ocupado={modalOcupado}
+      <Modal aberta={modal === 'importar'} titulo="Importar CSV" largura="extra" aoFechar={fecharModal} ocupado={modalOcupado}
         descricao="Traga o extrato exportado pelo banco. Nada é gravado antes de você conferir.">
         {contasAtivas.length === 0 ? (
           <AvisoComAtalho

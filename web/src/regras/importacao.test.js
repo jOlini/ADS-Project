@@ -1,11 +1,11 @@
 // Testes das regras da importação do extrato na tela: funções puras, sem
 // Firebase, sem API e sem navegador. Dados fictícios.
 import { describe, expect, it } from 'vitest';
+import { TAMANHO_MAXIMO_DO_ARQUIVO } from './arquivoDoExtrato';
 import {
   cabecalhoProvavel,
   categoriaSugerida,
   dataMaisRecente,
-  decodificarExtrato,
   destinoDaImportacao,
   descreverMapeamento,
   errosDaImportacao,
@@ -14,7 +14,6 @@ import {
   nomesDasColunas,
   papeisDoMapeamento,
   resumoDaImportacao,
-  TAMANHO_MAXIMO_DO_ARQUIVO,
   trocarPapel,
   validarImportacao,
   validarMapeamento,
@@ -27,21 +26,9 @@ const CATEGORIAS = [
   { id: 'r2', nome: 'Outras receitas', tipo: 'RECEITA', ativa: false },
 ];
 
-describe('decodificarExtrato', () => {
-  it('lê UTF-8', () => {
-    const bytes = new TextEncoder().encode('Data;Descrição;Valor');
-    expect(decodificarExtrato(bytes)).toBe('Data;Descrição;Valor');
-  });
-
-  it('lê Windows-1252 quando o arquivo não é UTF-8 (CSV "ANSI" do Excel)', () => {
-    // "Descrição" em Windows-1252: ç = 0xE7, ã = 0xE3.
-    const bytes = new Uint8Array([0x44, 0x65, 0x73, 0x63, 0x72, 0x69, 0xe7, 0xe3, 0x6f]);
-    expect(decodificarExtrato(bytes)).toBe('Descrição');
-  });
-});
-
 describe('validarImportacao', () => {
-  const completo = { arquivo: { size: 120 }, conta_id: 'c1', categoria_despesa_id: 'd2', categoria_receita_id: 'r1' };
+  const arquivo = { name: 'extrato.csv', type: 'text/csv', size: 120 };
+  const completo = { arquivo, conta_id: 'c1', categoria_despesa_id: 'd2', categoria_receita_id: 'r1' };
 
   it('aceita o formulário completo', () => {
     expect(validarImportacao(completo)).toEqual({});
@@ -52,8 +39,8 @@ describe('validarImportacao', () => {
   });
 
   it('recusa arquivo vazio ou maior que o limite da API', () => {
-    expect(validarImportacao({ ...completo, arquivo: { size: 0 } }).arquivo).toBe('O arquivo está vazio.');
-    expect(validarImportacao({ ...completo, arquivo: { size: TAMANHO_MAXIMO_DO_ARQUIVO + 1 } }).arquivo).toMatch(/grande demais/);
+    expect(validarImportacao({ ...completo, arquivo: { ...arquivo, size: 0 } }).arquivo).toBe('O arquivo está vazio.');
+    expect(validarImportacao({ ...completo, arquivo: { ...arquivo, size: TAMANHO_MAXIMO_DO_ARQUIVO + 1 } }).arquivo).toMatch(/grande demais/);
   });
 });
 

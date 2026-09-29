@@ -296,7 +296,7 @@ input[type='checkbox']:is(.marcar-linha, .marcar-cartao):disabled {
 .lista-flutuante [role='option'],
 button.item-do-menu,
 .of-rosca-legenda li,
-.linhas-da-importacao tr {
+.conferencia-da-importacao tr {
   transition: background-color var(--tempo) var(--curva), color var(--tempo) var(--curva);
 }
 

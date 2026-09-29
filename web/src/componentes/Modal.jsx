@@ -8,6 +8,7 @@ import { TEMPO_DE_SAIDA } from './flutuante';
 // existe com a janela aberta (e durante a animação de saída, para a janela
 // não sumir vazia), e cada abertura começa do zero.
 // ocupado (salvando, importando) trava o Esc e o botão de fechar.
+// largura: 'normal', 'larga' ou 'extra' (a conferência da importação).
 // O foco vai para o campo marcado com data-foco-inicial (o nome, a
 // descrição); sem ele, fica o padrão do <dialog>: o primeiro controle.
 export default function Modal({ aberta, titulo, descricao, aoFechar, ocupado = false, largura = 'normal', children }) {
@@ -45,7 +46,7 @@ export default function Modal({ aberta, titulo, descricao, aoFechar, ocupado = f
   return (
     <dialog
       ref={dialogo}
-      className={`modal${largura === 'larga' ? ' larga' : ''}`}
+      className={`modal${largura === 'normal' ? '' : ` ${largura}`}`}
       aria-labelledby={idDoTitulo}
       aria-describedby={descricao ? idDaDescricao : undefined}
       onCancel={(evento) => {
