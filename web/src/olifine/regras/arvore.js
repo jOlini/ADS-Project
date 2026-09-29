@@ -13,7 +13,8 @@ const DURACAO = 0.22;
 const FRUTOS_MINIMOS = 3;
 
 // Gerador de números previsível (mulberry32): mesma semente, mesma árvore.
-function gerador(semente) {
+// O pomar da landing (pomar.ts) usa o mesmo.
+export function gerador(semente) {
   let estado = semente >>> 0;
   return () => {
     estado = (estado + 0x6d2b79f5) | 0;

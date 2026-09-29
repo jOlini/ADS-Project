@@ -1,8 +1,9 @@
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
 import AlternadorDeTema from '../../componentes/AlternadorDeTema';
 import Arvore from '../componentes/Arvore';
+import CampoDoPomar from '../componentes/CampoDoPomar';
 import Icone from '../../componentes/Icone';
 import Logo, { MarcaOliFine, SLOGAN } from '../componentes/Logo';
 import { HOJE_DE_EXEMPLO, LANCAMENTOS_DE_EXEMPLO, MESES_DE_EXEMPLO, METAS_DE_EXEMPLO, SALDO_DE_EXEMPLO } from '../dados/exemplo';
@@ -64,6 +65,10 @@ function Celular() {
   const desenho = useMemo(() => desenhoDaSerie(DEMO.series[faixa]), [faixa]);
   return (
     <div className="lp-celular" aria-label="Demonstração do app com dados fictícios">
+      {/* Camadas atrás da tela: a espessura do aparelho quando ele gira. */}
+      {[1, 2, 3, 4, 5, 6].map((camada) => (
+        <span key={camada} className="lp-celular-camada" style={{ '--camada': camada }} aria-hidden="true" />
+      ))}
       <div className="lp-celular-tela">
         <p className="lp-celular-status" aria-hidden="true">
           <span>9:41</span>
@@ -125,6 +130,7 @@ function Celular() {
             </li>
           ))}
         </ul>
+        <span className="lp-celular-reflexo" aria-hidden="true" />
       </div>
     </div>
   );
@@ -264,7 +270,8 @@ const BENEFICIOS = [
 ];
 
 // O que protege a conta hoje, dito sem exagero: cada item existe no código
-// (ARCHITECTURE.md, seção 4).
+// (ARCHITECTURE.md, seção 4). Nada de "ponta a ponta" nem "nível bancário":
+// o servidor lê os dados para calcular os relatórios, e não há certificação.
 const SEGURANCA = [
   {
     icone: 'cadeado',
@@ -316,6 +323,17 @@ function Controle({ campo, rotulo, valor, aoMudar }) {
   );
 }
 
+// Onde cada fatia termina na barra do simulador (%), uma soma depois da outra.
+function cortesDaBarra(partes) {
+  let soma = 0;
+  return Object.fromEntries(
+    partes.map((parte, indice) => {
+      soma = Math.min(100, soma + parte.fatia);
+      return [`--lp-corte-${indice + 1}`, `${soma}%`];
+    }),
+  );
+}
+
 // Simulador de orçamento: renda e gastos em controles, e na hora a sobra do
 // mês, o ano e o prazo da reserva de emergência (regras/simulador.js). Nada
 // sai da página.
@@ -342,11 +360,9 @@ function Simulador() {
       <div className={`lp-simulador-resultado ${resultado.leitura}`}>
         <p className="lp-simulador-rotulo">Sobra do mês</p>
         <p className="lp-simulador-sobra">{formatarBRL(resultado.sobra)}</p>
-        <div className="lp-simulador-barra" aria-hidden="true">
-          {resultado.partes.map((parte) => (
-            <i key={parte.id} className={parte.id} style={{ width: `${parte.fatia}%` }} />
-          ))}
-        </div>
+        {/* A barra é um gradiente com os três cortes (fim de cada fatia,
+            somados): o que anda é a cor, não a largura de elementos. */}
+        <div className="lp-simulador-barra" aria-hidden="true" style={cortesDaBarra(resultado.partes)} />
         <ul className="lp-simulador-legenda">
           {resultado.partes.map((parte) => (
             <li key={parte.id} className={parte.id}>
@@ -376,11 +392,10 @@ function Simulador() {
   );
 }
 
-// Ondas orgânicas do fundo esmeralda: três faixas que deslizam devagar
-// (param com prefers-reduced-motion).
 // Contornos orgânicos atrás do conteúdo dos campos esmeralda: faixas largas
 // em tons da própria esmeralda, que dão profundidade ao fundo e deslizam
-// devagar junto com as ondas da borda.
+// devagar junto com as ondas da borda. No topo, somem quando o campo 3D
+// (CampoDoPomar) consegue desenhar; sem WebGL, ficam como o fundo.
 function Contornos({ className = '' }) {
   return (
     <svg className={`lp-contornos ${className}`.trim()} viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -393,6 +408,8 @@ function Contornos({ className = '' }) {
   );
 }
 
+// Ondas orgânicas do fundo esmeralda: três faixas que deslizam devagar
+// (param com prefers-reduced-motion).
 function Ondas() {
   const onda = 'M0 60C120 20 240 20 360 60S600 100 720 60 960 20 1080 60 1320 100 1440 60V160H0Z';
   return (
@@ -416,11 +433,14 @@ function Ondas() {
 export default function Landing() {
   const contexto = useOutletContext();
   const logado = Boolean(contexto?.usuario);
+  const topo = useRef(null);
+  const textoDoTopo = useRef(null);
 
   return (
     <div className="lp">
-      <header className="lp-topo">
+      <header className="lp-topo" ref={topo}>
         <Contornos />
+        <CampoDoPomar palco={topo} texto={textoDoTopo} />
         <nav className="lp-nav" aria-label="Seções">
           <Link to="/" className="lp-nav-marca" aria-label="OliFine, início">
             <Logo tamanho={30} />
@@ -453,7 +473,7 @@ export default function Landing() {
         </nav>
 
         <section className="lp-hero" id="produto" aria-labelledby="lp-titulo">
-          <div className="lp-hero-texto">
+          <div className="lp-hero-texto" ref={textoDoTopo}>
             <h1 id="lp-titulo">
               Sua vida financeira.
               <br />
@@ -489,21 +509,26 @@ export default function Landing() {
           </div>
 
           <div className="lp-hero-app">
-            {/* Os números do mês ficam numa coluna ao lado do celular (embaixo
-                dele no celular de verdade): nunca por cima da tela do app. */}
-            <div className="lp-chips" aria-hidden="true">
-              <div className="lp-flutua despesas">
-                <small>Despesas do mês</small>
-                <b>{formatarBRL(DEMO.totais.saidas)}</b>
-                <Tendencia variacao={DEMO.variacao.despesas} maiorEhMelhor={false} />
+            <span className="lp-sombra" aria-hidden="true" />
+            {/* Palco 3D: o celular e os números do mês giram juntos com o
+                ponteiro, cada um numa profundidade. Os números ficam numa
+                coluna ao lado do celular (embaixo dele no celular de verdade):
+                nunca por cima da tela do app. */}
+            <div className="lp-palco">
+              <div className="lp-chips" aria-hidden="true">
+                <div className="lp-flutua despesas">
+                  <small>Despesas do mês</small>
+                  <b>{formatarBRL(DEMO.totais.saidas)}</b>
+                  <Tendencia variacao={DEMO.variacao.despesas} maiorEhMelhor={false} />
+                </div>
+                <div className="lp-flutua receitas">
+                  <small>Receitas do mês</small>
+                  <b>{formatarBRL(DEMO.totais.entradas)}</b>
+                  <Tendencia variacao={DEMO.variacao.receitas} />
+                </div>
               </div>
-              <div className="lp-flutua receitas">
-                <small>Receitas do mês</small>
-                <b>{formatarBRL(DEMO.totais.entradas)}</b>
-                <Tendencia variacao={DEMO.variacao.receitas} />
-              </div>
+              <Celular />
             </div>
-            <Celular />
             <p className="lp-ficticio">Dados fictícios de demonstração</p>
           </div>
         </section>
@@ -566,8 +591,8 @@ export default function Landing() {
         <section className="lp-secao lp-seguranca" id="seguranca" aria-labelledby="lp-seguranca-titulo">
           <Contornos className="seguranca" />
           <div className="lp-seguranca-texto">
-            <h2 id="lp-seguranca-titulo">Segurança de nível bancário.</h2>
-            <p>Criptografia ponta a ponta e total controle sobre a privacidade dos seus dados.</p>
+            <h2 id="lp-seguranca-titulo">Seus dados protegidos. A decisão, sempre sua.</h2>
+            <p>Conexão criptografada, cada acesso conferido e total controle sobre a privacidade das suas informações.</p>
           </div>
           <div className="lp-seguranca-grade">
             {SEGURANCA.map((item) => (
