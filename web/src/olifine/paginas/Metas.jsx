@@ -9,6 +9,7 @@ import SeletorDeData from '../../componentes/SeletorDeData';
 import { useToast } from '../../componentes/toast/useToast';
 import { formatarBRL, lerValor } from '../../regras/dinheiro';
 import { formatarData, hojeIso } from '../../regras/datas';
+import { donoDasMetas } from '../../regras/espacos';
 import Arvore from '../componentes/Arvore';
 import Icone from '../../componentes/Icone';
 import {
@@ -241,11 +242,11 @@ function Estufa({ meta, rega, aoRegar, aoExcluir }) {
 // Aba Metas: cada meta é uma árvore que cresce com os aportes. As metas ficam
 // neste navegador até a API de metas (release 0.5); a tela diz isso.
 export default function Metas() {
-  const { usuario } = useOutletContext();
+  const { usuario, espaco } = useOutletContext();
   const location = useLocation();
   const toast = useToast();
   const [exemplo, setExemplo] = useState(false);
-  const { metas, gravou, criar, aportar, desfazerAporte, remover } = useMetas(usuario?.uid, { exemplo });
+  const { metas, gravou, criar, aportar, desfazerAporte, remover } = useMetas(donoDasMetas(usuario?.uid, espaco?.dados), { exemplo });
   const [escolhida, setEscolhida] = useState(() => location.hash.slice(1) || null);
   const [criando, setCriando] = useState(false);
   const [excluindo, setExcluindo] = useState(null);

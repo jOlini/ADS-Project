@@ -9,13 +9,15 @@ from datetime import UTC, date, datetime
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from app.erros import ErroConflito, ErroNaoEncontrado, ErroValidacao
+from app.erros import ErroConflito, ErroNaoEncontrado, ErroPermissao, ErroValidacao
 from app.financeiro import cartoes, importacao, parcelamento, regras, relatorios
 from app.financeiro.categorizacao import AJUSTE, Categorizador
 from app.financeiro.cartoes import PeriodoDaFatura, Referencia, ResumoDaFatura, ResumoDoCartao
 from app.financeiro.modelos import (
+    MAXIMO_DE_ESPACOS_CRIADOS,
     AtualizacaoCategoria,
     AtualizacaoConta,
+    AtualizacaoEspaco,
     AtualizacaoLancamento,
     Categoria,
     Conta,
@@ -27,6 +29,7 @@ from app.financeiro.modelos import (
     NovaCompra,
     NovaConta,
     NovaImportacao,
+    NovoEspaco,
     NovoLancamento,
     NovoPagamento,
     Papel,
@@ -51,6 +54,14 @@ LIMITE_DO_CARTAO = 5000
 # na importação (categorizacao.py).
 LIMITE_DO_HISTORICO = 2000
 
+PESSOAL_JA_EXISTE = "O espaço pessoal já existe: ele é criado no primeiro acesso. Escolha família ou empresa."
+PESSOAL_FIXO = "O espaço pessoal não muda de nome nem pode ser excluído."
+SO_O_DONO = "Só quem criou o espaço pode renomeá-lo ou excluí-lo."
+ESPACO_COM_DADOS = "Só dá para excluir um espaço vazio. Exclua antes as contas e os lançamentos dele."
+LIMITE_DE_ESPACOS = (
+    f"Você já criou {MAXIMO_DE_ESPACOS_CRIADOS} espaços além do pessoal. Exclua um espaço vazio para criar outro."
+)
+
 
 def agora() -> datetime:
     """Instante atual em UTC, cortado em milissegundos: é a precisão das datas
@@ -73,6 +84,61 @@ class ServicoLivroCaixa:
             self._criar_espaco_pessoal(uid)
         return self.repositorio.listar_espacos_do_membro(uid)
 
+    def criar_espaco(self, uid: str, dados: NovoEspaco) -> Espaco:
+        """Espaço de família ou de empresa, com quem criou como dono e as
+        categorias do tipo. Cada um é um livro-caixa separado do pessoal."""
+        if dados.tipo == TipoEspaco.PF:
+            raise ErroValidacao({"tipo": PESSOAL_JA_EXISTE})
+        # Garante o pessoal antes (e primeiro na lista, que sai por data).
+        criados = [
+            espaco
+            for espaco in self.espacos_do_cliente(uid)
+            if espaco.tipo != TipoEspaco.PF and espaco.papel_de(uid) == Papel.DONO
+        ]
+        if len(criados) >= MAXIMO_DE_ESPACOS_CRIADOS:
+            raise ErroConflito(LIMITE_DE_ESPACOS)
+        instante = agora()
+        espaco = self.repositorio.inserir_espaco(
+            Espaco(
+                tipo=dados.tipo,
+                nome=dados.nome,
+                moeda="BRL",
+                fuso=FUSO_PADRAO,
+                membros=[Membro(uid=uid, papel=Papel.DONO)],
+                criado_em=instante,
+            )
+        )
+        self._criar_categorias_iniciais(espaco, instante)
+        return espaco
+
+    def renomear_espaco(self, espaco: Espaco, uid: str, dados: AtualizacaoEspaco) -> Espaco:
+        self._conferir_dono(espaco, uid)
+        espaco.nome = dados.nome
+        return self.repositorio.atualizar_espaco(espaco)
+
+    def excluir_espaco(self, espaco: Espaco, uid: str) -> None:
+        """Só o espaço vazio sai (sem contas e sem lançamentos): um clique
+        errado não apaga o histórico de uma família ou de uma empresa."""
+        self._conferir_dono(espaco, uid)
+        if self.repositorio.listar_contas(espaco.id) or self.repositorio.listar_lancamentos(espaco.id, None, None, 1):
+            raise ErroConflito(ESPACO_COM_DADOS)
+        self.repositorio.excluir_espaco(espaco.id)
+
+    @staticmethod
+    def _conferir_dono(espaco: Espaco, uid: str) -> None:
+        if espaco.tipo == TipoEspaco.PF:
+            raise ErroConflito(PESSOAL_FIXO)
+        if espaco.papel_de(uid) != Papel.DONO:
+            raise ErroPermissao(SO_O_DONO)
+
+    def _criar_categorias_iniciais(self, espaco: Espaco, instante: datetime) -> None:
+        self.repositorio.inserir_categorias(
+            [
+                Categoria(espaco.id, nome, tipo, cor, ativa=True, criada_em=instante)
+                for nome, tipo, cor in regras.categorias_iniciais(espaco.tipo)
+            ]
+        )
+
     def _criar_espaco_pessoal(self, uid: str) -> None:
         instante = agora()
         espaco = Espaco(
@@ -90,12 +156,7 @@ class ServicoLivroCaixa:
             # Outra requisição do mesmo primeiro acesso chegou antes e já criou
             # o espaço (e as categorias). Nada a fazer.
             return
-        self.repositorio.inserir_categorias(
-            [
-                Categoria(espaco.id, nome, tipo, cor, ativa=True, criada_em=instante)
-                for nome, tipo, cor in regras.CATEGORIAS_INICIAIS
-            ]
-        )
+        self._criar_categorias_iniciais(espaco, instante)
 
     # --- Contas ---
 

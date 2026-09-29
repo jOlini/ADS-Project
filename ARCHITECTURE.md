@@ -102,7 +102,9 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
 - **Livro-caixa:** partidas dobradas (a soma das partidas de um lançamento é zero), dinheiro em **centavos
   inteiros**, correção por estorno (histórico fica) ou exclusão (erro de digitação). Cartão de crédito é uma conta
   de dívida com fatura por mês de vencimento. Tudo pertence a um **espaço** (`/espacos/{id}`), e o espaço
-  pertence a membros identificados pelo `uid` do Firebase.
+  pertence a membros identificados pelo `uid` do Firebase. Cada pessoa tem o espaço **pessoal** (`PF`, criado no
+  primeiro acesso) e pode criar espaços de **família** (`FAMILIA`) e de **empresa** (`PJ`), cada um um livro-caixa
+  separado, com as categorias do tipo; só o espaço vazio pode ser excluído.
 - **Importação de extrato (CSV):** leitura em funções puras; o arquivo que não é CSV é recusado antes de qualquer
   leitura; as colunas são reconhecidas pelo cabeçalho (moldes de vários bancos) ou pelo conteúdo, com as dúvidas
   apontadas; a categoria de cada linha vem da coluna do arquivo, do histórico do estabelecimento ou de regras pela
@@ -117,7 +119,7 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
 |---|---|---|
 | `usuarios` | Back-office: nome, e-mail, hash BCrypt, perfil | `email` único |
 | `tokens_revogados` | `jti` dos tokens do back-office encerrados no logout, com a hora em que venceriam | TTL em `expira_em` (a entrada some sozinha depois do vencimento) |
-| `espacos` | Espaço pessoal (PF) de cada `uid`, com os membros | um espaço pessoal por `uid` (único), `membros.uid` |
+| `espacos` | Espaços (pessoal, família, empresa), com o tipo, o nome e os membros | um espaço pessoal por `uid` (único), `membros.uid` |
 | `contas` | Contas e cartões (limite, fechamento, vencimento) | `espaco_id` + data de criação |
 | `categorias` | Categorias de receita e despesa, com cor | `espaco_id` + tipo + nome |
 | `lancamentos` | Lançamento com as partidas embutidas (gravação atômica), divisão entre pessoas, compra parcelada | `espaco_id` + data; `espaco_id` + `chave_importacao` (único); um estorno por lançamento (único) |
@@ -186,6 +188,11 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
   (5 em 15 minutos por e-mail, guardado como resumo FNV-1a, sem o e-mail em texto) e avisa quantas restam; o
   Firebase continua freando do lado dele. Cadastro com e-mail que já tem conta segue o mesmo caminho do novo
   (sem revelar quem tem cadastro). O logout apaga as chaves `olifine:*` do navegador, menos a preferência de tema.
+- **Espaço ativo:** o `Layout` busca a lista de espaços e entrega às páginas o ativo no mesmo formato de antes
+  (`espaco.dados.id`); o seletor no topo (`olifine/componentes/SeletorDeEspaco.tsx`) troca, cria, renomeia e
+  exclui. Trocar de espaço remonta a página (nada do livro anterior fica no estado) e volta ao começo da seção. O
+  último espaço escolhido fica no navegador por conta (`servicos/espacoAtivo.ts`, sai no logout), e as metas,
+  ainda locais, têm uma lista por espaço (`regras/espacos.ts`).
 - **Tema e zoom:** tokens de cor trocados por `data-tema` no `<html>`; a transição de cor dura 400 ms e some com
   "reduzir movimento". A coluna de conteúdo da área logada para em 1680 px (zoom de 50% a 80% não estica o extrato);
   de 125% a 200% o layout passa pelas mesmas quebras do celular, sem rolagem lateral.

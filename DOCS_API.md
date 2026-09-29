@@ -437,12 +437,16 @@ Código: [`api/app/financeiro/`](api/app/financeiro) e [`api/app/firebase.py`](a
 
 ### Endpoints
 
-Todos exigem o ID token do Firebase. Tudo que é do cliente fica sob um **espaço** (o livro-caixa dele).
+Todos exigem o ID token do Firebase. Tudo que é do cliente fica sob um **espaço** (o livro-caixa dele): o
+pessoal (`PF`), criado no primeiro acesso, e os de família (`FAMILIA`) e de empresa (`PJ`) que a pessoa criar.
 
 | Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
 |---|---|---|---|---|
 | `GET` | `/espacos` | Listar meus espaços; no primeiro acesso, cria o espaço pessoal com as categorias iniciais | `200 OK` | `401`, `403` (e-mail não confirmado), `503` |
+| `POST` | `/espacos` | Criar um espaço de família ou de empresa (`tipo`, `nome`), com as categorias do tipo | `201 Created` + `Location` | `400`, `401`, `409` (limite de espaços) |
 | `GET` | `/espacos/{espaco_id}` | Consultar um espaço | `200 OK` | `401`, `404` |
+| `PATCH` | `/espacos/{espaco_id}` | Renomear um espaço de família ou de empresa (`nome`) | `200 OK` | `400`, `401`, `403`, `404`, `409` (pessoal) |
+| `DELETE` | `/espacos/{espaco_id}` | Excluir um espaço vazio (sem contas nem lançamentos), com as categorias dele | `204 No Content` | `401`, `403`, `404`, `409` (pessoal ou com dados) |
 | `GET` | `/espacos/{espaco_id}/contas` | Listar contas com o saldo de cada uma | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial) ou cartão de crédito (tipo `CARTAO_CREDITO`, com limite, fechamento, vencimento e cor) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/contas/{conta_id}` | Consultar conta e saldo | `200 OK` | `401`, `404` |
@@ -484,6 +488,39 @@ Na exclusão, o estorno sai antes do original: se a operação parar no meio, so
 estado válido. Uma linha de extrato importada e depois excluída volta se o mesmo arquivo for importado de novo
 (a chave dela sai junto com o lançamento). Desativar uma conta ou categoria tira ela das escolhas de novos
 lançamentos e mantém o histórico; excluir é outra coisa (seção seguinte).
+
+### Espaços: pessoal, família e empresa
+
+Cada espaço é um livro-caixa separado: contas, categorias e lançamentos de um não aparecem no outro, e toda
+consulta filtra pelo `espaco_id` (espaço de outra pessoa responde `404`, como se não existisse).
+
+```http
+POST /espacos
+Authorization: Bearer <ID token do Firebase>
+Content-Type: application/json
+
+{ "tipo": "PJ", "nome": "Ateliê da Ana" }
+```
+
+```http
+HTTP/1.1 201 Created
+Location: /espacos/6ab54bfb5b2393fd604e53b1
+
+{ "id": "6ab54bfb5b2393fd604e53b1", "tipo": "PJ", "nome": "Ateliê da Ana", "moeda": "BRL",
+  "fuso": "America/Sao_Paulo", "papel": "DONO" }
+```
+
+- **Tipos:** `FAMILIA` nasce com as categorias da casa (moradia, mercado, educação, mesada, contribuições) e `PJ`
+  com as de um negócio (vendas, serviços prestados, impostos, fornecedores, folha, pró-labore). `PF` não entra
+  pelo `POST` (`400` em `tipo`): o pessoal existe desde o primeiro acesso, e o `POST` o cria antes se faltar.
+- **Nome:** de 1 a 60 caracteres, limpo como os outros textos livres (sem `<`, `>`, fórmula de planilha nem
+  caractere invisível).
+- **Limite:** 5 espaços criados por pessoa, além do pessoal (`409` com a mensagem). Excluir um vazio libera a vaga.
+- **Renomear e excluir:** só quem criou (`403` para outro papel) e nunca o pessoal (`409`). A exclusão só aceita o
+  espaço sem contas e sem lançamentos (`409` com o motivo): um clique errado não apaga o histórico de uma família
+  ou de uma empresa. As categorias saem junto.
+- **Listagem:** `GET /espacos` devolve o pessoal primeiro e os outros na ordem de criação, com o `papel` de quem
+  pediu em cada um.
 
 ### Edição, exclusão em lote e remoção de cadastros
 

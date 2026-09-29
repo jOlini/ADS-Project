@@ -4,15 +4,15 @@ import { describe, expect, it } from 'vitest';
 import { iconeDaLinha } from '../olifine/regras/icones';
 import { TRACOS } from './tracosDosIcones';
 
-// Todos os .js e .jsx do app (menos os testes), para achar os nomes de
-// ícone escritos no código.
+// Todos os .js, .jsx, .ts e .tsx do app (menos os testes), para achar os
+// nomes de ícone escritos no código.
 function arquivosDoApp(pasta) {
   return readdirSync(pasta).flatMap((nome) => {
     const caminho = join(pasta, nome);
     if (statSync(caminho).isDirectory()) {
       return arquivosDoApp(caminho);
     }
-    return /\.jsx?$/.test(nome) && !nome.includes('.test.') ? [caminho] : [];
+    return /\.[jt]sx?$/.test(nome) && !nome.includes('.test.') ? [caminho] : [];
   });
 }
 

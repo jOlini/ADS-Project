@@ -43,6 +43,17 @@ class LivroCaixaMemoria:
         self.espacos[espaco.id] = replace(espaco)
         return espaco
 
+    def atualizar_espaco(self, espaco):
+        self.espacos[espaco.id] = replace(espaco)
+        return espaco
+
+    def excluir_espaco(self, id):
+        if id not in self.espacos:
+            return False
+        self.categorias = {chave: c for chave, c in self.categorias.items() if c.espaco_id != id}
+        del self.espacos[id]
+        return True
+
     # --- Contas ---
 
     def listar_contas(self, espaco_id):

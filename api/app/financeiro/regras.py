@@ -28,6 +28,7 @@ from app.financeiro.modelos import (
     Partida,
     TipoCategoria,
     TipoConta,
+    TipoEspaco,
     TipoLancamento,
 )
 
@@ -45,6 +46,46 @@ CATEGORIAS_INICIAIS: list[tuple[str, TipoCategoria, CorCategoria]] = [
     ("Receita extra", TipoCategoria.RECEITA, CorCategoria.ENTRADA),
     ("Outras receitas", TipoCategoria.RECEITA, CorCategoria.NEUTRO),
 ]
+
+# Família: as despesas da casa e o que cada um põe nela (contribuições).
+CATEGORIAS_DA_FAMILIA: list[tuple[str, TipoCategoria, CorCategoria]] = [
+    ("Moradia", TipoCategoria.DESPESA, CorCategoria.MORADIA),
+    ("Mercado", TipoCategoria.DESPESA, CorCategoria.MERCADO),
+    ("Contas da casa", TipoCategoria.DESPESA, CorCategoria.CASA),
+    ("Educação", TipoCategoria.DESPESA, CorCategoria.LAZER),
+    ("Saúde", TipoCategoria.DESPESA, CorCategoria.SAUDE),
+    ("Transporte", TipoCategoria.DESPESA, CorCategoria.TRANSPORTE),
+    ("Mesada", TipoCategoria.DESPESA, CorCategoria.NEUTRO),
+    ("Outras despesas", TipoCategoria.DESPESA, CorCategoria.NEUTRO),
+    ("Contribuições", TipoCategoria.RECEITA, CorCategoria.ENTRADA),
+    ("Outras receitas", TipoCategoria.RECEITA, CorCategoria.NEUTRO),
+]
+
+# Empresa: o vocabulário do caixa de um negócio pequeno (vendas, serviços,
+# impostos, fornecedores, folha), no lugar de salário e mercado.
+CATEGORIAS_DA_EMPRESA: list[tuple[str, TipoCategoria, CorCategoria]] = [
+    ("Impostos", TipoCategoria.DESPESA, CorCategoria.SAUDE),
+    ("Fornecedores", TipoCategoria.DESPESA, CorCategoria.MERCADO),
+    ("Folha de pagamento", TipoCategoria.DESPESA, CorCategoria.CASA),
+    ("Pró-labore", TipoCategoria.DESPESA, CorCategoria.MORADIA),
+    ("Aluguel e estrutura", TipoCategoria.DESPESA, CorCategoria.TRANSPORTE),
+    ("Marketing", TipoCategoria.DESPESA, CorCategoria.LAZER),
+    ("Tarifas bancárias", TipoCategoria.DESPESA, CorCategoria.NEUTRO),
+    ("Outras despesas", TipoCategoria.DESPESA, CorCategoria.NEUTRO),
+    ("Vendas", TipoCategoria.RECEITA, CorCategoria.ENTRADA),
+    ("Serviços prestados", TipoCategoria.RECEITA, CorCategoria.ENTRADA),
+    ("Outras receitas", TipoCategoria.RECEITA, CorCategoria.NEUTRO),
+]
+
+
+def categorias_iniciais(tipo: TipoEspaco) -> list[tuple[str, TipoCategoria, CorCategoria]]:
+    """As categorias que nascem com cada tipo de espaço."""
+    if tipo == TipoEspaco.FAMILIA:
+        return CATEGORIAS_DA_FAMILIA
+    if tipo == TipoEspaco.PJ:
+        return CATEGORIAS_DA_EMPRESA
+    return CATEGORIAS_INICIAIS
+
 
 OBRIGATORIO = "Campo obrigatório."
 CAMPOS_DO_CARTAO = ("limite_centavos", "dia_fechamento", "dia_vencimento")

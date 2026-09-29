@@ -22,6 +22,9 @@ LIMITE_EM_CENTAVOS = 100_000_000_000
 TAMANHO_MAXIMO_DO_CSV = 500_000
 # Pessoas numa divisão (racha) de um lançamento.
 MAXIMO_DE_PESSOAS = 20
+# Espaços que uma pessoa cria além do pessoal (família e empresa). Barra quem
+# criaria livros-caixa vazios sem fim com a mesma conta.
+MAXIMO_DE_ESPACOS_CRIADOS = 5
 # Parcelas de uma compra no cartão de crédito (4 anos).
 MAXIMO_DE_PARCELAS = 48
 # Lançamentos numa exclusão em lote (o teto de uma consulta do extrato).
@@ -31,7 +34,12 @@ MAXIMO_DE_AJUSTES = 1000
 
 
 class TipoEspaco(StrEnum):
-    PF = "PF"
+    """Cada espaço é um livro-caixa separado: trocar de espaço é trocar de
+    livro, e nada de um aparece no outro."""
+
+    PF = "PF"  # pessoal: um por pessoa, criado sozinho no primeiro acesso
+    FAMILIA = "FAMILIA"  # o dinheiro da casa, fora do pessoal de cada um
+    PJ = "PJ"  # uma empresa
 
 
 class Papel(StrEnum):
@@ -276,6 +284,18 @@ Booleano = Annotated[bool, Field(strict=True)]
 Data = Annotated[date, BeforeValidator(_data_sem_numero)]
 # Dia do mês. 29, 30 e 31 viram o último dia nos meses mais curtos.
 DiaDoMes = Annotated[int, Field(strict=True, ge=1, le=31)]
+
+
+class NovoEspaco(Entrada):
+    """Espaço de família ou de empresa. O pessoal não entra por aqui: ele já
+    existe desde o primeiro acesso (servicos.criar_espaco recusa PF)."""
+
+    tipo: TipoEspaco
+    nome: Nome
+
+
+class AtualizacaoEspaco(Entrada):
+    nome: Nome
 
 
 class NovaConta(Entrada):

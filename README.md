@@ -56,7 +56,8 @@ relatórios (0.3) estão em construção:
 - uma **área do cliente** em React, com a identidade visual **OliFine**: página de apresentação com simulador de
   orçamento, cadastro com confirmação do e-mail, login e Visão geral com Firebase Authentication e Cloud
   Firestore, publicada no GitHub Pages; com a API local, ganha lançamentos, contas e cartões de crédito,
-  categorias, importação do extrato em CSV e relatórios; as metas funcionam nos dois casos;
+  categorias, importação do extrato em CSV, relatórios e **espaços separados** (pessoal, família e empresa, cada
+  um com o próprio livro-caixa, trocados no topo da tela); as metas funcionam nos dois casos;
 - **testes automatizados** que rodam a cada commit de pull request, com **CI/CD** e alertas no Discord.
 
 **Objetivo acadêmico.** Projeto do curso de Análise e Desenvolvimento de Sistemas, compartilhado entre três
@@ -488,7 +489,7 @@ poucos.
 | API | `api/tests/test_emails.py` e `test_emails_rotas.py` | E-mails da conta: modelos (link e key escapados), Resend, SMTP só com criptografia, pasta, conta de serviço e código do Firebase sem rede, rotas `/conta` com `202` igual com e sem conta, `429`, `503` sem provedor e log sem o endereço |
 | API | `api/tests/test_producao.py` | `AMBIENTE=producao`: recusa exemplo, CORS inseguro, MongoDB sem senha e `APP_URL` sem HTTPS; segredos em arquivo; Swagger fora do ar; `/saude` |
 | API | `api/tests/test_monitoramento.py` | Alertas no Discord: canal certo, repetição a cada 15 minutos, sem menção, falha do Discord que não afeta a API, força bruta e rajada de `401` sem o e-mail nem o token, `500` sem a mensagem da exceção, e-mail que não saiu, cota de e-mails, resumo por rota e webhook fora do Discord recusado sem aparecer no erro |
-| API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, edição, rotas e isolamento entre clientes, importação de CSV de vários bancos (colunas pelo cabeçalho e pelo conteúdo, arquivo que não é CSV, teto de importações), categoria automática (arquivo, histórico, regras) e edição na conferência, racha, exclusão (uma e em lote), cartão de crédito (fatura, parcelas, pagamento, parcelas geradas da fatura importada) e relatórios |
+| API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, edição, rotas e isolamento entre clientes, importação de CSV de vários bancos (colunas pelo cabeçalho e pelo conteúdo, arquivo que não é CSV, teto de importações), categoria automática (arquivo, histórico, regras) e edição na conferência, racha, exclusão (uma e em lote), cartão de crédito (fatura, parcelas, pagamento, parcelas geradas da fatura importada), relatórios e espaços de família e empresa (categorias do tipo, livro-caixa separado, renomear, excluir só o vazio, limite por pessoa) |
 | API | `api/tests/test_sanitizacao.py` | Texto livre limpo na entrada (XSS, fórmula de planilha, caracteres invisíveis) e operador do MongoDB (`$ne`, `$where`) recusado pelo tipo do campo |
 | Front-end | `web/src/regras/tentativas.test.js` | Tentativas de login: contagem por e-mail, bloqueio na quinta, janela de 15 minutos, o que conta como senha errada e a chave sem o e-mail em texto |
 | Front-end | `web/src/regras/dadosLocais.test.js` e `servicos/dadosLocais.test.js` | O que o logout apaga do navegador (metas, tentativas, sessão) e o que fica (tema e dados de outros sites) |
@@ -498,6 +499,7 @@ poucos.
 | Front-end | `web/src/regras/mascaras.test.ts` e `sanitizacao.test.ts` | Máscara de valor (milhar, vírgula, dois decimais, sinal, cursor, colar) e de inteiro, teclas barradas por tipo de campo, e a limpeza do texto antes de ir à API |
 | Front-end | `web/src/regras/arquivoDoExtrato.test.ts` e `conferenciaDaImportacao.test.ts` | Arquivo do extrato (extensão, tipo, planilha ou PDF renomeado, binário, UTF-8, Windows-1252 e UTF-16) e a edição de descrição e categoria na conferência |
 | Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |
+| Front-end | `web/src/regras/espacos.test.ts` e `servicos/espacoAtivo.test.ts` | Espaços: qual abre, o nome na tela, quem renomeia e exclui, o formulário, a seção depois da troca, as metas de cada espaço e o último espaço guardado no navegador (sai no logout) |
 | Front-end | `web/src/servicos/livroCaixa.test.js` e `enderecoDaApi.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar, token que não renova e endereço pela rede local |
 | Front-end | `web/src/olifine/regras/*.test.js` e `*.test.ts` | OliFine: tendência, séries do gráfico de saldo, Visão geral, metas, a árvore que cresce, o simulador de orçamento e o pomar 3D da landing (câmera, toque no chão, movimento suave, quantas folhas e onde nascem) |
 | Front-end | `web/src/componentes/*.test.js` | Error Boundary, avisos (toasts) e todo nome de ícone usado nas telas com desenho na família própria |
@@ -678,6 +680,8 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de seguran�
 | `POST` | `/conta/nova-senha` | Mandar o link para criar uma senha nova (resposta igual com e sem conta) | Público | `202 Accepted` |
 | `GET` | `/saude` | Verificação de funcionamento (healthcheck) | Público | `200 OK` |
 | `GET` | `/espacos` | Listar os espaços do cliente (cria o pessoal no primeiro acesso) | Cliente com e-mail confirmado (ID token do Firebase) | `200 OK` |
+| `POST` | `/espacos` | Criar um espaço de família ou de empresa, com as categorias do tipo | Cliente com e-mail confirmado | `201 Created` |
+| `PATCH`, `DELETE` | `/espacos/{id}` | Renomear; excluir o espaço vazio (o pessoal é fixo) | Quem criou o espaço | `200 OK` / `204 No Content` |
 | `GET`, `POST`, `PUT`, `DELETE` | `/espacos/{id}/contas` e `/espacos/{id}/categorias` | Contas (com saldo), cartões de crédito e categorias | Membro do espaço | `200 OK` / `201 Created` / `204 No Content` |
 | `GET`, `DELETE` | `/espacos/{id}/cartoes`, `/cartoes/{id}`, `/cartoes/{id}/faturas` e `/faturas/{AAAA-MM}` | Painel do cartão, lista de faturas, extrato e exclusão de uma fatura | Membro do espaço | `200 OK` |
 | `POST` | `/espacos/{id}/cartoes/{id}/compras` e `/pagamentos` | Compra no cartão (à vista ou parcelada) e pagamento da fatura | Membro do espaço | `201 Created` |

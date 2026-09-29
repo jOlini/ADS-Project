@@ -438,6 +438,108 @@ button.of-conta-acao:hover:not(:disabled) {
   color: var(--suave);
 }
 
+/* ----------------------------------------------------- Seletor de espaço */
+
+/* No topo, à esquerda da busca: a marca do tipo e o nome do espaço ativo.
+   Mesma altura e moldura da busca, para as duas lerem como uma faixa só. */
+button.of-espaco-botao {
+  flex: none;
+  gap: var(--espaco-4);
+  max-width: 260px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0 var(--espaco-5) 0 var(--espaco-3);
+  color: var(--texto);
+  background: var(--superficie);
+  border: var(--borda);
+  border-radius: var(--raio);
+  font-size: var(--fonte-rotulo);
+}
+
+button.of-espaco-botao:hover:not(:disabled) {
+  background: var(--superficie);
+  border-color: var(--linha-forte);
+}
+
+button.of-espaco-botao[aria-expanded='true'] {
+  border-color: var(--marca);
+  box-shadow: var(--anel-de-foco);
+}
+
+.of-espaco-nome {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-espaco-botao > .icone:last-child {
+  flex: none;
+  color: var(--suave);
+}
+
+button.of-espaco-opcao {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 16px;
+  gap: var(--espaco-5);
+  align-items: center;
+  justify-content: stretch;
+  width: 100%;
+  min-height: 52px;
+  padding: var(--espaco-3) var(--espaco-5);
+  color: var(--texto);
+  background: transparent;
+  border: 0;
+  border-radius: var(--raio-pequeno);
+  font-weight: var(--peso-regular);
+  text-align: left;
+}
+
+button.of-espaco-opcao:hover:not(:disabled) {
+  background: var(--lateral);
+}
+
+/* O espaço em que a pessoa está: a menta de "aqui", com o visto. */
+button.of-espaco-opcao[aria-current='true'] {
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.of-espaco-opcao .marca-do-espaco {
+  width: 36px;
+  height: 36px;
+}
+
+.of-espaco-opcao b {
+  display: block;
+  overflow: hidden;
+  font-weight: var(--peso-semi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-espaco-opcao small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-espaco-opcao[aria-current='true'] small {
+  color: var(--of-sobre-menta);
+}
+
+.of-espacos-acoes {
+  display: grid;
+  gap: var(--espaco-1);
+  margin-top: var(--espaco-3);
+  padding-top: var(--espaco-3);
+  border-top: var(--borda);
+}
+
+button.of-espaco-excluir,
+button.of-espaco-excluir .icone {
+  color: var(--erro);
+}
+
 /* ----------------------------------------------------- Abas do celular */
 
 .of-abas {
@@ -467,6 +569,13 @@ button.of-conta-acao:hover:not(:disabled) {
 
   .of-topo-marca {
     display: inline-flex;
+  }
+
+  /* Sem a busca, o seletor divide o topo com a marca e os botões. */
+  button.of-espaco-botao {
+    min-width: 0;
+    max-width: 46vw;
+    flex: 0 1 auto;
   }
 
   .of-area {
@@ -520,6 +629,14 @@ button.of-conta-acao:hover:not(:disabled) {
     border-radius: var(--raio-pilula);
     background: var(--of-menta);
     box-sizing: border-box;
+  }
+}
+
+/* Celular estreito: com o seletor de espaço no topo, a marca fica só no
+   monograma, e o nome do espaço (o que diz em que livro se está) cabe. */
+@media (max-width: 520px) {
+  .of-topo:has(.of-espaco-botao) .of-topo-marca .of-logo-textos {
+    display: none;
   }
 }
 

@@ -1,14 +1,16 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCarga } from '../componentes/useCarga';
 import { formatarBRL } from '../regras/dinheiro';
 import { faturasAVencer } from '../regras/cartoes';
+import { nomeDoEspaco } from '../regras/espacos';
 import { apiConfigurada, listarCartoes } from '../servicos/livroCaixa';
 import Flutuante from './componentes/Flutuante';
 import AlternadorDeTema from '../componentes/AlternadorDeTema';
 import Icone from '../componentes/Icone';
 import LimiteDeErro from '../componentes/LimiteDeErro';
 import Logo from './componentes/Logo';
+import SeletorDeEspaco from './componentes/SeletorDeEspaco';
 
 // Itens do menu. Sem a API (site publicado), as telas que dependem dela ficam
 // desligadas com a versão ao lado. Metas funciona sempre: fica no navegador
@@ -51,10 +53,11 @@ function ItemDoMenu({ item, aoEscolher }) {
 }
 
 // Casca da área logada na OliFine: barra lateral branca com o monograma,
-// barra do topo com busca, avisos e conta, e no celular a barra de abas
-// embaixo. Todas as páginas da área logada entram no <main className="area">.
+// barra do topo com o seletor de espaço, busca, avisos e conta, e no celular
+// a barra de abas embaixo. Todas as páginas da área logada entram no <main
+// className="area">.
 export default function CascaOliFine({ contexto }) {
-  const { usuario, pessoa, espaco, sairDaConta } = contexto;
+  const { usuario, pessoa, espaco, espacos, trocarEspaco, recarregarEspacos, sairDaConta } = contexto;
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [busca, setBusca] = useState('');
@@ -71,6 +74,7 @@ export default function CascaOliFine({ contexto }) {
   const cartoes = useCarga(buscarCartoes);
   const avisos = cartoes.dados ? faturasAVencer(cartoes.dados) : [];
   const itens = itensDoMenu();
+  const nomeDoAtivo = nomeDoEspaco(espaco.dados);
 
   function buscar(evento) {
     evento.preventDefault();
@@ -91,7 +95,7 @@ export default function CascaOliFine({ contexto }) {
       </p>
       <p className="of-conta-espaco">
         <span className="of-ponto-verde" aria-hidden="true" />
-        Espaço pessoal
+        {nomeDoAtivo}
       </p>
       <button
         type="button"
@@ -127,7 +131,7 @@ export default function CascaOliFine({ contexto }) {
             </span>
             <span className="of-lateral-usuario-textos">
               <b title={nome}>{nome}</b>
-              <small>Espaço pessoal</small>
+              <small title={nomeDoAtivo}>{nomeDoAtivo}</small>
             </span>
           </p>
           <button type="button" className="discreto-botao of-lateral-sair" onClick={sairDaConta}>
@@ -142,6 +146,16 @@ export default function CascaOliFine({ contexto }) {
           <Link to="/principal" className="of-topo-marca" aria-label="OliFine, Visão geral">
             <Logo tamanho={28} />
           </Link>
+
+          {apiConfigurada && espaco.dados && (
+            <SeletorDeEspaco
+              espacos={espacos}
+              ativo={espaco.dados}
+              sobrenome={dados?.sobrenome}
+              trocarEspaco={trocarEspaco}
+              recarregarEspacos={recarregarEspacos}
+            />
+          )}
 
           {apiConfigurada && (
             <form className="of-busca" role="search" onSubmit={buscar}>
@@ -209,7 +223,11 @@ export default function CascaOliFine({ contexto }) {
           {/* Uma tela que falha ao desenhar troca só o conteúdo pelo aviso: o
               menu continua e abrir outra rota desenha a tela nova. */}
           <LimiteDeErro chave={pathname}>
-            <Outlet context={contexto} />
+            {/* Outro espaço, tela nova: nada do livro anterior (filtros,
+                listas, seleção) sobra no estado da página. */}
+            <Fragment key={espacoId ?? 'sem-espaco'}>
+              <Outlet context={contexto} />
+            </Fragment>
           </LimiteDeErro>
         </main>
       </div>

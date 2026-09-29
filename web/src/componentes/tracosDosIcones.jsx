@@ -327,6 +327,16 @@ export const TRACOS = {
       <path d="M10 20.5v-4.3a2 2 0 0 1 4 0v4.3" />
     </>
   ),
+  // Empresa: a maleta com cantos em folha e o fecho no meio da faixa.
+  empresa: (
+    <>
+      <path d={folha(3, 7.5, 18, 12.5, 5, 1.8)} />
+      <path d="M9 7.5V6.3a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.2" />
+      <path d="M3 12.9h7.2M13.8 12.9H21" />
+      <path className="seiva" d={folha(10.2, 11.3, 3.6, 3.2, 1.3, 0.6)} />
+      <path d={folha(10.2, 11.3, 3.6, 3.2, 1.3, 0.6)} />
+    </>
+  ),
   carrinho: (
     <>
       <path d="M2.8 3.8h2.6l2.3 11.1h10.5l2-7.7H6.4" />
