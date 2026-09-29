@@ -194,6 +194,7 @@ a.of-menu-item.active {
 }
 
 .of-menu-item > span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -2337,6 +2338,261 @@ a.of-regar-convite-link:hover {
 
   .of-progresso i {
     transition: none;
+  }
+}
+
+/* ------------------------------------------------- Espaço de empresa */
+
+/* Título de grupo no menu (Empresa, Livro-caixa), só no espaço de empresa.
+   Com a barra recolhida, o nome sai e fica um traço entre os ícones. */
+.of-menu-grupo {
+  margin: var(--espaco-6) 0 var(--espaco-1);
+  padding: 0 var(--espaco-6);
+  color: var(--suave);
+  font-size: var(--fonte-caps);
+  font-weight: var(--peso-semi);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.of-menu > .of-menu-grupo:first-child,
+.of-mais > .of-menu-grupo:first-child {
+  margin-top: 0;
+}
+
+.lateral-recolhida .of-lateral .of-menu-grupo {
+  width: 28px;
+  height: 1px;
+  margin: var(--espaco-4) auto;
+  padding: 0;
+  background: var(--linha);
+}
+
+.lateral-recolhida .of-lateral .of-menu-grupo span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.of-empresa {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espaco-10);
+  align-content: start;
+}
+
+/* A coluna do cartão não cresce com a tabela larga (ela rola dentro dele). */
+.of-empresa .of-painel {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Título e legenda do gráfico dividem a linha; sem espaço, a legenda desce. */
+.of-empresa .of-painel-cabecalho {
+  flex-wrap: wrap;
+}
+
+.of-empresa-numeros {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.of-kpi.negativo .of-kpi-valor {
+  color: var(--erro);
+}
+
+/* Fluxo de caixa: a tabela operação × investimentos fica aberta. */
+.of-fluxo-tabela {
+  margin-top: var(--espaco-4);
+}
+
+.of-fluxo-tabela td.negativo {
+  color: var(--erro);
+}
+
+/* DRE: uma linha por grupo, com o valor, a parte da receita e o mês
+   anterior alinhados em colunas. Os grupos abrem nas categorias. */
+.of-dre-mes {
+  gap: var(--espaco-3);
+  align-items: center;
+}
+
+.of-dre-mes b {
+  min-width: 11ch;
+  font-size: var(--fonte-botao);
+  text-align: center;
+}
+
+.of-dre {
+  display: grid;
+  font-size: var(--fonte-rotulo);
+}
+
+.of-dre-titulos,
+.of-dre-linha > summary,
+.of-dre-linha.resultado {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7.5rem, auto) 4.5rem 5.5rem;
+  gap: var(--espaco-6);
+  align-items: center;
+  padding: var(--espaco-5) var(--espaco-4);
+}
+
+.of-dre-titulos {
+  padding-block: 0 var(--espaco-4);
+  border-bottom: var(--borda);
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+}
+
+.of-dre-titulos span:not(:first-child),
+.of-dre-valor,
+.of-dre-parte,
+.of-dre-comparacao {
+  text-align: right;
+}
+
+.of-dre-linha {
+  border-bottom: 1px dashed var(--linha);
+}
+
+.of-dre-linha > summary {
+  list-style: none;
+  cursor: pointer;
+  border-radius: var(--raio-pequeno);
+}
+
+.of-dre-linha > summary::-webkit-details-marker {
+  display: none;
+}
+
+.of-dre-linha > summary:hover {
+  background: var(--lateral);
+}
+
+.of-dre-linha > summary:focus-visible {
+  outline: var(--espessura-do-foco) solid var(--of-verde);
+  outline-offset: -2px;
+}
+
+.of-dre-rotulo {
+  display: flex;
+  gap: var(--espaco-3);
+  align-items: center;
+  min-width: 0;
+}
+
+.of-dre-rotulo .icone {
+  flex: none;
+  color: var(--suave);
+  transition: rotate var(--transicao);
+}
+
+.of-dre-linha[open] .of-dre-rotulo .icone {
+  rotate: 180deg;
+}
+
+.of-dre-sinal {
+  flex: none;
+  width: 1.4ch;
+  color: var(--suave);
+  font-weight: var(--peso-semi);
+}
+
+.of-dre-valor {
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.of-dre-valor.negativo {
+  color: var(--erro);
+}
+
+.of-dre-parte,
+.of-dre-sem {
+  color: var(--suave);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-dre-comparacao .of-tendencia {
+  justify-content: center;
+}
+
+.of-dre-linha.resultado {
+  border-bottom: 1.5px solid var(--linha-forte);
+  font-weight: var(--peso-semi);
+}
+
+.of-dre-linha.resultado.destaque {
+  margin-top: var(--espaco-2);
+  border-bottom: 0;
+  border-radius: var(--raio);
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.of-dre-linha.destaque .of-dre-valor {
+  font-size: var(--fonte-numero-compacto);
+}
+
+.of-dre-linha ul {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0 0 var(--espaco-4);
+  padding: 0 var(--espaco-4) 0 calc(var(--espaco-4) + 3ch);
+  list-style: none;
+}
+
+.of-dre-linha li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7.5rem, auto) 4.5rem 5.5rem;
+  gap: var(--espaco-6);
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-dre-linha li span:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.of-dre-linha > .of-discreto {
+  margin: 0 0 var(--espaco-4) calc(var(--espaco-4) + 3ch);
+}
+
+.of-dre-ajuda {
+  font-size: var(--fonte-apoio);
+}
+
+.of-dre-ajuda summary {
+  color: var(--of-sobre-menta);
+  font-weight: var(--peso-semi);
+  cursor: pointer;
+}
+
+.of-dre-ajuda p {
+  max-width: 80ch;
+  margin-top: var(--espaco-4);
+  color: var(--suave);
+}
+
+/* Celular: a parte da receita e o mês anterior saem das linhas (ficam nos
+   números do topo); o valor segue à direita. */
+@media (max-width: 640px) {
+  .of-dre-titulos,
+  .of-dre-linha > summary,
+  .of-dre-linha.resultado,
+  .of-dre-linha li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .of-dre-titulos span:nth-child(n + 3),
+  .of-dre-parte,
+  .of-dre-comparacao {
+    display: none;
   }
 }
 

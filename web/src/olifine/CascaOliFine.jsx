@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useCarga } from '../componentes/useCarga';
 import { formatarBRL } from '../regras/dinheiro';
 import { faturasAVencer } from '../regras/cartoes';
-import { nomeDoEspaco } from '../regras/espacos';
+import { ehEmpresa, nomeDoEspaco } from '../regras/espacos';
 import { guardarLateralRecolhida, lerLateralRecolhida } from '../servicos/lateral';
 import { apiConfigurada, listarCartoes } from '../servicos/livroCaixa';
 import Flutuante from './componentes/Flutuante';
@@ -22,14 +22,34 @@ const DA_API = [
   { para: '/categorias', icone: 'categorias', rotulo: 'Categorias', versao: '0.2' },
 ];
 
-function itensDoMenu() {
-  const semApi = (item) => (apiConfigurada ? item : { ...item, para: null });
+// Visões do espaço de empresa, logo abaixo da Visão geral, só com ele ativo.
+// Fornecedores e centros de custo aparecem marcados, ainda sem tela.
+const DA_EMPRESA = [
+  { grupo: 'Empresa' },
+  { para: '/empresa/fluxo', icone: 'transferencia', rotulo: 'Fluxo de caixa', versao: '0.3' },
+  { para: '/empresa/dre', icone: 'documento', rotulo: 'DRE', versao: '0.3' },
+  { para: null, icone: 'pessoas', rotulo: 'Fornecedores e centros', versao: 'em breve' },
+];
+
+function itensDoMenu(empresa) {
+  const semApi = (item) => (apiConfigurada || !item.para ? item : { ...item, para: null });
   return [
     { para: '/principal', icone: 'resumo', rotulo: 'Visão geral' },
+    ...(empresa ? [...DA_EMPRESA.map(semApi), { grupo: 'Livro-caixa' }] : []),
     ...DA_API.map(semApi),
     { para: '/metas', icone: 'broto', rotulo: 'Metas' },
     semApi({ para: '/relatorios', icone: 'relatorios', rotulo: 'Relatórios', versao: '0.3' }),
   ];
+}
+
+// Título de um grupo do menu (só no espaço de empresa). Com a barra
+// recolhida, vira um traço entre os ícones.
+function GrupoDoMenu({ item }) {
+  return (
+    <p className="of-menu-grupo">
+      <span>{item.grupo}</span>
+    </p>
+  );
 }
 
 const DIA_E_MES = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', timeZone: 'UTC' });
@@ -41,7 +61,8 @@ const dataCurta = (iso) => DIA_E_MES.format(new Date(`${iso}T12:00:00Z`)).replac
 function ItemDoMenu({ item, aoEscolher, dica }) {
   if (!item.para) {
     return (
-      <span className="of-menu-item futuro" aria-disabled="true" {...dica?.(`${item.rotulo} (${item.versao})`)}>
+      <span className="of-menu-item futuro" aria-disabled="true" title={dica ? undefined : `${item.rotulo} (${item.versao})`}
+        {...dica?.(`${item.rotulo} (${item.versao})`)}>
         <Icone nome={item.icone} />
         <span className="of-menu-rotulo">{item.rotulo}</span>
         <em>{item.versao}</em>
@@ -109,7 +130,7 @@ export default function CascaOliFine({ contexto }) {
   const buscarCartoes = useMemo(() => (apiConfigurada && espacoId ? () => listarCartoes(espacoId) : null), [espacoId]);
   const cartoes = useCarga(buscarCartoes);
   const avisos = cartoes.dados ? faturasAVencer(cartoes.dados) : [];
-  const itens = itensDoMenu();
+  const itens = itensDoMenu(ehEmpresa(espaco.dados));
   const nomeDoAtivo = nomeDoEspaco(espaco.dados);
 
   function buscar(evento) {
@@ -169,9 +190,9 @@ export default function CascaOliFine({ contexto }) {
         </div>
 
         <nav className="of-menu" aria-label="Navegação principal">
-          {itens.map((item) => (
-            <ItemDoMenu key={item.rotulo} item={item} dica={dicaDoItem} />
-          ))}
+          {itens.map((item) =>
+            item.grupo ? <GrupoDoMenu key={item.grupo} item={item} /> : <ItemDoMenu key={item.rotulo} item={item} dica={dicaDoItem} />,
+          )}
         </nav>
 
         <div className="of-lateral-pe">
@@ -317,10 +338,14 @@ export default function CascaOliFine({ contexto }) {
           {(fechar) => (
             <nav className="of-mais" aria-label="Mais opções">
               {itens
-                .filter((item) => !['/principal', '/metas', apiConfigurada ? '/lancamentos' : ''].includes(item.para))
-                .map((item) => (
-                  <ItemDoMenu key={item.rotulo} item={item} aoEscolher={fechar} />
-                ))}
+                .filter((item) => item.grupo || !['/principal', '/metas', apiConfigurada ? '/lancamentos' : ''].includes(item.para))
+                .map((item) =>
+                  item.grupo ? (
+                    <GrupoDoMenu key={item.grupo} item={item} />
+                  ) : (
+                    <ItemDoMenu key={item.rotulo} item={item} aoEscolher={fechar} />
+                  ),
+                )}
             </nav>
           )}
         </Flutuante>
