@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { caminhoSuave, valorCurto } from './curva';
+import { caminhoSuave, desenhoDaMiniatura, valorCurto } from './curva';
 
 describe('caminhoSuave', () => {
   it('começa no primeiro ponto e termina no último', () => {
@@ -24,6 +24,29 @@ describe('caminhoSuave', () => {
   it('trata um ponto só e nenhum ponto', () => {
     expect(caminhoSuave([{ x: 3, y: 4 }])).toBe('M3 4');
     expect(caminhoSuave([])).toBe('');
+  });
+});
+
+describe('desenhoDaMiniatura', () => {
+  const serie = [{ saldo: 100 }, { saldo: 300 }, { saldo: 200 }];
+
+  it('ocupa a largura toda e deixa 8 de respiro em cima e embaixo', () => {
+    const { pontos, fim } = desenhoDaMiniatura(serie, 300, 110);
+
+    expect(pontos.map((ponto) => ponto.x)).toEqual([0, 150, 300]);
+    expect(Math.min(...pontos.map((ponto) => ponto.y))).toBe(8);
+    expect(Math.max(...pontos.map((ponto) => ponto.y))).toBe(102);
+    expect(fim).toEqual(pontos[2]);
+  });
+
+  it('fecha a área na base do quadro', () => {
+    expect(desenhoDaMiniatura(serie, 300, 90).area.endsWith('L300 90L0 90Z')).toBe(true);
+  });
+
+  it('série plana fica no meio do caminho, sem dividir por zero', () => {
+    const { pontos } = desenhoDaMiniatura([{ saldo: 5 }, { saldo: 5 }], 100, 50);
+
+    expect(pontos.every((ponto) => Number.isFinite(ponto.y))).toBe(true);
   });
 });
 
