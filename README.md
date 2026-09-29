@@ -26,8 +26,9 @@ abre um menu. Detalhes em [Como executar](#como-executar).
 - **Clareza em vez de planilha.** A Visão geral junta saldo, receitas e despesas do mês comparadas ao anterior,
   evolução do saldo e gasto por categoria. Cada número mostra de onde veio, lançamento por lançamento.
 - **Do seu jeito, sem burocracia.** Contas, carteira de cartões de crédito com fatura e parcelas, categorias, racha
-  entre pessoas, edição e remoção em lote e importação do extrato do banco em CSV (vários formatos, sem duplicar;
-  na fatura do cartão, a compra "03/12" já gera as parcelas das próximas faturas).
+  entre pessoas, edição e remoção em lote e importação do extrato do banco em CSV (as colunas de vários bancos
+  reconhecidas sozinhas, a categoria sugerida pela descrição e pelo histórico, editável na conferência, sem
+  duplicar; na fatura do cartão, a compra "03/12" já gera as parcelas das próximas faturas).
 - **Metas que dão vontade de cumprir.** Cada meta é uma árvore: cada aporte rega, ela brota, cresce e, completa,
   dá maçãs. O plano mensal diz quanto guardar para chegar lá no prazo.
 - **Privacidade e segurança desde o início.** Conta com e-mail confirmado, sessão que termina ao fechar o
@@ -110,14 +111,14 @@ Diagrama completo, camadas da API e do front-end, modelo de dados, segurança em
 
 | Camada | Tecnologia | Para quê |
 |---|---|---|
-| Área do cliente | React 19 · Vite · React Router | SPA com a página de apresentação (`/`), `/cadastro`, `/login`, `/principal` e as telas do livro-caixa |
+| Área do cliente | React 19 · Vite · React Router · TypeScript (entrando aos poucos) | SPA com a página de apresentação (`/`), `/cadastro`, `/login`, `/principal` e as telas do livro-caixa |
 | Identidade do cliente | Firebase Authentication (e-mail/senha, com confirmação do e-mail) · Cloud Firestore | Conta do cliente final e dados do perfil, protegidos por regras do Firestore |
 | Interface | CSS próprio com design tokens (`web/src/estilos/tokens.css`), fonte Geist auto-hospedada (SIL OFL) | Identidade OliFine: modo claro e escuro com botão (a escolha fica salva), verdes de croma contido, ícones desenhados no projeto, componentes próprios (seletor, calendário, modal, menu), micro-interações e esqueletos de carga |
 | API | Python 3.13 · FastAPI · Pydantic · Uvicorn | Endpoints REST, validação da entrada e documentação OpenAPI (Swagger) gerada do código |
 | Segurança da API | PyJWT (HS256 e RS256) · cryptography · bcrypt | Token do back-office de 15 minutos com revogação pelo `jti`; ID token do Firebase conferido com as chaves do Google; senhas só como hash |
 | Persistência | MongoDB 7 (pymongo) | Usuários (e-mail único), tokens revogados (TTL) e livro-caixa (lançamento e partidas num só documento, gravação atômica) |
 | Painel da API | HTML, CSS e JavaScript puros, servidos pela própria API | Interface de demonstração: login, CRUD e respostas da API na tela |
-| Testes | pytest · Vitest · oxlint | Testes unitários e de rota da API; regras e serviços do front-end; lint |
+| Testes | pytest · Vitest · oxlint · tsc | Testes unitários e de rota da API; regras e serviços do front-end; lint; tipos dos módulos em TypeScript |
 | CI/CD | GitHub Actions (actions fixadas por SHA) · GitHub Pages · webhook do Discord | Testes a cada commit de PR, deploy automático e alertas |
 | Containers e rede | Docker · Docker Compose · Cloudflare Quick Tunnel | MongoDB + API com um comando; imagem nginx do front-end; demonstração externa temporária |
 
@@ -135,7 +136,8 @@ Diagrama completo, camadas da API e do front-end, modelo de dados, segurança em
 | Sessão no navegador | Sessão por aba (`sessionStorage`): fechar o navegador sai da conta. O logout apaga do navegador as metas, a contagem de tentativas e a sessão do Firebase; só a preferência de tema fica |
 | Login do back-office | Senha só como hash BCrypt; `401` com `tentativas_restantes`; `429` depois de 5 senhas erradas (por e-mail e endereço) ou 20 (por endereço) em 15 minutos; mesmo tempo de resposta com e sem conta |
 | Token do back-office | JWT HS256 de 15 minutos com `jti`; `POST /auth/logout` revoga o token na hora (lista no MongoDB com TTL); perfil lido do banco a cada requisição |
-| Borda da API | CSP, `X-Frame-Options`, `nosniff`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, HSTS em HTTPS, `no-store` nos dados; corpo acima de 2 MB → `413`; erros sem stack trace; CSV importado sem fórmula de planilha |
+| Borda da API | CSP, `X-Frame-Options`, `nosniff`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, HSTS em HTTPS, `no-store` nos dados; corpo acima de 2 MB → `413`; erros sem stack trace; texto livre limpo (sem tag, fórmula de planilha nem caractere invisível); CSV conferido (planilha, PDF ou binário recusado, célula de até 5 mil caracteres, no máximo 4 importações ao mesmo tempo) |
+| Formulários | Máscaras por tipo de dado: valor em reais (letra e símbolo nem entram, pontos de milhar sozinhos, dois decimais), data e texto sem `<` e `>`; a linha da mensagem de erro fica reservada embaixo de cada campo, e o erro não empurra nem desalinha nada |
 | Documentação (`/docs`) | Swagger UI de versão fixa com Subresource Integrity e CSP própria, sem script inline; ReDoc desligado |
 | Borda do front-end | CSP em `<meta>` no build (script só do próprio site e do login do Google), recusa de moldura (clickjacking); no container, cabeçalhos do nginx |
 | Monitoramento | Alertas no Discord em três canais, cada um com o próprio webhook: sistema (erro `500` com a rota e o tipo da exceção, e-mail que não saiu), segurança (login travado por força bruta, rajada de `401` do mesmo endereço, abuso dos e-mails) e telemetria (resumo de uso e cota diária de e-mails). Sem e-mail, token, corpo ou mensagem de exceção; o mesmo alerta sai no máximo a cada 15 minutos, com a contagem das repetições; uma falha do Discord nunca afeta a resposta |
@@ -305,7 +307,7 @@ leitura; no `prod`, o serviço `web` recebe o `web/.env` como secret de build (f
 | `python subir-app.py prod` | Sobe tudo em modo de produção local (`--sem-build` reaproveita as imagens) |
 | `python subir-app.py status` | Mostra o que está no ar, o modo, os endereços e as pendências de configuração, sem subir nada |
 | `python subir-app.py verificar` | Confere tudo e aponta o que falta: `api/.env`, e-mails, alertas, `web/.env`, segredos fora do Git, site publicado com o monograma, DNS do remetente (DKIM, SPF, DMARC), Console do Firebase (URL de ação e domínios autorizados) e webhooks do Discord (existem e aceitam o token, sem mandar mensagem). Só lê; `--sem-rede` fica nas locais |
-| `python subir-app.py testes` | Roda o pytest da API e o lint, o Vitest e o build do front-end, como o CI |
+| `python subir-app.py testes` | Roda o pytest da API e o lint, os tipos (TypeScript), o Vitest e o build do front-end, como o CI |
 | `python subir-app.py logs [serviço]` | Acompanha os logs: `api` (padrão), `web` (nginx do `prod`), `mongo`, `vite` ou `todos`. `Ctrl + C` sai e deixa tudo no ar |
 | `python subir-app.py alertas` | Manda uma mensagem de teste para cada canal do Discord configurado no `api/.env` |
 | `python subir-app.py down` | Para o túnel, o Vite e os containers (`--apagar-dados` também apaga o banco) |
@@ -459,19 +461,21 @@ pip install -r requirements-dev.txt
 pytest -v
 ```
 
-Resultado esperado: `426 passed`.
+Resultado esperado: todos passando, nenhum `failed` (a contagem cresce a cada entrega).
 
-**Front-end (Vitest, lint e build):** em `web/`.
+**Front-end (Vitest, lint, tipos e build):** em `web/`.
 
 ```bash
 npm ci
 npm test -- --run
 npm run lint
+npm run typecheck
 npm run build
 ```
 
-Resultado esperado: `Test Files 36 passed (36)` e `Tests 354 passed (354)`. Sem o `--run`, o Vitest fica em modo
-observador.
+Resultado esperado: todos os arquivos e testes `passed`, e o `typecheck` sem erro. Sem o `--run`, o Vitest fica em
+modo observador. O `typecheck` confere os módulos em TypeScript (`.ts`, `.tsx`); os `.js` antigos migram aos
+poucos.
 
 | Suíte | Arquivo | O que cobre |
 |---|---|---|
@@ -484,12 +488,15 @@ observador.
 | API | `api/tests/test_emails.py` e `test_emails_rotas.py` | E-mails da conta: modelos (link e key escapados), Resend, SMTP só com criptografia, pasta, conta de serviço e código do Firebase sem rede, rotas `/conta` com `202` igual com e sem conta, `429`, `503` sem provedor e log sem o endereço |
 | API | `api/tests/test_producao.py` | `AMBIENTE=producao`: recusa exemplo, CORS inseguro, MongoDB sem senha e `APP_URL` sem HTTPS; segredos em arquivo; Swagger fora do ar; `/saude` |
 | API | `api/tests/test_monitoramento.py` | Alertas no Discord: canal certo, repetição a cada 15 minutos, sem menção, falha do Discord que não afeta a API, força bruta e rajada de `401` sem o e-mail nem o token, `500` sem a mensagem da exceção, e-mail que não saiu, cota de e-mails, resumo por rota e webhook fora do Discord recusado sem aparecer no erro |
-| API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, edição, rotas e isolamento entre clientes, importação de CSV de vários bancos, racha, exclusão (uma e em lote), cartão de crédito (fatura, parcelas, pagamento, parcelas geradas da fatura importada) e relatórios |
+| API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, edição, rotas e isolamento entre clientes, importação de CSV de vários bancos (colunas pelo cabeçalho e pelo conteúdo, arquivo que não é CSV, teto de importações), categoria automática (arquivo, histórico, regras) e edição na conferência, racha, exclusão (uma e em lote), cartão de crédito (fatura, parcelas, pagamento, parcelas geradas da fatura importada) e relatórios |
+| API | `api/tests/test_sanitizacao.py` | Texto livre limpo na entrada (XSS, fórmula de planilha, caracteres invisíveis) e operador do MongoDB (`$ne`, `$where`) recusado pelo tipo do campo |
 | Front-end | `web/src/regras/tentativas.test.js` | Tentativas de login: contagem por e-mail, bloqueio na quinta, janela de 15 minutos, o que conta como senha errada e a chave sem o e-mail em texto |
 | Front-end | `web/src/regras/dadosLocais.test.js` e `servicos/dadosLocais.test.js` | O que o logout apaga do navegador (metas, tentativas, sessão) e o que fica (tema e dados de outros sites) |
 | Front-end | `web/src/regras/sessao.test.js` e `servicos/contas.test.js` | Área logada só com sessão e e-mail confirmado; cadastro no Firebase com o link de confirmação, logout e "Já confirmei" com o SDK simulado |
 | Front-end | `web/src/regras/acaoDaConta.test.js` e `servicos/emailsDaConta.test.js` | Links dos e-mails: código no fragmento ou na consulta, modo do Firebase para cada página, senha nova repetida, e quando a API manda o e-mail ou o Firebase assume |
 | Front-end | `web/src/regras/tema.test.js` | Tema salvo ou do sistema e alternância |
+| Front-end | `web/src/regras/mascaras.test.ts` e `sanitizacao.test.ts` | Máscara de valor (milhar, vírgula, dois decimais, sinal, cursor, colar) e de inteiro, teclas barradas por tipo de campo, e a limpeza do texto antes de ir à API |
+| Front-end | `web/src/regras/arquivoDoExtrato.test.ts` e `conferenciaDaImportacao.test.ts` | Arquivo do extrato (extensão, tipo, planilha ou PDF renomeado, binário, UTF-8, Windows-1252 e UTF-16) e a edição de descrição e categoria na conferência |
 | Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |
 | Front-end | `web/src/servicos/livroCaixa.test.js` e `enderecoDaApi.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar, token que não renova e endereço pela rede local |
 | Front-end | `web/src/olifine/regras/*.test.js` | OliFine: tendência, séries do gráfico de saldo, Visão geral, metas, a árvore que cresce e o simulador de orçamento da landing |
@@ -609,9 +616,11 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
 6. Na **Visão geral**, as despesas do mês aparecem separadas em à vista e no crédito, e o **+ Novo** do topo
    escolhe entre lançamento, compra no crédito, conta e cartão, cada um no seu modal. Em **Categorias**, crie,
    renomeie, desative ou remova uma categoria (a que já tem lançamentos não sai: o aviso manda desativar).
-7. Em **Importar CSV**, escolha um CSV com as colunas Data, Descrição e Valor (exemplo fictício abaixo), a conta
-   e as categorias, e clique em **Continuar**. **Importe** e depois confira o mesmo arquivo de novo: nenhum
-   lançamento é novo, todos aparecem como "Já importada".
+7. Em **Importar CSV**, escolha um CSV com as colunas Data, Descrição e Valor (exemplo fictício abaixo) e a conta,
+   e clique em **Continuar**: as colunas são reconhecidas sozinhas e a conferência já abre, com a categoria de cada
+   linha sugerida ("Salário" vai para Salário, "Padaria" para Mercado). Troque a descrição ou a categoria de uma
+   linha ali mesmo, **importe** e depois confira o mesmo arquivo de novo: nenhum lançamento é novo, todos aparecem
+   como "Já importada". Um PDF ou uma planilha renomeada para `.csv` é recusado antes de sair do navegador.
 
    ```text
    Data;Descrição;Valor
@@ -636,7 +645,7 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
 
 | Workflow | Quando roda | O que faz |
 |---|---|---|
-| [`ci-tests.yml`](.github/workflows/ci-tests.yml) | A cada commit em pull request e em push na `main` | Lint, testes (Vitest e pytest) e build; avisa no Discord se passou ou falhou |
+| [`ci-tests.yml`](.github/workflows/ci-tests.yml) | A cada commit em pull request e em push na `main` | Lint, tipos (TypeScript), testes (Vitest e pytest) e build; avisa no Discord se passou ou falhou |
 | [`cd.yml`](.github/workflows/cd.yml) | Build em PR; deploy só em push na `main` | Publica a área do cliente no GitHub Pages |
 | [`alertas.yml`](.github/workflows/alertas.yml) | Push na `main` | Avisa no Discord cada merge |
 

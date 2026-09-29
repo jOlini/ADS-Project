@@ -78,6 +78,9 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
   │                 OliFine) e envio.py (Resend, SMTP ou pasta, atrás do contrato EnviadorDeEmail)
   ├─ servicos.py / financeiro/servicos.py regras de negócio, sem nada de HTTP
   ├─ financeiro/regras.py, importacao.py, cartoes.py, relatorios.py   funções puras, testadas sem banco
+  ├─ financeiro/celulas.py, reconhecimento.py, categorizacao.py   leitura de cada célula do CSV, colunas
+  │                 reconhecidas pelo cabeçalho ou pelo conteúdo, categoria de cada linha importada
+  ├─ sanitizacao.py limpeza do texto livre (tag, fórmula, invisíveis) antes de validar e gravar
   └─ repositorio.py / financeiro/repositorio.py   MongoDB (Protocol + implementação; os testes usam memória)
 ```
 
@@ -100,8 +103,12 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
   inteiros**, correção por estorno (histórico fica) ou exclusão (erro de digitação). Cartão de crédito é uma conta
   de dívida com fatura por mês de vencimento. Tudo pertence a um **espaço** (`/espacos/{id}`), e o espaço
   pertence a membros identificados pelo `uid` do Firebase.
-- **Importação de extrato (CSV):** leitura em funções puras; cada linha ganha uma chave de idempotência
-  (SHA-256 da conta, data, valor, descrição e ocorrência), com índice único no MongoDB.
+- **Importação de extrato (CSV):** leitura em funções puras; o arquivo que não é CSV é recusado antes de qualquer
+  leitura; as colunas são reconhecidas pelo cabeçalho (moldes de vários bancos) ou pelo conteúdo, com as dúvidas
+  apontadas; a categoria de cada linha vem da coluna do arquivo, do histórico do estabelecimento ou de regras pela
+  descrição; a pessoa edita descrição e categoria na conferência. Cada linha ganha uma chave de idempotência
+  (SHA-256 da conta, data, valor, descrição do arquivo e ocorrência), com índice único no MongoDB. No máximo 4
+  importações ao mesmo tempo no servidor.
 - **Relatórios:** agregações no MongoDB (`$group` por mês, categoria e conta), com o cartão por competência.
 
 ### Dados (MongoDB)
@@ -152,6 +159,13 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
 
 - **Regra de negócio fora da interface:** tudo o que decide (validação, cálculo, texto de erro) mora em
   `regras/` ou `olifine/regras/` e é testado com Vitest sem renderizar componente.
+- **TypeScript aos poucos:** módulo novo ou refeito é `.ts` ou `.tsx` e passa pelo `npm run typecheck` (no CI
+  também); os `.js` e `.jsx` antigos são lidos para dar tipo a quem os importa, sem ser conferidos, até migrarem.
+  Componente `.jsx` usado num `.tsx` passa pelo `semTipos` (`componentes/semTipos.ts`).
+- **Campos com máscara:** o `Campo` recebe `mascara` (moeda, moeda com sinal, inteiro, texto) e a regra em
+  `regras/mascaras.ts` barra a tecla que não serve antes de ela aparecer; a linha da mensagem de erro fica
+  reservada embaixo de cada campo (sem deslocar a tela). Nome, descrição e pessoa saem limpos para a API
+  (`regras/sanitizacao.ts`, no `servicos/livroCaixa.js`).
 - **Erros:** `servicos/livroCaixa.js` converte toda falha em `ErroDaApi` (status + mensagem própria):
   rede fora, token que não renova, `401`, Problem Details da API. O texto técnico do SDK ou da API nunca vai para
   a tela; código do Firebase desconhecido cai na mensagem genérica (`regras/erros.js`).
@@ -184,7 +198,7 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
 | E-mails da conta | Resposta igual com e sem conta no "Esqueci minha senha", envio depois da resposta (tempo igual), limite por conta, e-mail e endereço, texto fixo (nada escrito por quem pede), código do link no fragmento, SMTP só com TLS, chave do provedor e da conta de serviço fora do código e dos logs | `emails/`, `limites.py`, `web/src/paginas/VerificarEmail.jsx`, `RedefinirSenha.jsx` |
 | Sessão no navegador | Sessão por aba; logout apaga metas, tentativas e a sessão do Firebase (menos o tema); área logada só com e-mail confirmado | `servicos/contas.js`, `regras/dadosLocais.js`, `regras/sessao.js` |
 | Autorização | RBAC por dependência em cada rota; perfil lido do banco a cada requisição; livro-caixa isolado por espaço (id alheio = `404`) | `seguranca.py`, `financeiro/acesso.py`, repositórios |
-| Entrada | Pydantic com `extra="forbid"`, tamanhos e faixas; texto do CSV sem controle e sem começo de fórmula (CSV injection) | `modelos.py`, `financeiro/modelos.py`, `financeiro/importacao.py` |
+| Entrada | Pydantic com `extra="forbid"`, tamanhos e faixas; texto livre (nomes, descrições, pessoas) e cada célula do CSV limpos antes do tamanho: sem tag, sem começo de fórmula (CSV injection), sem caractere de controle ou invisível; objeto no lugar de texto (`$ne`) recusado; arquivo que não é CSV recusado e importações limitadas ao mesmo tempo | `sanitizacao.py`, `modelos.py`, `financeiro/modelos.py`, `financeiro/importacao.py`, `financeiro/rotas.py` |
 | Saída | Problem Details com mensagens próprias; `500` genérico; React e `textContent` escapam todo texto (nenhum `innerHTML` nem `dangerouslySetInnerHTML`) | `erros.py`, `painel.js` |
 | Dados | Senha só como hash BCrypt (custo 12); valores em centavos inteiros; regras do Firestore com dono, campos fixos, tipos e tamanhos | `senhas.py`, `web/firestore.rules` |
 | Segredos | `.env` fora do Git; `JWT_SECRET`, `MONGODB_URI`, chaves de e-mail e os webhooks do Discord só no ambiente, em `/run/secrets` ou nos secrets do GitHub; chave da conta de serviço do Firebase fora de qualquer repositório; `AMBIENTE=producao` recusa os valores de exemplo | `.gitignore`, `config.py`, `api/.env.example`, `web/.env.example` |
@@ -227,7 +241,7 @@ Ao mudar o código, mantenha estas regras:
 
 | Workflow | Gatilho | Etapas |
 |---|---|---|
-| [`ci-tests.yml`](.github/workflows/ci-tests.yml) | Cada commit de PR e push na `main` | oxlint, Vitest, build; pytest; alerta no Discord com o resultado |
+| [`ci-tests.yml`](.github/workflows/ci-tests.yml) | Cada commit de PR e push na `main` | oxlint, tsc (tipos), Vitest, build; pytest; alerta no Discord com o resultado |
 | [`cd.yml`](.github/workflows/cd.yml) | PR (só build) e push na `main` (build + deploy) | Build com os `VITE_FIREBASE_*` dos secrets, `404.html` para as rotas da SPA, deploy no Pages |
 | [`alertas.yml`](.github/workflows/alertas.yml) | Push na `main` | Aviso de merge no Discord |
 
