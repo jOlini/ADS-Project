@@ -3,7 +3,8 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useCarga } from '../componentes/useCarga';
 import { formatarBRL } from '../regras/dinheiro';
 import { faturasAVencer } from '../regras/cartoes';
-import { nomeDoEspaco } from '../regras/espacos';
+import { ehEmpresa, nomeDoEspaco } from '../regras/espacos';
+import { guardarLateralRecolhida, lerLateralRecolhida } from '../servicos/lateral';
 import { apiConfigurada, listarCartoes } from '../servicos/livroCaixa';
 import Flutuante from './componentes/Flutuante';
 import AlternadorDeTema from '../componentes/AlternadorDeTema';
@@ -21,33 +22,57 @@ const DA_API = [
   { para: '/categorias', icone: 'categorias', rotulo: 'Categorias', versao: '0.2' },
 ];
 
-function itensDoMenu() {
-  const semApi = (item) => (apiConfigurada ? item : { ...item, para: null });
+// Visões do espaço de empresa, logo abaixo da Visão geral, só com ele ativo.
+// Fornecedores e centros de custo aparecem marcados, ainda sem tela.
+const DA_EMPRESA = [
+  { grupo: 'Empresa' },
+  { para: '/empresa/fluxo', icone: 'transferencia', rotulo: 'Fluxo de caixa', versao: '0.3' },
+  { para: '/empresa/dre', icone: 'documento', rotulo: 'DRE', versao: '0.3' },
+  { para: null, icone: 'pessoas', rotulo: 'Fornecedores e centros', versao: 'em breve' },
+];
+
+function itensDoMenu(empresa) {
+  const semApi = (item) => (apiConfigurada || !item.para ? item : { ...item, para: null });
   return [
     { para: '/principal', icone: 'resumo', rotulo: 'Visão geral' },
+    ...(empresa ? [...DA_EMPRESA.map(semApi), { grupo: 'Livro-caixa' }] : []),
     ...DA_API.map(semApi),
     { para: '/metas', icone: 'broto', rotulo: 'Metas' },
     semApi({ para: '/relatorios', icone: 'relatorios', rotulo: 'Relatórios', versao: '0.3' }),
   ];
 }
 
+// Título de um grupo do menu (só no espaço de empresa). Com a barra
+// recolhida, vira um traço entre os ícones.
+function GrupoDoMenu({ item }) {
+  return (
+    <p className="of-menu-grupo">
+      <span>{item.grupo}</span>
+    </p>
+  );
+}
+
 const DIA_E_MES = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', timeZone: 'UTC' });
 const dataCurta = (iso) => DIA_E_MES.format(new Date(`${iso}T12:00:00Z`)).replace('.', '');
 
-function ItemDoMenu({ item, aoEscolher }) {
+// dica: com a barra recolhida, o nome aparece num balão ao lado do ícone (no
+// mouse e no foco pelo teclado). O nome continua no link, escondido só da
+// vista: o leitor de tela lê igual nos dois estados.
+function ItemDoMenu({ item, aoEscolher, dica }) {
   if (!item.para) {
     return (
-      <span className="of-menu-item futuro" aria-disabled="true">
+      <span className="of-menu-item futuro" aria-disabled="true" title={dica ? undefined : `${item.rotulo} (${item.versao})`}
+        {...dica?.(`${item.rotulo} (${item.versao})`)}>
         <Icone nome={item.icone} />
-        <span>{item.rotulo}</span>
+        <span className="of-menu-rotulo">{item.rotulo}</span>
         <em>{item.versao}</em>
       </span>
     );
   }
   return (
-    <NavLink to={item.para} className="of-menu-item" onClick={aoEscolher}>
+    <NavLink to={item.para} className="of-menu-item" onClick={aoEscolher} {...dica?.(item.rotulo)}>
       <Icone nome={item.icone} />
-      <span>{item.rotulo}</span>
+      <span className="of-menu-rotulo">{item.rotulo}</span>
     </NavLink>
   );
 }
@@ -56,11 +81,43 @@ function ItemDoMenu({ item, aoEscolher }) {
 // barra do topo com o seletor de espaço, busca, avisos e conta, e no celular
 // a barra de abas embaixo. Todas as páginas da área logada entram no <main
 // className="area">.
+//
+// A barra lateral recolhe para uma coluna só de ícones (o botão ao lado do
+// logo), um pouco maiores para o alvo ficar bom, com o nome de cada aba num
+// balão ao passar o mouse. A escolha fica no navegador (servicos/lateral.ts).
 export default function CascaOliFine({ contexto }) {
   const { usuario, pessoa, espaco, espacos, trocarEspaco, recarregarEspacos, sairDaConta } = contexto;
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [busca, setBusca] = useState('');
+  const [recolhida, setRecolhida] = useState(lerLateralRecolhida);
+  // Balão do item sob o mouse (ou no foco): fica fora da barra, em posição
+  // fixa, porque a barra rola e cortaria o que passa da borda dela.
+  const [dica, setDica] = useState(null);
+
+  function alternarLateral() {
+    setDica(null);
+    setRecolhida((atual) => {
+      guardarLateralRecolhida(!atual);
+      return !atual;
+    });
+  }
+
+  // Props do balão para um item, ou nada com a barra aberta (o nome já está
+  // à vista). No foco, só o do teclado: o clique não deixa balão preso.
+  const dicaDoItem = recolhida
+    ? (texto) => ({
+        onPointerEnter: (evento) => mostrarDica(evento.currentTarget, texto),
+        onPointerLeave: () => setDica(null),
+        onFocus: (evento) => evento.currentTarget.matches(':focus-visible') && mostrarDica(evento.currentTarget, texto),
+        onBlur: () => setDica(null),
+      })
+    : undefined;
+
+  function mostrarDica(elemento, texto) {
+    const caixa = elemento.getBoundingClientRect();
+    setDica({ texto, x: caixa.right + 12, y: caixa.top + caixa.height / 2 });
+  }
 
   const dados = pessoa.dados;
   const nome = dados ? `${dados.nome} ${dados.sobrenome}`.trim() : (usuario.email ?? 'Sua conta');
@@ -73,7 +130,7 @@ export default function CascaOliFine({ contexto }) {
   const buscarCartoes = useMemo(() => (apiConfigurada && espacoId ? () => listarCartoes(espacoId) : null), [espacoId]);
   const cartoes = useCarga(buscarCartoes);
   const avisos = cartoes.dados ? faturasAVencer(cartoes.dados) : [];
-  const itens = itensDoMenu();
+  const itens = itensDoMenu(ehEmpresa(espaco.dados));
   const nomeDoAtivo = nomeDoEspaco(espaco.dados);
 
   function buscar(evento) {
@@ -112,20 +169,34 @@ export default function CascaOliFine({ contexto }) {
   );
 
   return (
-    <div className="of-app">
-      <aside className="of-lateral">
-        <Link to="/principal" className="of-lateral-marca" aria-label="OliFine, Visão geral">
-          <Logo tamanho={30} />
-        </Link>
+    <div className={`of-app${recolhida ? ' lateral-recolhida' : ''}`}>
+      <aside className="of-lateral" id="barra-lateral">
+        <div className="of-lateral-topo">
+          <Link to="/principal" className="of-lateral-marca" aria-label="OliFine, Visão geral" {...dicaDoItem?.('Visão geral')}>
+            <Logo tamanho={30} />
+          </Link>
+          <button
+            type="button"
+            className="botao-icone of-lateral-alternar"
+            aria-pressed={recolhida}
+            aria-controls="barra-lateral"
+            aria-label="Recolher o menu"
+            title={recolhida ? undefined : 'Recolher o menu'}
+            onClick={alternarLateral}
+            {...dicaDoItem?.('Abrir o menu')}
+          >
+            <Icone nome="lateral" />
+          </button>
+        </div>
 
         <nav className="of-menu" aria-label="Navegação principal">
-          {itens.map((item) => (
-            <ItemDoMenu key={item.rotulo} item={item} />
-          ))}
+          {itens.map((item) =>
+            item.grupo ? <GrupoDoMenu key={item.grupo} item={item} /> : <ItemDoMenu key={item.rotulo} item={item} dica={dicaDoItem} />,
+          )}
         </nav>
 
         <div className="of-lateral-pe">
-          <p className="of-lateral-usuario">
+          <p className="of-lateral-usuario" {...dicaDoItem?.(`${nome} · ${nomeDoAtivo}`)}>
             <span className="of-avatar" aria-hidden="true">
               {iniciais}
             </span>
@@ -134,12 +205,18 @@ export default function CascaOliFine({ contexto }) {
               <small title={nomeDoAtivo}>{nomeDoAtivo}</small>
             </span>
           </p>
-          <button type="button" className="discreto-botao of-lateral-sair" onClick={sairDaConta}>
+          <button type="button" className="discreto-botao of-lateral-sair" onClick={sairDaConta} {...dicaDoItem?.('Sair')}>
             <Icone nome="sair" tamanho={16} />
-            Sair
+            <span className="of-menu-rotulo">Sair</span>
           </button>
         </div>
       </aside>
+
+      {recolhida && dica && (
+        <span className="of-dica-lateral" style={{ left: `${dica.x}px`, top: `${dica.y}px` }} aria-hidden="true">
+          {dica.texto}
+        </span>
+      )}
 
       <div className="of-coluna">
         <header className="of-topo">
@@ -261,10 +338,14 @@ export default function CascaOliFine({ contexto }) {
           {(fechar) => (
             <nav className="of-mais" aria-label="Mais opções">
               {itens
-                .filter((item) => !['/principal', '/metas', apiConfigurada ? '/lancamentos' : ''].includes(item.para))
-                .map((item) => (
-                  <ItemDoMenu key={item.rotulo} item={item} aoEscolher={fechar} />
-                ))}
+                .filter((item) => item.grupo || !['/principal', '/metas', apiConfigurada ? '/lancamentos' : ''].includes(item.para))
+                .map((item) =>
+                  item.grupo ? (
+                    <GrupoDoMenu key={item.grupo} item={item} />
+                  ) : (
+                    <ItemDoMenu key={item.rotulo} item={item} aoEscolher={fechar} />
+                  ),
+                )}
             </nav>
           )}
         </Flutuante>

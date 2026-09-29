@@ -15,6 +15,12 @@
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--fundo);
+  transition: grid-template-columns 240ms var(--curva);
+}
+
+/* Barra recolhida: só a coluna dos ícones. */
+.of-app.lateral-recolhida {
+  grid-template-columns: var(--largura-lateral-recolhida) minmax(0, 1fr);
 }
 
 .of-lateral {
@@ -29,13 +35,125 @@
   padding: var(--espaco-11) var(--espaco-8) var(--espaco-8);
   background: var(--superficie);
   border-right: var(--borda);
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
+.of-lateral-topo {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  justify-content: space-between;
+}
+
 .of-lateral-marca {
+  min-width: 0;
   padding: var(--espaco-2) var(--espaco-5);
   text-decoration: none;
   border-radius: var(--raio-pequeno);
+}
+
+button.of-lateral-alternar .seta-da-lateral {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: rotate 240ms var(--curva);
+}
+
+/* ------------------------------------------- Barra lateral recolhida */
+
+/* Os nomes saem da vista (continuam para o leitor de tela), os ícones crescem
+   12% e cada item vira um alvo quadrado de 48 px, centrado na coluna. */
+.lateral-recolhida .of-lateral {
+  align-items: center;
+  padding-inline: var(--espaco-5);
+}
+
+.lateral-recolhida .of-lateral-topo {
+  flex-direction: column;
+  gap: var(--espaco-6);
+}
+
+.lateral-recolhida .of-lateral-marca {
+  padding: var(--espaco-2);
+}
+
+.lateral-recolhida .of-lateral .of-logo-textos,
+.lateral-recolhida .of-lateral .of-menu-rotulo,
+.lateral-recolhida .of-lateral-usuario-textos,
+.lateral-recolhida .of-menu-item em {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.lateral-recolhida button.of-lateral-alternar .seta-da-lateral {
+  rotate: 180deg;
+}
+
+.lateral-recolhida .of-menu {
+  justify-items: center;
+}
+
+.lateral-recolhida .of-menu-item,
+.lateral-recolhida button.of-lateral-sair {
+  justify-content: center;
+  width: 48px;
+  min-height: 48px;
+  padding: 0;
+}
+
+.lateral-recolhida .of-menu-item .icone,
+.lateral-recolhida .of-lateral-sair .icone {
+  scale: 1.12;
+}
+
+.lateral-recolhida .of-lateral-pe {
+  justify-items: center;
+}
+
+.lateral-recolhida .of-lateral-usuario {
+  padding: 0;
+}
+
+/* O nome da aba ao lado do ícone, fora da barra (posição fixa, a partir do
+   item): a barra rola e cortaria um balão preso a ela. */
+.of-dica-lateral {
+  position: fixed;
+  z-index: var(--camada-fixa);
+  padding: var(--espaco-3) var(--espaco-5);
+  border-radius: var(--raio-pequeno);
+  background: var(--of-esmeralda);
+  color: #ffffff;
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-semi);
+  white-space: nowrap;
+  pointer-events: none;
+  translate: 0 -50%;
+  box-shadow: 0 6px 16px -8px rgb(31 87 70 / 0.6);
+  animation: of-dica-entra 140ms var(--curva-chegada) both;
+}
+
+.of-dica-lateral::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -4px;
+  width: 8px;
+  height: 8px;
+  background: inherit;
+  border-radius: 2px;
+  translate: 0 -50%;
+  rotate: 45deg;
+}
+
+@keyframes of-dica-entra {
+  from {
+    opacity: 0;
+    translate: -4px -50%;
+  }
 }
 
 .of-menu {
@@ -76,6 +194,7 @@ a.of-menu-item.active {
 }
 
 .of-menu-item > span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -552,7 +671,9 @@ button.of-espaco-excluir .icone {
 }
 
 @media (max-width: 900px) {
-  .of-app {
+  /* No celular não há barra lateral (nem recolhida): uma coluna só. */
+  .of-app,
+  .of-app.lateral-recolhida {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -755,10 +876,17 @@ button.of-espaco-excluir .icone {
 
 /* ----------------------------------------------------------------- KPIs */
 
+/* Grade dos números: o saldo total (widget de consolidação) ocupa duas
+   colunas e duas linhas à esquerda; Receitas e Despesas ficam em cima à
+   direita e Metas embaixo delas, nas duas colunas. */
 .of-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--espaco-8);
+}
+
+.of-kpis > .of-kpi-link {
+  grid-column: span 2;
 }
 
 .of-kpi {
@@ -857,131 +985,213 @@ a.of-kpi-link:hover {
   color: var(--of-sobre-rosa);
 }
 
-/* ---------------------------------------------------------- Saldo livre */
+/* -------------------------------------------------- Saldo consolidado */
 
-/* "Quanto está sobrando" até o fim do mês (componentes/SaldoLivre.tsx): o
-   número grande à esquerda, a conta aberta à direita e o medidor embaixo. A
-   saúde do mês troca só o acento (faixa, selo, número e barra): verde com
-   folga, âmbar pedindo atenção, vermelho quando o mês fecha no negativo. */
-.of-saldo-livre {
+/* O saldo total como widget (componentes/SaldoConsolidado.tsx): ocupa duas
+   colunas e duas linhas da grade dos números, com o patrimônio em destaque e
+   as três leituras do mês embaixo (saldo livre, investido, fechamento). A
+   saúde do mês troca só o acento (faixa da esquerda, selo e número do
+   fechamento): verde com folga, âmbar pedindo atenção, vermelho no
+   negativo. */
+.of-consolidado {
   --acento: var(--marca);
   --acento-suave: var(--of-menta);
   --sobre-acento: var(--of-sobre-menta);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-  gap: var(--espaco-8) var(--espaco-16);
-  align-items: center;
-  padding: var(--espaco-10) var(--espaco-12) var(--espaco-10) var(--espaco-14);
-  box-shadow: inset 4px 0 0 var(--acento), var(--sombra);
+  container: consolidado / inline-size;
+  grid-column: span 2;
+  grid-row: span 2;
+  gap: var(--espaco-4);
+  align-content: start;
 }
 
-.of-saldo-livre.atencao {
+.of-consolidado.atencao {
   --acento: var(--aviso);
   --acento-suave: color-mix(in srgb, var(--aviso) 14%, var(--superficie));
   --sobre-acento: var(--aviso);
 }
 
-.of-saldo-livre.negativo {
+.of-consolidado.negativo {
   --acento: var(--erro);
   --acento-suave: var(--of-rosa-suave);
   --sobre-acento: var(--of-sobre-rosa);
-  background: color-mix(in srgb, var(--erro) 5%, var(--superficie));
-  border-color: color-mix(in srgb, var(--erro) 30%, transparent);
 }
 
-.of-saldo-livre-principal {
-  display: grid;
-  gap: var(--espaco-3);
-  min-width: 0;
-}
-
-.of-saldo-livre-topo {
+.of-consolidado-topo {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--espaco-4) var(--espaco-6);
+  gap: var(--espaco-2) var(--espaco-6);
   align-items: center;
+  justify-content: space-between;
 }
 
-.of-saldo-livre-topo h2 {
-  display: flex;
+.of-consolidado-topo h2 {
+  margin: 0;
+}
+
+.of-consolidado-apoio {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-consolidado .of-kpi-valor {
+  font-size: clamp(1.75rem, 1.3rem + 1.1vw, 2.25rem);
+  letter-spacing: -0.04em;
+}
+
+/* As três leituras do mês, lado a lado, como selos do widget. */
+.of-consolidado-metricas {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--espaco-5);
+  margin: var(--espaco-5) 0 0;
+}
+
+.of-metrica {
+  display: grid;
+  gap: var(--espaco-1);
+  align-content: start;
+  min-width: 0;
+  padding: var(--espaco-6) var(--espaco-7);
+  border-radius: var(--raio);
+  background: var(--lateral);
+}
+
+.of-metrica dt {
+  display: flex;
+  gap: var(--espaco-3);
   align-items: center;
   color: var(--suave);
-  font-size: var(--fonte-rotulo);
+  font-size: var(--fonte-micro);
   font-weight: var(--peso-medio);
 }
 
-.of-saldo-livre-topo .of-kpi-icone {
-  background: var(--acento-suave);
-  color: var(--sobre-acento);
+.of-metrica dd {
+  margin: 0;
 }
 
-.of-saldo-livre-selo {
-  display: inline-flex;
-  gap: var(--espaco-2);
+.of-metrica > dd:not(.of-metrica-apoio) {
+  margin-top: var(--espaco-2);
+  overflow: hidden;
+  font-size: var(--fonte-numero-compacto);
+  font-weight: var(--peso-forte);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.of-metrica.livre {
+  background: color-mix(in srgb, var(--of-menta) 70%, var(--superficie));
+}
+
+.of-metrica.livre dt {
+  color: var(--of-sobre-menta);
+}
+
+.of-metrica.negativa > dd:not(.of-metrica-apoio),
+.of-metrica.fechamento.negativo > dd:not(.of-metrica-apoio) {
+  color: var(--erro);
+}
+
+.of-metrica-apoio {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2) var(--espaco-3);
   align-items: center;
-  padding: 1px var(--espaco-5);
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-metrica-selo {
+  display: inline-flex;
+  gap: var(--espaco-1);
+  align-items: center;
+  padding: 0 var(--espaco-4) 0 var(--espaco-3);
   border-radius: var(--raio-pilula);
   background: var(--acento-suave);
   color: var(--sobre-acento);
-  font-size: var(--fonte-micro);
   font-weight: var(--peso-semi);
   white-space: nowrap;
 }
 
-.of-saldo-livre-valor {
-  margin-top: var(--espaco-3);
-  font-size: clamp(1.875rem, 1.4rem + 1.4vw, 2.375rem);
-  font-weight: var(--peso-forte);
-  letter-spacing: -0.04em;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.of-saldo-livre.negativo .of-saldo-livre-valor {
-  color: var(--erro);
-}
-
-.of-saldo-livre-leitura {
-  max-width: 52ch;
+.of-consolidado-leitura {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: flex-start;
+  margin-top: var(--espaco-2);
+  padding: var(--espaco-5) var(--espaco-6);
+  border-radius: var(--raio-pequeno);
+  background: var(--acento-suave);
   color: var(--texto);
-  font-size: var(--fonte-rotulo);
+  font-size: var(--fonte-apoio);
   text-wrap: pretty;
 }
 
-.of-saldo-livre-nota {
-  color: var(--suave);
+.of-consolidado-leitura .icone {
+  flex: none;
+  margin-top: 1px;
+  color: var(--sobre-acento);
+}
+
+/* A conta aberta, recolhida por padrão. */
+.of-consolidado-conta {
+  margin-top: var(--espaco-2);
   font-size: var(--fonte-apoio);
-  font-variant-numeric: tabular-nums;
 }
 
-/* A conta, uma linha por parcela, com os valores alinhados à direita. */
-.of-saldo-livre-conta {
+.of-consolidado-conta summary {
+  display: inline-flex;
+  gap: var(--espaco-2);
+  align-items: center;
+  min-height: 32px;
+  color: var(--of-sobre-menta);
+  font-weight: var(--peso-semi);
+  list-style: none;
+  cursor: pointer;
+  border-radius: var(--raio-mini);
+}
+
+.of-consolidado-conta summary::-webkit-details-marker {
+  display: none;
+}
+
+.of-consolidado-conta summary .icone {
+  transition: rotate var(--transicao);
+}
+
+.of-consolidado-conta[open] summary .icone {
+  rotate: 180deg;
+}
+
+.of-consolidado-conta summary:focus-visible {
+  outline: var(--espessura-do-foco) solid var(--of-verde);
+  outline-offset: 2px;
+}
+
+.of-consolidado-conta dl {
   display: grid;
-  margin: 0;
-  font-size: var(--fonte-rotulo);
+  margin: var(--espaco-2) 0 0;
 }
 
-.of-saldo-livre-conta > div {
+.of-consolidado-conta dl > div {
   display: flex;
   gap: var(--espaco-6);
   align-items: baseline;
   justify-content: space-between;
-  padding: var(--espaco-4) 0;
+  padding: var(--espaco-3) 0;
 }
 
-.of-saldo-livre-conta > div + div {
+.of-consolidado-conta dl > div + div {
   border-top: 1px dashed var(--linha);
 }
 
-.of-saldo-livre-conta dt {
+.of-consolidado-conta dt {
   display: grid;
   gap: 1px;
   color: var(--suave);
 }
 
-.of-saldo-livre-conta dt > span {
+.of-consolidado-conta dt > span {
   display: inline-block;
   width: 1ch;
   margin-right: var(--espaco-2);
@@ -989,54 +1199,50 @@ a.of-kpi-link:hover {
   font-weight: var(--peso-semi);
 }
 
-.of-saldo-livre-conta dt small {
+.of-consolidado-conta dt small {
   font-size: var(--fonte-micro);
   font-variant-numeric: tabular-nums;
 }
 
-.of-saldo-livre-conta dd {
+.of-consolidado-conta dd {
   margin: 0;
   font-weight: var(--peso-semi);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.of-saldo-livre-conta .soma dd {
+.of-consolidado-conta .soma dd {
   color: var(--of-sobre-menta);
 }
 
-.of-saldo-livre-conta .subtrai dd {
+.of-consolidado-conta .subtrai dd {
   color: var(--of-sobre-rosa);
 }
 
-.of-saldo-livre-conta > .resultado {
+.of-consolidado-conta dl > .resultado {
   border-top: 1.5px solid var(--linha-forte);
 }
 
-.of-saldo-livre-conta > .resultado dt,
-.of-saldo-livre-conta > .resultado dd {
+.of-consolidado-conta dl > .resultado dt,
+.of-consolidado-conta dl > .resultado dd {
   color: var(--texto);
   font-weight: var(--peso-forte);
 }
 
-.of-saldo-livre.negativo .of-saldo-livre-conta > .resultado dd {
-  color: var(--erro);
-}
-
 /* Medidor: quanto do dinheiro do mês (saldo de hoje + a receber) já tem
    destino. */
-.of-saldo-livre-medidor {
-  grid-column: 1 / -1;
+.of-consolidado-medidor {
   display: grid;
   gap: var(--espaco-3);
+  margin-top: var(--espaco-5);
 }
 
-.of-saldo-livre-medidor small {
+.of-consolidado-medidor small {
   color: var(--suave);
-  font-size: var(--fonte-apoio);
+  font-size: var(--fonte-micro);
 }
 
-.of-saldo-livre-barra {
+.of-consolidado-barra {
   display: block;
   height: 8px;
   overflow: hidden;
@@ -1044,19 +1250,12 @@ a.of-kpi-link:hover {
   background: var(--lateral);
 }
 
-.of-saldo-livre-barra i {
+.of-consolidado-barra i {
   display: block;
   width: var(--p);
   height: 100%;
   border-radius: inherit;
   background: var(--acento);
-}
-
-@media (max-width: 900px) {
-  .of-saldo-livre {
-    grid-template-columns: minmax(0, 1fr);
-    padding: var(--espaco-9) var(--espaco-10) var(--espaco-9) var(--espaco-12);
-  }
 }
 
 /* ---------------------------------------------------------------- Grade */
@@ -1423,10 +1622,18 @@ a.of-kpi-link:hover {
   grid-template-rows: auto minmax(264px, 1fr);
 }
 
+/* Moldura responsiva do gráfico: o tamanho vem só do CSS (largura da coluna,
+   altura da linha da grade) e o ResizeObserver lê. O SVG e o balão ficam em
+   posição absoluta, fora do fluxo, para a moldura poder encolher no zoom e na
+   janela estreita. Na horizontal, nada passa da borda do cartão; na vertical,
+   o balão pode subir acima do ponto mais alto. */
 .of-grafico {
   position: relative;
+  width: 100%;
+  min-width: 0;
   height: 100%;
   min-height: 220px;
+  overflow-x: clip;
   border-radius: var(--raio);
   outline: none;
   cursor: crosshair;
@@ -1439,7 +1646,11 @@ a.of-kpi-link:hover {
 }
 
 .of-grafico svg {
+  position: absolute;
+  inset: 0;
   display: block;
+  width: 100%;
+  height: 100%;
   overflow: visible;
 }
 
@@ -2111,8 +2322,14 @@ a.of-regar-convite-link:hover {
   .of-grafico-linha,
   .of-grafico-area,
   .of-arvore-maca,
-  .of-arvore-queda {
+  .of-arvore-queda,
+  .of-dica-lateral {
     animation: none;
+  }
+
+  .of-app,
+  button.of-lateral-alternar .seta-da-lateral {
+    transition: none;
   }
 
   .of-arvore-rega {
@@ -2121,6 +2338,447 @@ a.of-regar-convite-link:hover {
 
   .of-progresso i {
     transition: none;
+  }
+}
+
+/* ------------------------------------------------- Espaço de empresa */
+
+/* Título de grupo no menu (Empresa, Livro-caixa), só no espaço de empresa.
+   Com a barra recolhida, o nome sai e fica um traço entre os ícones. */
+.of-menu-grupo {
+  margin: var(--espaco-6) 0 var(--espaco-1);
+  padding: 0 var(--espaco-6);
+  color: var(--suave);
+  font-size: var(--fonte-caps);
+  font-weight: var(--peso-semi);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.of-menu > .of-menu-grupo:first-child,
+.of-mais > .of-menu-grupo:first-child {
+  margin-top: 0;
+}
+
+.lateral-recolhida .of-lateral .of-menu-grupo {
+  width: 28px;
+  height: 1px;
+  margin: var(--espaco-4) auto;
+  padding: 0;
+  background: var(--linha);
+}
+
+.lateral-recolhida .of-lateral .of-menu-grupo span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.of-empresa {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espaco-10);
+  align-content: start;
+}
+
+/* A coluna do cartão não cresce com a tabela larga (ela rola dentro dele). */
+.of-empresa .of-painel {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Título e legenda do gráfico dividem a linha; sem espaço, a legenda desce. */
+.of-empresa .of-painel-cabecalho {
+  flex-wrap: wrap;
+}
+
+.of-empresa-numeros {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.of-kpi.negativo .of-kpi-valor {
+  color: var(--erro);
+}
+
+/* Fluxo de caixa: a tabela operação × investimentos fica aberta. */
+.of-fluxo-tabela {
+  margin-top: var(--espaco-4);
+}
+
+.of-fluxo-tabela td.negativo {
+  color: var(--erro);
+}
+
+/* DRE: uma linha por grupo, com o valor, a parte da receita e o mês
+   anterior alinhados em colunas. Os grupos abrem nas categorias. */
+.of-dre-mes {
+  gap: var(--espaco-3);
+  align-items: center;
+}
+
+.of-dre-mes b {
+  min-width: 11ch;
+  font-size: var(--fonte-botao);
+  text-align: center;
+}
+
+.of-dre {
+  display: grid;
+  font-size: var(--fonte-rotulo);
+}
+
+.of-dre-titulos,
+.of-dre-linha > summary,
+.of-dre-linha.resultado {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7.5rem, auto) 4.5rem 5.5rem;
+  gap: var(--espaco-6);
+  align-items: center;
+  padding: var(--espaco-5) var(--espaco-4);
+}
+
+.of-dre-titulos {
+  padding-block: 0 var(--espaco-4);
+  border-bottom: var(--borda);
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+}
+
+.of-dre-titulos span:not(:first-child),
+.of-dre-valor,
+.of-dre-parte,
+.of-dre-comparacao {
+  text-align: right;
+}
+
+.of-dre-linha {
+  border-bottom: 1px dashed var(--linha);
+}
+
+.of-dre-linha > summary {
+  list-style: none;
+  cursor: pointer;
+  border-radius: var(--raio-pequeno);
+}
+
+.of-dre-linha > summary::-webkit-details-marker {
+  display: none;
+}
+
+.of-dre-linha > summary:hover {
+  background: var(--lateral);
+}
+
+.of-dre-linha > summary:focus-visible {
+  outline: var(--espessura-do-foco) solid var(--of-verde);
+  outline-offset: -2px;
+}
+
+.of-dre-rotulo {
+  display: flex;
+  gap: var(--espaco-3);
+  align-items: center;
+  min-width: 0;
+}
+
+.of-dre-rotulo .icone {
+  flex: none;
+  color: var(--suave);
+  transition: rotate var(--transicao);
+}
+
+.of-dre-linha[open] .of-dre-rotulo .icone {
+  rotate: 180deg;
+}
+
+.of-dre-sinal {
+  flex: none;
+  width: 1.4ch;
+  color: var(--suave);
+  font-weight: var(--peso-semi);
+}
+
+.of-dre-valor {
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.of-dre-valor.negativo {
+  color: var(--erro);
+}
+
+.of-dre-parte,
+.of-dre-sem {
+  color: var(--suave);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-dre-comparacao .of-tendencia {
+  justify-content: center;
+}
+
+.of-dre-linha.resultado {
+  border-bottom: 1.5px solid var(--linha-forte);
+  font-weight: var(--peso-semi);
+}
+
+.of-dre-linha.resultado.destaque {
+  margin-top: var(--espaco-2);
+  border-bottom: 0;
+  border-radius: var(--raio);
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.of-dre-linha.destaque .of-dre-valor {
+  font-size: var(--fonte-numero-compacto);
+}
+
+.of-dre-linha ul {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0 0 var(--espaco-4);
+  padding: 0 var(--espaco-4) 0 calc(var(--espaco-4) + 3ch);
+  list-style: none;
+}
+
+.of-dre-linha li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7.5rem, auto) 4.5rem 5.5rem;
+  gap: var(--espaco-6);
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-dre-linha li span:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.of-dre-linha > .of-discreto {
+  margin: 0 0 var(--espaco-4) calc(var(--espaco-4) + 3ch);
+}
+
+.of-dre-ajuda {
+  font-size: var(--fonte-apoio);
+}
+
+.of-dre-ajuda summary {
+  color: var(--of-sobre-menta);
+  font-weight: var(--peso-semi);
+  cursor: pointer;
+}
+
+.of-dre-ajuda p {
+  max-width: 80ch;
+  margin-top: var(--espaco-4);
+  color: var(--suave);
+}
+
+/* Celular: a parte da receita e o mês anterior saem das linhas (ficam nos
+   números do topo); o valor segue à direita. */
+@media (max-width: 640px) {
+  .of-dre-titulos,
+  .of-dre-linha > summary,
+  .of-dre-linha.resultado,
+  .of-dre-linha li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .of-dre-titulos span:nth-child(n + 3),
+  .of-dre-parte,
+  .of-dre-comparacao {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------ Folhas em volta (3D) */
+
+/* As folhas e moedas da landing dentro do app (componentes/FolhasEmVolta.tsx):
+   a folha é a lente do F do monograma (dois cantos redondos em diagonal, com
+   a nervura), a moeda é a dourada da árvore completa. Só transform e
+   opacity animam. */
+.of-folhas-3d {
+  position: absolute;
+  pointer-events: none;
+  perspective: 640px;
+}
+
+.of-folhas-3d i {
+  position: absolute;
+  width: var(--tamanho);
+  height: var(--tamanho);
+}
+
+.of-folhas-3d i.folha {
+  border-radius: 100% 0;
+  background:
+    linear-gradient(135deg, transparent calc(50% - 0.6px), rgb(255 255 255 / 0.4) 50%, transparent calc(50% + 0.6px)),
+    linear-gradient(135deg, #64bf8d, #2b7857 70%);
+}
+
+.of-folhas-3d i.moeda {
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 32%, #f6e0a0, #e3bb5f 42%, #b0873b 74%);
+  box-shadow: inset 0 0 0 1.5px rgb(176 135 59 / 0.9);
+}
+
+/* Cabeçalho da Visão geral: folhas subindo e virando no próprio eixo à
+   direita do "Olá", atrás do texto, apagando nas pontas. */
+.of-cabecalho.com-folhas {
+  position: relative;
+  isolation: isolate;
+}
+
+.of-folhas-3d.cabecalho {
+  inset: -18px 0 -6px;
+  z-index: -1;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000 34%, #000 88%, transparent);
+}
+
+.of-folhas-3d.cabecalho i {
+  left: var(--x);
+  top: var(--y);
+  opacity: 0;
+  animation: of-folha-sobe var(--duracao) linear var(--atraso) infinite;
+}
+
+@keyframes of-folha-sobe {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 34px, var(--z)) rotateZ(var(--giro)) rotateY(0deg) rotateX(18deg);
+  }
+  16%,
+  80% {
+    opacity: 0.62;
+  }
+  50% {
+    transform: translate3d(16px, -34px, var(--z)) rotateZ(calc(var(--giro) + 110deg)) rotateY(180deg) rotateX(-12deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-6px, -104px, var(--z)) rotateZ(calc(var(--giro) + 220deg)) rotateY(360deg) rotateX(18deg);
+  }
+}
+
+/* Estado vazio: uma órbita inclinada em volta do símbolo. */
+.vazio .simbolo {
+  position: relative;
+}
+
+.of-folhas-3d.vazio {
+  /* Raio pequeno o bastante para a órbita não passar do respiro do .vazio. */
+  --raio-da-orbita: 32px;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  perspective: 360px;
+  transform-style: preserve-3d;
+}
+
+.of-folhas-3d.vazio i {
+  top: calc(var(--tamanho) / -2);
+  left: calc(var(--tamanho) / -2);
+  opacity: 0.85;
+  animation: of-folha-orbita var(--duracao) linear var(--atraso) infinite;
+}
+
+@keyframes of-folha-orbita {
+  from {
+    transform: rotateX(-16deg) rotateY(var(--x)) translate3d(0, var(--y), var(--raio-da-orbita)) rotateZ(var(--giro)) rotateY(0deg);
+  }
+  to {
+    transform: rotateX(-16deg) rotateY(calc(var(--x) + 360deg)) translate3d(0, var(--y), var(--raio-da-orbita))
+      rotateZ(calc(var(--giro) + 180deg)) rotateY(360deg);
+  }
+}
+
+/* Meta completa: folhas e moedas saem da árvore, giram e caem, uma vez. */
+.of-folhas-3d.colheita {
+  top: 46%;
+  left: 50%;
+  z-index: 1;
+  width: 0;
+  height: 0;
+  perspective: 800px;
+}
+
+.of-folhas-3d.colheita i {
+  top: calc(var(--tamanho) / -2);
+  left: calc(var(--tamanho) / -2);
+  animation: of-colheita var(--duracao) cubic-bezier(0.18, 0.7, 0.3, 1) var(--atraso) both;
+}
+
+@keyframes of-colheita {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.3) rotateZ(var(--giro)) rotateY(0deg);
+  }
+  12% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 1;
+    transform: translate3d(var(--x), var(--y), var(--z)) scale(1) rotateZ(calc(var(--giro) + 200deg)) rotateY(300deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(var(--x) * 1.15), calc(var(--y) + 170px), var(--z)) scale(0.9)
+      rotateZ(calc(var(--giro) + 360deg)) rotateY(540deg);
+  }
+}
+
+/* Modal da meta completa: a árvore com as maçãs no meio da festa. */
+.of-conquista {
+  display: grid;
+  gap: var(--espaco-8);
+  justify-items: center;
+  text-align: center;
+}
+
+.of-conquista-palco {
+  position: relative;
+  width: min(260px, 100%);
+}
+
+.of-conquista p {
+  max-width: 40ch;
+  color: var(--suave);
+  text-wrap: pretty;
+}
+
+.of-conquista p b {
+  color: var(--texto);
+  white-space: nowrap;
+}
+
+.of-conquista .acoes-do-formulario {
+  justify-self: stretch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .of-folhas-3d i {
+    animation: none;
+  }
+
+  .of-folhas-3d.cabecalho i {
+    opacity: 0.5;
+    transform: translate3d(0, 0, var(--z)) rotateZ(var(--giro));
+  }
+
+  .of-folhas-3d.vazio i {
+    transform: rotateX(-16deg) rotateY(var(--x)) translate3d(0, var(--y), var(--raio-da-orbita)) rotateZ(var(--giro));
+  }
+
+  .of-folhas-3d.colheita i {
+    opacity: 0.9;
+    transform: translate3d(calc(var(--x) * 0.7), calc(var(--y) * 0.7), 0) rotateZ(var(--giro));
   }
 }
 
@@ -2476,6 +3134,11 @@ button.of-chip:hover:not(:disabled) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .of-consolidado {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
   .of-grade,
   .of-metas-grade {
     grid-template-columns: minmax(0, 1fr);
@@ -2517,6 +3180,75 @@ button.of-chip:hover:not(:disabled) {
   .of-kpi-saldo .of-tendencia.ruim {
     background: rgb(255 255 255 / 0.16);
     color: #ecf5f0;
+  }
+
+  .of-kpi-saldo .of-consolidado-apoio,
+  .of-kpi-saldo .of-metrica dt,
+  .of-kpi-saldo .of-metrica-apoio,
+  .of-kpi-saldo .of-consolidado-conta dt,
+  .of-kpi-saldo .of-consolidado-medidor small {
+    color: rgb(255 255 255 / 0.8);
+  }
+
+  .of-kpi-saldo .of-metrica {
+    background: rgb(255 255 255 / 0.1);
+  }
+
+  .of-kpi-saldo .of-metrica.livre {
+    background: rgb(255 255 255 / 0.18);
+  }
+
+  .of-kpi-saldo .of-metrica.livre dt,
+  .of-kpi-saldo .of-consolidado-conta summary,
+  .of-kpi-saldo .of-consolidado-conta dt > span,
+  .of-kpi-saldo .of-consolidado-conta dl > .resultado dt,
+  .of-kpi-saldo .of-consolidado-conta dl > .resultado dd {
+    color: #ffffff;
+  }
+
+  .of-kpi-saldo .of-metrica.negativa > dd:not(.of-metrica-apoio),
+  .of-kpi-saldo .of-metrica.fechamento.negativo > dd:not(.of-metrica-apoio),
+  .of-kpi-saldo .of-consolidado-conta .subtrai dd {
+    color: #ffd2cf;
+  }
+
+  .of-kpi-saldo .of-consolidado-conta .soma dd {
+    color: #c6f1d9;
+  }
+
+  .of-kpi-saldo .of-metrica-selo,
+  .of-kpi-saldo .of-consolidado-leitura {
+    background: rgb(255 255 255 / 0.16);
+    color: #ffffff;
+  }
+
+  .of-kpi-saldo.negativo .of-metrica-selo {
+    background: #feeae9;
+    color: #963a35;
+  }
+
+  .of-kpi-saldo .of-consolidado-leitura .icone {
+    color: #ffffff;
+  }
+
+  .of-kpi-saldo .of-consolidado-conta dl > div + div {
+    border-top-color: rgb(255 255 255 / 0.22);
+  }
+
+  .of-kpi-saldo .of-consolidado-conta dl > .resultado {
+    border-top-color: rgb(255 255 255 / 0.5);
+  }
+
+  .of-kpi-saldo .of-consolidado-barra {
+    background: rgb(255 255 255 / 0.18);
+  }
+
+  .of-kpi-saldo:not(.negativo) .of-consolidado-barra i {
+    background: #ffffff;
+  }
+
+  .of-kpi-saldo.negativo .of-consolidado-barra i {
+    background: #ffb4ae;
   }
 
   .of-atalhos {
@@ -2581,6 +3313,34 @@ button.of-chip:hover:not(:disabled) {
 
   .of-grafico {
     height: 220px;
+  }
+}
+
+/* Widget estreito (barra lateral aberta em tela média, celular): cada
+   leitura numa linha, com o valor à direita, em vez de três colunas que
+   cortariam o número. */
+@container consolidado (max-width: 520px) {
+  .of-consolidado-metricas {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--espaco-3);
+  }
+
+  .of-metrica {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--espaco-6);
+    align-items: center;
+    padding: var(--espaco-4) var(--espaco-6);
+  }
+
+  .of-metrica dt,
+  .of-metrica-apoio {
+    grid-column: 1;
+  }
+
+  .of-metrica > dd:not(.of-metrica-apoio) {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin-top: 0;
   }
 }
 

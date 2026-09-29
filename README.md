@@ -23,10 +23,11 @@ abre um menu. Detalhes em [Como executar](#como-executar).
 
 ## Proposta de valor
 
-- **Clareza em vez de planilha.** A Visão geral começa pelo **saldo livre até o fim do mês**: o saldo de hoje
-  mais o que ainda entra, menos o que ainda sai (contas lançadas com data futura e as faturas dos cartões), com
-  aviso quando o mês fecha no vermelho mesmo com o saldo de hoje positivo. Depois vêm receitas e despesas do mês
-  comparadas ao anterior, evolução do saldo e gasto por categoria. Cada número mostra de onde veio.
+- **Clareza em vez de planilha.** A Visão geral começa pelo **saldo total** como painel do mês: o patrimônio e,
+  logo abaixo, o **saldo livre** (o saldo de hoje mais o que ainda entra, menos o que ainda sai e sem o dinheiro
+  aplicado), o **investido** e o **fechamento previsto** do mês, positivo ou negativo, com aviso quando o mês fecha
+  no vermelho mesmo com o saldo de hoje positivo. Depois vêm receitas e despesas do mês comparadas ao anterior,
+  evolução do saldo e gasto por categoria. Cada número mostra de onde veio (a conta abre no próprio painel).
 - **Do seu jeito, sem burocracia.** Contas, carteira de cartões de crédito com fatura e parcelas, categorias, a
   pessoa responsável por cada gasto, racha entre pessoas, edição e remoção em lote e importação do extrato do banco em CSV (as colunas de vários bancos
   reconhecidas sozinhas, a categoria sugerida pela descrição e pelo histórico, editável na conferência, sem
@@ -59,7 +60,8 @@ relatórios (0.3) estão em construção:
   orçamento, cadastro com confirmação do e-mail, login e Visão geral com Firebase Authentication e Cloud
   Firestore, publicada no GitHub Pages; com a API local, ganha lançamentos, contas e cartões de crédito,
   categorias, importação do extrato em CSV, relatórios e **espaços separados** (pessoal, família e empresa, cada
-  um com o próprio livro-caixa, trocados no topo da tela); as metas funcionam nos dois casos;
+  um com o próprio livro-caixa, trocados no topo da tela; o de empresa ganha o **fluxo de caixa operacional** e o
+  **DRE simplificado**); as metas funcionam nos dois casos;
 - **testes automatizados** que rodam a cada commit de pull request, com **CI/CD** e alertas no Discord.
 
 **Objetivo acadêmico.** Projeto do curso de Análise e Desenvolvimento de Sistemas, compartilhado entre três
@@ -401,11 +403,16 @@ http://localhost:5173/ADS-Project/ (`npm run dev` sobe o mesmo servidor sem abri
 do cliente: [`web/README.md`](web/README.md).
 
 A raiz (`/`) mostra a página de apresentação, com o simulador "Quanto sobra no seu mês?": o pomar 3D do topo
-segue pela página como folhas e moedas ao vento atrás das seções (WebGL, carregado só ao rolar), cada bloco
-entra ao rolar e os cartões giram com o mouse; pedindo menos movimento ao sistema, tudo fica parado. A área
-logada tem a Visão geral (saldo livre até o fim do mês, números do mês, evolução do saldo, despesas por categoria, últimas transações, metas e os dados do
-cadastro), a aba Metas (as metas ficam no navegador até a API de metas e saem dele no logout) e, com a API,
-Lançamentos, Contas & Cartões, Categorias e Relatórios. O botão de lua ou sol no topo troca o tema.
+reage ao mouse (as folhas sob ele se levantam) e segue pela página como folhas e moedas ao vento atrás das seções
+(WebGL, carregado só ao rolar), cada bloco entra ao rolar e os cartões giram com o mouse. Na seção do notebook, a
+página fica presa enquanto a rolagem abre a tampa e só volta a descer com ela aberta; aberta, a tela é o app de
+exemplo e responde ao mouse (telas, gráfico, categorias, contas e a meta que cresce a cada rega). Pedindo menos
+movimento ao sistema, tudo fica parado e o notebook já aparece aberto. A área logada tem a Visão geral (o saldo
+total com saldo livre, investido e fechamento do mês, números do mês, evolução do saldo, despesas por categoria,
+últimas transações, metas e os dados do cadastro), a aba Metas (as metas ficam no navegador até a API de metas e
+saem dele no logout; a meta completa abre a colheita) e, com a API, Lançamentos, Contas & Cartões, Categorias e
+Relatórios; no espaço de empresa, também Fluxo de caixa e DRE. A barra lateral recolhe para uma coluna de ícones
+(o nome aparece ao passar o mouse). O botão de lua ou sol no topo troca o tema.
 
 ### Front-end em container (nginx)
 
@@ -503,9 +510,9 @@ poucos.
 | Front-end | `web/src/regras/mascaras.test.ts` e `sanitizacao.test.ts` | Máscara de valor (milhar, vírgula, dois decimais, sinal, cursor, colar) e de inteiro, teclas barradas por tipo de campo, e a limpeza do texto antes de ir à API |
 | Front-end | `web/src/regras/arquivoDoExtrato.test.ts` e `conferenciaDaImportacao.test.ts` | Arquivo do extrato (extensão, tipo, planilha ou PDF renomeado, binário, UTF-8, Windows-1252 e UTF-16) e a edição de descrição e categoria na conferência |
 | Front-end | `web/src/regras/*.test.js` e `responsavel.test.ts` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, responsável e racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |
-| Front-end | `web/src/regras/espacos.test.ts` e `servicos/espacoAtivo.test.ts` | Espaços: qual abre, o nome na tela, quem renomeia e exclui, o formulário, a seção depois da troca, as metas de cada espaço e o último espaço guardado no navegador (sai no logout) |
+| Front-end | `web/src/regras/espacos.test.ts`, `servicos/espacoAtivo.test.ts` e `servicos/lateral.test.ts` | Espaços: qual abre, o nome na tela, quem renomeia e exclui, o formulário, a seção depois da troca, as visões do espaço de empresa, as metas de cada espaço e o último espaço guardado no navegador (sai no logout); a barra lateral recolhida (fica depois do logout, como o tema) |
 | Front-end | `web/src/servicos/livroCaixa.test.js` e `enderecoDaApi.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar, token que não renova e endereço pela rede local |
-| Front-end | `web/src/olifine/regras/*.test.js` e `*.test.ts` | OliFine: tendência, séries do gráfico de saldo, Visão geral, saldo livre do mês (datas futuras, faturas, falsa folga), metas, a árvore que cresce, o simulador de orçamento, o pomar 3D da landing (câmera, toque no chão, movimento suave, quantas folhas e onde nascem) e as folhas ao vento (quantas por tela, margens e paralaxe) |
+| Front-end | `web/src/olifine/regras/*.test.js` e `*.test.ts` | OliFine: tendência, séries do gráfico de saldo, Visão geral, saldo livre do mês (datas futuras, faturas, falsa folga), metas, a árvore que cresce, o simulador de orçamento, o pomar 3D da landing (câmera, ponto do chão sob o ponteiro, movimento suave, quantas folhas e onde nascem), as folhas ao vento (quantas por tela, margens e paralaxe), o notebook preso na rolagem (progresso, abertura só completa antes de soltar), as folhas e moedas em 3D do app (cabeçalho, estado vazio e colheita) e as visões da empresa (grupo de cada categoria no DRE, DRE do mês com estorno, fluxo de caixa operacional separado dos investimentos) |
 | Front-end | `web/src/componentes/*.test.js` | Error Boundary, avisos (toasts) e todo nome de ícone usado nas telas com desenho na família própria |
 
 Os mesmos testes rodam no GitHub Actions a cada commit de pull request e a cada push na `main`
@@ -621,9 +628,11 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
    do saldo. **Editar**, no mesmo menu, corrige descrição, valor, data, categoria e meio. Marque duas linhas pelas
    caixas da esquerda e use **Remover selecionados** (ou **Remover todos**, para tudo o que está na tela): a
    confirmação diz o que sai junto.
-6. Na **Visão geral**, o **Saldo livre até o fim do mês** abre a conta (saldo de hoje + a receber − a pagar):
-   lance uma despesa grande com a data de amanhã e o card fica vermelho, dizendo que o saldo de hoje está
-   positivo mas o mês fecha no negativo. As despesas do mês aparecem separadas em à vista e no crédito, e o
+6. Na **Visão geral**, o **Saldo total** mostra o saldo livre, o investido e o fechamento do mês; **Ver a conta
+   do mês** abre a conta (saldo de hoje + a receber − a pagar = fechamento; − investido = saldo livre): lance uma
+   despesa grande com a data de amanhã e o fechamento fica **Negativo**, com o aviso de que o saldo de hoje está
+   positivo mas o mês fecha no vermelho. No gráfico **Evolução do saldo**, o valor aparece só com o mouse (ou o
+   dedo, ou as setas) em cima. As despesas do mês aparecem separadas em à vista e no crédito, e o
    **+ Novo** do topo escolhe entre lançamento, compra no crédito, conta e cartão, cada um no seu modal. Em **Categorias**, crie,
    renomeie, desative ou remova uma categoria (a que já tem lançamentos não sai: o aviso manda desativar).
 7. Em **Importar CSV**, escolha um CSV com as colunas Data, Descrição e Valor (exemplo fictício abaixo) e a conta,

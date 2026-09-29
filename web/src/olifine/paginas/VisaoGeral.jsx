@@ -31,10 +31,12 @@ import {
   relatorioMensal,
 } from '../../servicos/livroCaixa';
 import Arvore from '../componentes/Arvore';
+import FolhasEmVolta from '../componentes/FolhasEmVolta';
 import GraficoDeSaldo from '../componentes/GraficoDeSaldo';
 import Icone from '../../componentes/Icone';
 import Rosca from '../componentes/Rosca';
-import SaldoLivre from '../componentes/SaldoLivre';
+import SaldoConsolidado from '../componentes/SaldoConsolidado';
+import SimboloDoVazio from '../componentes/SimboloDoVazio';
 import {
   CARTOES_DE_EXEMPLO,
   CONTAS_DE_EXEMPLO,
@@ -110,10 +112,10 @@ function SeloDeTendencia({ variacao, maiorEhMelhor = true, referencia }) {
   );
 }
 
-// Visão geral da OliFine: o saldo livre até o fim do mês (o que sobra depois
-// das contas previstas), os quatro números do mês com a tendência, a
-// evolução do saldo, as despesas por categoria, as últimas transações, as
-// metas e o compromisso nos cartões. Com a API, dados de verdade; sem ela
+// Visão geral da OliFine: o saldo total como widget de consolidação (com o
+// saldo livre, o investido e o fechamento previsto do mês), os números do mês
+// com a tendência, a evolução do saldo, as despesas por categoria, as últimas
+// transações, as metas e o compromisso nos cartões. Com a API, dados de verdade; sem ela
 // (Pages), a tela vazia oferece o modo de exemplo, sempre marcado.
 //
 // O "+ Novo" do topo deixa a pessoa escolher o que criar (lançamento à
@@ -284,7 +286,9 @@ export default function VisaoGeral() {
 
   return (
     <div className="of-visao">
-      <header className="of-cabecalho">
+      <header className="of-cabecalho com-folhas">
+        {/* As folhas ao vento da landing, em miniatura, atrás das boas-vindas. */}
+        <FolhasEmVolta arranjo="cabecalho" />
         <div>
           <h1>{dados ? `Olá, ${dados.nome}!` : 'Olá!'}</h1>
           <p>
@@ -320,27 +324,20 @@ export default function VisaoGeral() {
         </div>
       )}
 
-      <SaldoLivre resultado={livreDoMes} investido={saldos?.investido.total ?? 0} />
-
       <section className="of-kpis" aria-label="Números do mês">
-        <article className="of-kpi of-kpi-saldo">
-          <p className="of-kpi-rotulo">
-            <span className="of-kpi-icone" aria-hidden="true">
-              <Icone nome="contas" tamanho={18} />
-            </span>
-            Saldo total
-          </p>
-          <p className="of-kpi-valor">{comNumeros ? formatarBRL(visao.saldo) : 'R$ —'}</p>
-          {saldos && (
-            <p className="of-kpi-origem">
-              {formatarBRL(saldos.disponivel.total)} disponível · {formatarBRL(saldos.investido.total)} investido
-            </p>
-          )}
-          {comNumeros ? (
-            <SeloDeTendencia variacao={visao.variacao.saldo} referencia={`${mesAnterior}`} />
-          ) : (
-            <p className="of-kpi-rodape">Soma das suas contas</p>
-          )}
+        <SaldoConsolidado
+          saldo={comNumeros ? visao.saldo : null}
+          resultado={livreDoMes}
+          investido={saldos?.investido.total ?? 0}
+          investida={investida}
+          rodape={
+            comNumeros ? (
+              <SeloDeTendencia variacao={visao.variacao.saldo} referencia={mesAnterior} />
+            ) : (
+              <p className="of-kpi-rodape">Soma das suas contas</p>
+            )
+          }
+        >
           <div className="of-atalhos" aria-label="Atalhos">
             {apiConfigurada && (
               <Link to="/lancamentos" className="of-atalho">
@@ -373,7 +370,7 @@ export default function VisaoGeral() {
               </Link>
             )}
           </div>
-        </article>
+        </SaldoConsolidado>
 
         <article className="of-kpi">
           <p className="of-kpi-rotulo">
@@ -460,7 +457,6 @@ export default function VisaoGeral() {
               // Outra faixa: gráfico novo, com o cursor em repouso.
               key={faixa}
               serie={serie}
-              variacao={faixa === '30d' || faixa === '12m' || faixa === '6m' ? visao.variacao.saldo : null}
               descricao={`Evolução do saldo em ${FAIXAS.find((opcao) => opcao.id === faixa).rotulo}: de ${formatarBRL(serie[0].saldo)} a ${formatarBRL(serie.at(-1).saldo)}`}
             />
           ) : (
@@ -770,9 +766,7 @@ function VazioDaVisao({ semContas, real, aoVerExemplo, aoCadastrarConta }) {
   if (semContas) {
     return (
       <div className="vazio">
-        <span className="simbolo" aria-hidden="true">
-          <Icone nome="contas" tamanho={20} />
-        </span>
+        <SimboloDoVazio icone="contas" semente={17} />
         <h3>Comece pelas suas contas</h3>
         <p>Cadastre onde o seu dinheiro está (conta corrente, poupança, carteira) com o saldo de hoje. O gráfico acompanha o saldo a partir daí.</p>
         <button type="button" onClick={aoCadastrarConta}>
@@ -787,9 +781,7 @@ function VazioDaVisao({ semContas, real, aoVerExemplo, aoCadastrarConta }) {
   }
   return (
     <div className="vazio">
-      <span className="simbolo" aria-hidden="true">
-        <Icone nome="crescimento" tamanho={20} />
-      </span>
+      <SimboloDoVazio icone="crescimento" semente={43} />
       <h3>Seu saldo, dia a dia</h3>
       <p>
         Contas e lançamentos ficam na API do livro-caixa, que não está ligada a esta versão do site. Veja a tela com

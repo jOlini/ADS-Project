@@ -67,6 +67,16 @@ export const TRACOS = {
       <path d="M12 11.5c.2-3.6 2.4-5.8 6.8-6 0 3.9-2.4 6-6.8 6Z" />
     </>
   ),
+  // Recolher ou abrir a barra lateral: a janela com a coluna do menu (seiva)
+  // e a seta em curva, que vira (.seta-da-lateral) quando a barra recolhe.
+  lateral: (
+    <>
+      <path className="seiva" d="M9.5 4H8.5a5 5 0 0 0-5 5v9.2a1.8 1.8 0 0 0 1.8 1.8h4.2Z" />
+      <path d={folha(3.5, 4, 17, 16, 5, 1.8)} />
+      <path d="M9.5 4v16" />
+      <path className="seta-da-lateral" d="M16.2 9.2c-1.2 1.1-2.1 1.9-2.8 2.8.7.9 1.6 1.7 2.8 2.8" />
+    </>
+  ),
   sair: (
     <>
       <path d="M13 4.5h-2.5A4.5 4.5 0 0 0 6 9v8.7a1.8 1.8 0 0 0 1.8 1.8H13" />

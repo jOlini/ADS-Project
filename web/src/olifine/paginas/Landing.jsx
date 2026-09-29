@@ -5,16 +5,18 @@ import AlternadorDeTema from '../../componentes/AlternadorDeTema';
 import Arvore from '../componentes/Arvore';
 import CampoDoPomar from '../componentes/CampoDoPomar';
 import FolhasAoVento from '../componentes/FolhasAoVento';
+import Notebook from '../componentes/Notebook';
 import Icone from '../../componentes/Icone';
-import Logo, { MarcaOliFine, SLOGAN } from '../componentes/Logo';
+import Logo, { SLOGAN } from '../componentes/Logo';
 import { HOJE_DE_EXEMPLO, LANCAMENTOS_DE_EXEMPLO, MESES_DE_EXEMPLO, METAS_DE_EXEMPLO, SALDO_DE_EXEMPLO } from '../dados/exemplo';
-import { caminhoSuave } from '../regras/curva';
+import { desenhoDaMiniatura } from '../regras/curva';
 import { iconeDaLinha } from '../regras/icones';
 import { planoMensal, porcentagem } from '../regras/metas';
 import { FAIXAS, simularOrcamento, textoDaLeitura, textoDoPrazo, VALORES_INICIAIS } from '../regras/simulador';
 import { fatiasDaRosca, montarVisao } from '../regras/visao';
 import { leituraDaVariacao, textoDaVariacao } from '../regras/tendencia';
 import { useMovimentoDaLanding } from '../useMovimentoDaLanding';
+import { useNotebookPreso } from '../useNotebookPreso';
 import '../estilos/landing.css';
 
 // Números fictícios da demonstração: os mesmos da Visão geral em modo de
@@ -42,20 +44,6 @@ const FAIXAS_DO_CELULAR = [
   { id: '12m', rotulo: '12 meses' },
 ];
 
-// Linha e área do gráfico em miniatura, num quadro de 300 × 110.
-function desenhoDaSerie(serie, largura = 300, altura = 110) {
-  const valores = serie.map((ponto) => ponto.saldo);
-  const menor = Math.min(...valores);
-  const maior = Math.max(...valores);
-  const faixa = maior - menor || 1;
-  const pontos = serie.map((ponto, indice) => ({
-    x: (indice / Math.max(1, serie.length - 1)) * largura,
-    y: 8 + (1 - (ponto.saldo - menor) / faixa) * (altura - 16),
-  }));
-  const linha = caminhoSuave(pontos);
-  return { linha, area: `${linha}L${largura} ${altura}L0 ${altura}Z`, fim: pontos.at(-1) };
-}
-
 function Tendencia({ variacao, maiorEhMelhor = true }) {
   return <span className={`of-tendencia ${leituraDaVariacao(variacao, { maiorEhMelhor })}`}>{textoDaVariacao(variacao)}</span>;
 }
@@ -64,7 +52,7 @@ function Tendencia({ variacao, maiorEhMelhor = true }) {
 function Celular() {
   // Abre nos 12 meses: é a faixa em que o crescimento do saldo aparece.
   const [faixa, setFaixa] = useState('12m');
-  const desenho = useMemo(() => desenhoDaSerie(DEMO.series[faixa]), [faixa]);
+  const desenho = useMemo(() => desenhoDaMiniatura(DEMO.series[faixa]), [faixa]);
   return (
     <div className="lp-celular" aria-label="Demonstração do app com dados fictícios">
       {/* Camadas atrás da tela: a espessura do aparelho quando ele gira. */}
@@ -134,73 +122,6 @@ function Celular() {
         </ul>
         <span className="lp-celular-reflexo" aria-hidden="true" />
       </div>
-    </div>
-  );
-}
-
-// Laptop com a Visão geral em miniatura, montada com os mesmos números.
-function Laptop() {
-  const desenho = desenhoDaSerie(DEMO.series['12m'], 300, 90);
-  const fatias = fatiasDaRosca(DEMO.categorias, 5);
-  const total = fatias.reduce((soma, fatia) => soma + fatia.valor, 0);
-  const tamanhos = fatias.map((fatia) => (fatia.valor / total) * 226.2);
-  const inicio = (indice) => tamanhos.slice(0, indice).reduce((soma, tamanho) => soma + tamanho, 0);
-  return (
-    <div className="lp-laptop" aria-label="Visão geral do app com dados fictícios">
-      <div className="lp-laptop-tela">
-        <aside className="lp-mini-lateral" aria-hidden="true">
-          <MarcaOliFine tamanho={18} />
-          {['Visão geral', 'Lançamentos', 'Contas & Cartões', 'Metas', 'Categorias'].map((item, indice) => (
-            <span key={item} className={indice === 0 ? 'ativo' : ''}>
-              {item}
-            </span>
-          ))}
-        </aside>
-        <div className="lp-mini-conteudo">
-          <p className="lp-mini-ola">Olá, Ana!</p>
-          <div className="lp-mini-kpis">
-            {[
-              ['Saldo total', DEMO.saldo, DEMO.variacao.saldo, true],
-              ['Receitas', DEMO.totais.entradas, DEMO.variacao.receitas, true],
-              ['Despesas', DEMO.totais.saidas, DEMO.variacao.despesas, false],
-            ].map(([rotulo, valor, variacao, maiorEhMelhor]) => (
-              <div key={rotulo}>
-                <small>{rotulo}</small>
-                <b>{formatarBRL(valor)}</b>
-                <Tendencia variacao={variacao} maiorEhMelhor={maiorEhMelhor} />
-              </div>
-            ))}
-          </div>
-          <div className="lp-mini-paineis">
-            <div>
-              <small>Evolução do saldo</small>
-              <svg viewBox="0 0 300 90" preserveAspectRatio="none" aria-hidden="true">
-                <defs>
-                  <linearGradient id="lp-area-laptop" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#16a34a" stopOpacity="0.26" />
-                    <stop offset="1" stopColor="#16a34a" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <path d={desenho.area} fill="url(#lp-area-laptop)" />
-                <path d={desenho.linha} className="lp-linha estatica" vectorEffect="non-scaling-stroke" />
-              </svg>
-            </div>
-            <div>
-              <small>Despesas por categoria</small>
-              <svg viewBox="0 0 100 100" className="lp-mini-rosca" aria-hidden="true">
-                <g transform="rotate(-90 50 50)">
-                  {fatias.map((fatia, indice) => (
-                    <circle key={fatia.categoria} cx="50" cy="50" r="36" fill="none" strokeWidth="13"
-                      style={{ stroke: `var(--cat-${fatia.cor})` }} strokeDasharray={`${Math.max(0.5, tamanhos[indice] - 2)} 226.2`}
-                      strokeDashoffset={-inicio(indice)} />
-                  ))}
-                </g>
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="lp-laptop-base" aria-hidden="true" />
     </div>
   );
 }
@@ -444,7 +365,9 @@ export default function Landing() {
   const topo = useRef(null);
   const textoDoTopo = useRef(null);
   const conteudo = useRef(null);
+  const pistaDoNotebook = useRef(null);
   useMovimentoDaLanding(raiz);
+  const notebookAberto = useNotebookPreso(pistaDoNotebook);
 
   return (
     <div className="lp" ref={raiz}>
@@ -562,30 +485,42 @@ export default function Landing() {
           </div>
         </section>
 
-        <section className="lp-secao lp-demonstracao" id="demonstracao" aria-labelledby="lp-demo-titulo">
-          <div className="lp-demonstracao-texto" data-revela="esquerda">
-            <h2 id="lp-demo-titulo">Do número à decisão.</h2>
-            <p>
-              A Visão geral junta o que importa no mês: quanto você tem, quanto entrou e saiu comparado ao mês anterior,
-              como o saldo evoluiu e para onde foi cada real.
-            </p>
-            <ul className="lp-lista-certa">
-              <li>
-                <Icone nome="certo" tamanho={16} />
-                Tendência de cada número em relação ao mês anterior
-              </li>
-              <li>
-                <Icone nome="certo" tamanho={16} />
-                Saldo dia a dia ou mês a mês
-              </li>
-              <li>
-                <Icone nome="certo" tamanho={16} />
-                Despesas por categoria, com o valor de cada uma
-              </li>
-            </ul>
-          </div>
-          <div className="lp-laptop-palco" data-revela="direita">
-            <Laptop />
+        {/* Pista do notebook: mais alta que a tela, com o palco preso
+            (sticky) enquanto ela passa. A rolagem abre a tampa; aberta, a
+            tela do app responde ao mouse e a página volta a descer. */}
+        <section className="lp-notebook" id="demonstracao" aria-labelledby="lp-demo-titulo" ref={pistaDoNotebook}
+          data-aberto={notebookAberto ? '' : undefined}>
+          <div className="lp-notebook-palco">
+            <div className="lp-secao lp-demonstracao">
+              <div className="lp-demonstracao-texto" data-revela="esquerda">
+                <h2 id="lp-demo-titulo">Do número à decisão.</h2>
+                <p>
+                  A Visão geral junta o que importa no mês: quanto você tem, quanto entrou e saiu comparado ao mês
+                  anterior, como o saldo evoluiu e para onde foi cada real.
+                </p>
+                <ul className="lp-lista-certa">
+                  <li>
+                    <Icone nome="certo" tamanho={16} />
+                    Tendência de cada número em relação ao mês anterior
+                  </li>
+                  <li>
+                    <Icone nome="certo" tamanho={16} />
+                    Saldo dia a dia ou mês a mês
+                  </li>
+                  <li>
+                    <Icone nome="certo" tamanho={16} />
+                    Despesas por categoria, com o valor de cada uma
+                  </li>
+                </ul>
+                <p className="lp-notebook-dica" aria-live="polite">
+                  <Icone nome={notebookAberto ? 'certo' : 'seta'} tamanho={16} />
+                  {notebookAberto ? 'Aberto: clique nas telas do app de exemplo.' : 'Continue rolando para abrir o notebook.'}
+                </p>
+              </div>
+              <div className="lp-laptop-palco">
+                <Notebook demo={DEMO} aberto={notebookAberto} />
+              </div>
+            </div>
           </div>
         </section>
 

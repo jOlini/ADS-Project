@@ -103,9 +103,20 @@ export function nomeSugerido(tipo: string, sobrenome = ''): string {
 
 // Trocando de espaço, a tela volta ao começo da seção em que estava: o
 // cartão ou o filtro abertos eram do livro anterior e não existem no novo.
+// As visões da empresa (/empresa/fluxo, /empresa/dre) são seções inteiras;
+// num espaço que não é de empresa, a própria tela volta à Visão geral.
 export function secaoDaRota(caminho: string): string {
-  const primeiro = caminho.split('?')[0]?.split('/').find(Boolean);
-  return primeiro ? `/${primeiro}` : '/principal';
+  const partes = caminho.split('?')[0]?.split('/').filter(Boolean) ?? [];
+  if (partes[0] === 'empresa' && partes[1]) {
+    return `/empresa/${partes[1]}`;
+  }
+  return partes[0] ? `/${partes[0]}` : '/principal';
+}
+
+// As visões próprias do espaço de empresa (DRE e fluxo de caixa) aparecem
+// sozinhas no menu quando o espaço ativo é de empresa.
+export function ehEmpresa(espaco: Pick<Espaco, 'tipo'> | null | undefined): boolean {
+  return espaco?.tipo === 'PJ';
 }
 
 // Metas ficam no navegador até a API de metas: as do pessoal continuam na

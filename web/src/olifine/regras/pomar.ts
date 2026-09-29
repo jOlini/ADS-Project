@@ -1,7 +1,7 @@
 // O pomar da landing, sem interface: a conta 3D por trás da cena WebGL do
 // topo (pomar/cenaDoPomar.ts). Folhas, pontos e moedas espalhados num campo,
-// a câmera que olha para ele e segue o ponteiro, o toque que cai no chão e
-// quantas folhas cabem em cada tela. Tudo determinístico e testado em
+// a câmera que olha para ele e segue o ponteiro, o ponto do chão sob o
+// ponteiro (onde as folhas se levantam) e quantas folhas cabem em cada tela. Tudo determinístico e testado em
 // pomar.test.ts; o relevo e a cor de cada folha são feitos na placa de vídeo
 // (o shader), a partir do que sai daqui.
 

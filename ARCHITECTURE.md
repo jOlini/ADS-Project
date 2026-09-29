@@ -175,8 +175,9 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
   pelo túnel da Cloudflare, no proxy do Vite, só em `/espacos` (`servicos/enderecoDaApi.js`, `vite.config.js`).
 - **Sem API** (GitHub Pages): as telas do livro-caixa ficam desligadas e a Visão geral oferece dados de exemplo.
 - **Landing em 3D:** o topo tem um campo de folhas e moedas desenhado em WebGL 1 próprio, sem biblioteca
-  (`olifine/componentes/cenaDoPomar.ts`, cerca de 3 kB comprimido e carregado depois do primeiro quadro), e o
-  celular gira com o ponteiro por CSS 3D. A conta de câmera, toque e distribuição das folhas é pura e testada
+  (`olifine/componentes/cenaDoPomar.ts`, cerca de 3 kB comprimido e carregado depois do primeiro quadro), que só
+  reage ao ponteiro (hover; o clique não faz nada), e o celular gira com o ponteiro por CSS 3D. A conta de
+  câmera, ponteiro e distribuição das folhas é pura e testada
   (`olifine/regras/pomar.ts`); o `CampoDoPomar.tsx` pausa o desenho fora da tela e com a aba escondida, afina o
   campo em máquina lenta e, pedindo menos movimento, desenha um quadro parado. Sem WebGL, só com desenho por
   software ou com o contexto perdido, o topo fica com os contornos em SVG. Abaixo do topo, as folhas ao vento
@@ -186,6 +187,14 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
   As duas cenas usam as mesmas peças de WebGL (`olifine/componentes/webgl.ts`). A revelação ao rolar e a
   inclinação dos cartões (`olifine/useMovimentoDaLanding.ts`) usam `IntersectionObserver` e transições de
   `opacity`, `translate` e `rotate`, que não refazem o layout.
+- **Notebook preso na rolagem:** a seção é uma pista mais alta que a tela com o palco em `position: sticky`; o
+  `olifine/useNotebookPreso.ts` lê o progresso da pista uma vez por quadro (só com ela perto da tela) e escreve o
+  ângulo da tampa, que termina de abrir antes do fim da pista (`olifine/regras/notebook.ts`). A tela do notebook
+  (`olifine/componentes/Notebook.jsx`) é o app de exemplo em DOM, inerte (`inert`) até a tampa abrir. Com
+  "reduzir movimento" ou tela baixa, não há trava e a tampa já está aberta.
+- **3D dentro do app:** as mesmas folhas e moedas, em CSS 3D (`olifine/componentes/FolhasEmVolta.tsx`, posições
+  em `olifine/regras/folhasEmVolta.ts`), no cabeçalho da Visão geral, em volta do símbolo dos estados vazios e
+  na colheita da meta completa: sem um contexto WebGL novo por tela, só `transform` e `opacity` animados.
 - **Caminho da publicação:** `VITE_BASE` no build (`/ADS-Project/` no Pages, `/` num domínio próprio). O React
   Router, os arquivos de `public/` e os links usam o `BASE_URL` gravado pelo Vite; nenhum caminho fica escrito à
   mão (`regras/enderecoDoApp.js`).
@@ -193,7 +202,12 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
   ConfirmarEmail (reenviar com espera de 60 s, "Já confirmei", sair). Login conta as senhas erradas no navegador
   (5 em 15 minutos por e-mail, guardado como resumo FNV-1a, sem o e-mail em texto) e avisa quantas restam; o
   Firebase continua freando do lado dele. Cadastro com e-mail que já tem conta segue o mesmo caminho do novo
-  (sem revelar quem tem cadastro). O logout apaga as chaves `olifine:*` do navegador, menos a preferência de tema.
+  (sem revelar quem tem cadastro). O logout apaga as chaves `olifine:*` do navegador, menos as preferências de
+  tela (tema e barra lateral recolhida).
+- **Visões do espaço de empresa:** com o espaço de empresa ativo, o menu ganha Fluxo de caixa
+  (`/empresa/fluxo`) e DRE (`/empresa/dre`), calculados no navegador a partir do livro-caixa do espaço
+  (`olifine/regras/empresa.ts`): o grupo do DRE sai do nome da categoria (as iniciais da empresa) e o fluxo
+  separa o caixa da operação das contas de investimento. Em outro espaço, as duas rotas voltam à Visão geral.
 - **Espaço ativo:** o `Layout` busca a lista de espaços e entrega às páginas o ativo no mesmo formato de antes
   (`espaco.dados.id`); o seletor no topo (`olifine/componentes/SeletorDeEspaco.tsx`) troca, cria, renomeia e
   exclui. Trocar de espaço remonta a página (nada do livro anterior fica no estado) e volta ao começo da seção. O

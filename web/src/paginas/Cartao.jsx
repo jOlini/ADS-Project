@@ -11,6 +11,7 @@ import FormularioDeCartao from '../componentes/FormularioDeCartao';
 import FormularioDeCompra from '../componentes/FormularioDeCompra';
 import FormularioDePagamento from '../componentes/FormularioDePagamento';
 import Icone from '../componentes/Icone';
+import SimboloDoVazio from '../olifine/componentes/SimboloDoVazio';
 import ImportarExtrato from '../componentes/ImportarExtrato';
 import MedidorDoLimite from '../componentes/MedidorDoLimite';
 import Menu from '../componentes/Menu';
@@ -334,9 +335,7 @@ export default function Cartao() {
               />
             ) : (
               <div className="vazio">
-                <span className="simbolo" aria-hidden="true">
-                  <Icone nome="cartao" tamanho={20} />
-                </span>
+                <SimboloDoVazio icone="cartao" semente={31} />
                 <h3>Nenhuma compra nesta fatura</h3>
                 <p>Use &quot;Nova compra&quot; para lançar uma compra no crédito, ou traga a fatura do banco com &quot;Importar fatura&quot;.</p>
               </div>

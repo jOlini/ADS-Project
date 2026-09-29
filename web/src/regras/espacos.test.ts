@@ -8,6 +8,7 @@ import {
   nomeDoEspaco,
   nomeSugerido,
   podeGerenciar,
+  ehEmpresa,
   secaoDaRota,
   TIPOS_DE_ESPACO,
   TIPOS_QUE_SE_CRIAM,
@@ -91,6 +92,21 @@ describe('secaoDaRota', () => {
     expect(secaoDaRota('/lancamentos?busca=mercado')).toBe('/lancamentos');
     expect(secaoDaRota('/principal')).toBe('/principal');
     expect(secaoDaRota('/')).toBe('/principal');
+  });
+
+  it('as visões da empresa são seções inteiras', () => {
+    expect(secaoDaRota('/empresa/dre')).toBe('/empresa/dre');
+    expect(secaoDaRota('/empresa/fluxo?mes=2026-09')).toBe('/empresa/fluxo');
+    expect(secaoDaRota('/empresa')).toBe('/empresa');
+  });
+});
+
+describe('ehEmpresa', () => {
+  it('só o espaço de empresa ganha as visões de DRE e fluxo de caixa', () => {
+    expect(ehEmpresa(OFICINA)).toBe(true);
+    expect(ehEmpresa(PESSOAL)).toBe(false);
+    expect(ehEmpresa(CASA)).toBe(false);
+    expect(ehEmpresa(null)).toBe(false);
   });
 });
 

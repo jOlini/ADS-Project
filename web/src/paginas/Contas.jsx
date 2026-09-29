@@ -8,6 +8,7 @@ import Esqueleto from '../componentes/Esqueleto';
 import FormularioDeCartao from '../componentes/FormularioDeCartao';
 import FormularioDeConta from '../componentes/FormularioDeConta';
 import Icone from '../componentes/Icone';
+import SimboloDoVazio from '../olifine/componentes/SimboloDoVazio';
 import Modal from '../componentes/Modal';
 import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
@@ -220,9 +221,7 @@ export default function Contas() {
               aoRemover={(ids) => pedirRemocao('conta', ids)} ocupado={removendo} />
             {contas.length === 0 ? (
               <div className="vazio">
-                <span className="simbolo" aria-hidden="true">
-                  <Icone nome="contas" tamanho={20} />
-                </span>
+                <SimboloDoVazio icone="contas" semente={17} />
                 <h3>Nenhuma conta cadastrada</h3>
                 <p>
                   Comece pela conta onde o salário cai e informe o saldo de hoje. Poupança e dinheiro na carteira também

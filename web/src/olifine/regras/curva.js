@@ -36,6 +36,22 @@ export function caminhoSuave(pontos) {
   return caminho;
 }
 
+// Linha e área de um gráfico em miniatura (o celular e o notebook da landing),
+// num quadro de largura × altura em unidades do viewBox, com 8 de respiro em
+// cima e embaixo. Devolve também os pontos, para o cursor da miniatura.
+export function desenhoDaMiniatura(serie, largura = 300, altura = 110) {
+  const valores = serie.map((ponto) => ponto.saldo);
+  const menor = Math.min(...valores);
+  const maior = Math.max(...valores);
+  const faixa = maior - menor || 1;
+  const pontos = serie.map((ponto, indice) => ({
+    x: (indice / Math.max(1, serie.length - 1)) * largura,
+    y: 8 + (1 - (ponto.saldo - menor) / faixa) * (altura - 16),
+  }));
+  const linha = caminhoSuave(pontos);
+  return { linha, area: `${linha}L${largura} ${altura}L0 ${altura}Z`, fim: pontos.at(-1), pontos };
+}
+
 // "R$ 4,5 mil", "R$ 12 mil", "R$ 1,2 mi": rótulo curto do eixo do gráfico.
 export function valorCurto(centavos) {
   const reais = centavos / 100;

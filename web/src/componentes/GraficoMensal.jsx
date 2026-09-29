@@ -26,11 +26,15 @@ function coluna(x, largura, base, topo) {
   return `M${x} ${base}V${topo - raio}Q${x} ${topo} ${x + raio} ${topo}H${x + largura - raio}Q${x + largura} ${topo} ${x + largura} ${topo - raio}V${base}Z`;
 }
 
+const ROTULOS = { receitas: 'Receitas', despesas: 'Despesas', sobra: 'Sobra' };
+
 // Receitas e despesas de cada mês em colunas lado a lado, na mesma escala,
 // e a sobra do mês como linha fina com pontos (mesma unidade, mesma régua).
 // Passar o mouse (ou o dedo, ou as setas do teclado) numa faixa de mês abre
 // o balão com os três valores; a tabela embaixo tem todos eles sem balão.
-export default function GraficoMensal({ meses, descricao }) {
+// rotulos troca os nomes do balão e do leitor de tela (o fluxo de caixa da
+// empresa usa entradas, saídas e geração de caixa).
+export default function GraficoMensal({ meses, descricao, rotulos = ROTULOS }) {
   const caixa = useRef(null);
   const { largura, altura } = useTamanho(caixa);
   const [cursor, setCursor] = useState(null);
@@ -143,24 +147,24 @@ export default function GraficoMensal({ meses, descricao }) {
           <p>
             <i className="chave receita" />
             <b>{formatarBRL(lido.receitas_centavos)}</b>
-            <span>Receitas</span>
+            <span>{rotulos.receitas}</span>
           </p>
           <p>
             <i className="chave despesa" />
             <b>{formatarBRL(lido.despesas_centavos)}</b>
-            <span>Despesas</span>
+            <span>{rotulos.despesas}</span>
           </p>
           <p>
             <i className="chave sobra" />
             <b>{formatarComSinal(lido.sobra_centavos)}</b>
-            <span>Sobra</span>
+            <span>{rotulos.sobra}</span>
           </p>
         </div>
       )}
 
       <p className="apenas-leitor" aria-live="polite">
         {lido
-          ? `${nomeDoMes(lido.mes)}: receitas ${formatarBRL(lido.receitas_centavos)}, despesas ${formatarBRL(lido.despesas_centavos)}, sobra ${formatarComSinal(lido.sobra_centavos)}.`
+          ? `${nomeDoMes(lido.mes)}: ${rotulos.receitas.toLowerCase()} ${formatarBRL(lido.receitas_centavos)}, ${rotulos.despesas.toLowerCase()} ${formatarBRL(lido.despesas_centavos)}, ${rotulos.sobra.toLowerCase()} ${formatarComSinal(lido.sobra_centavos)}.`
           : ''}
       </p>
     </div>

@@ -1,8 +1,9 @@
 // O que o app guarda no navegador e o que sai no logout.
 //
 // Chaves do app começam com "olifine:" (metas por conta, contagem de
-// tentativas de login, último link de confirmação do e-mail, tema). Sair da conta apaga todas, menos a preferência
-// de tema, que não diz nada sobre a pessoa. Num computador compartilhado, quem
+// tentativas de login, último link de confirmação do e-mail, tema, barra
+// lateral recolhida). Sair da conta apaga todas, menos as preferências de tela
+// (tema e barra lateral), que não dizem nada sobre a pessoa. Num computador compartilhado, quem
 // senta depois não encontra as metas nem os rastros de quem saiu.
 //
 // Só as chaves do app, e nunca um clear() geral: no GitHub Pages a origem
@@ -11,9 +12,10 @@
 
 export const PREFIXO_DO_APP = 'olifine:';
 export const CHAVE_DO_TEMA = `${PREFIXO_DO_APP}tema`;
+export const CHAVE_DA_LATERAL = `${PREFIXO_DO_APP}lateral`;
 
 // Preferências que continuam depois do logout.
-const PERMANENTES = new Set([CHAVE_DO_TEMA]);
+const PERMANENTES = new Set([CHAVE_DO_TEMA, CHAVE_DA_LATERAL]);
 
 // Sessão do Firebase Authentication na aba (firebase.js usa sessionStorage).
 // O signOut() já a apaga; esta é a rede de proteção para quando ele falhou

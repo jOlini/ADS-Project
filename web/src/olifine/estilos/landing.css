@@ -909,16 +909,146 @@
   color: var(--of-verde);
 }
 
+/* ------------------------------------------------ Notebook preso na rolagem */
+
+/* A pista é mais alta que a tela; o palco fica preso (sticky) enquanto ela
+   passa, e a rolagem abre a tampa (useNotebookPreso escreve
+   --angulo-da-tampa). A tampa termina de abrir antes do fim da pista: a página
+   só volta a descer com o notebook aberto. Sem trava (menos movimento, tela
+   baixa), a seção tem a altura do conteúdo e a tampa já está aberta. */
+.lp-notebook {
+  --angulo-da-tampa: 0deg;
+  position: relative;
+  height: 250vh;
+}
+
+.lp-notebook-palco {
+  position: sticky;
+  top: 0;
+  display: grid;
+  align-items: center;
+  height: 100vh;
+  height: 100svh;
+}
+
+.lp-notebook .lp-demonstracao {
+  width: 100%;
+  padding-block: var(--espaco-12);
+}
+
+/* Empilhado, o texto fica em cima e o notebook embaixo, os dois na altura da
+   tela presa: a lista sai e o notebook encolhe pela altura que sobra. */
+@media (max-width: 1080px) {
+  .lp-notebook .lp-demonstracao {
+    gap: var(--espaco-10);
+  }
+
+  .lp-notebook .lp-lista-certa {
+    display: none;
+  }
+
+  .lp-notebook .lp-laptop {
+    width: min(100%, calc((100svh - 330px) * 1.3));
+    margin-inline: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (max-height: 540px) {
+  .lp-notebook {
+    height: auto;
+  }
+
+  .lp-notebook-palco {
+    position: static;
+    height: auto;
+  }
+
+  .lp-notebook-dica {
+    display: none;
+  }
+}
+
+.lp-notebook-dica {
+  display: inline-flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  margin-top: var(--espaco-10);
+  padding: var(--espaco-3) var(--espaco-7);
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-medio);
+  transition: background-color var(--transicao), color var(--transicao);
+}
+
+.lp-notebook[data-aberto] .lp-notebook-dica {
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.lp-notebook:not([data-aberto]) .lp-notebook-dica .icone {
+  animation: lp-desce 1.6s var(--curva) infinite;
+}
+
+@keyframes lp-desce {
+  50% {
+    translate: 0 3px;
+  }
+}
+
 .lp-laptop {
   display: grid;
   justify-items: center;
+  /* Espaço para a base deitada, que sai do fluxo (posição absoluta): vista
+     de cima, ela ocupa uns 15% da largura abaixo da tela. */
+  padding-bottom: 15%;
   perspective: 1800px;
-  perspective-origin: 50% 10%;
+  perspective-origin: 50% 0%;
+}
+
+/* Tampa e base no mesmo espaço 3D: fechada, a tampa deita sobre a base. */
+.lp-laptop-corpo {
+  --proporcao-da-base: 1.76;
+  position: relative;
+  width: 100%;
+  transform-style: preserve-3d;
+}
+
+/* A tampa gira em volta da dobradiça (a borda de baixo): a tela na frente,
+   as costas de alumínio com o monograma atrás. Fechada, quase deitada sobre
+   a base, mostra as costas. */
+.lp-laptop-tampa {
+  position: relative;
+  display: grid;
+  width: 100%;
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--angulo-da-tampa));
+}
+
+.lp-laptop-tela,
+.lp-laptop-costas {
+  grid-area: 1 / 1;
+  backface-visibility: hidden;
+}
+
+.lp-laptop-costas {
+  display: grid;
+  place-items: center;
+  border-radius: 18px 18px 6px 6px;
+  background: linear-gradient(160deg, #e3e9ec, #b9c4ca 60%, #a4b0b7);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.5);
+  transform: rotateY(180deg);
+}
+
+.lp-laptop-costas .of-monograma {
+  opacity: 0.8;
 }
 
 .lp-laptop-tela {
   display: grid;
-  grid-template-columns: 22% minmax(0, 1fr);
+  grid-template-columns: 21% minmax(0, 1fr);
   width: 100%;
   aspect-ratio: 16 / 10;
   overflow: hidden;
@@ -929,36 +1059,50 @@
   font-size: 10px;
 }
 
-/* A tampa do notebook abre conforme a seção entra na tela (animação ligada à
-   rolagem). Sem suporte a animation-timeline, ou pedindo menos movimento, o
-   notebook já aparece aberto. */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .lp-laptop-tela {
-      transform-origin: 50% 100%;
-      animation: lp-abre-a-tampa linear both;
-      animation-timeline: view();
-      animation-range: entry 0% cover 42%;
-    }
-  }
+/* A base, deitada (rotateX 90° a partir da dobradiça), vai em direção a
+   quem olha e tem a profundidade da tela: a tampa fechada a cobre inteira. A
+   câmera fica acima (perspective-origin no alto), então a base aparece como
+   o trapézio de um notebook visto de frente e de cima. */
+.lp-laptop-teclado {
+  position: absolute;
+  top: 100%;
+  left: -5%;
+  width: 110%;
+  aspect-ratio: var(--proporcao-da-base);
+  border-radius: 0 0 18px 18px;
+  background: linear-gradient(180deg, #c3ccd2, #dde3e7 18%, #d2dade);
+  box-shadow:
+    inset 0 -4px 0 #a9b4bb,
+    inset 0 1px 0 rgb(255 255 255 / 0.6);
+  transform-origin: 50% 0;
+  transform: rotateX(90deg);
 }
 
-@keyframes lp-abre-a-tampa {
-  from {
-    transform: rotateX(-62deg);
-  }
-
-  to {
-    transform: rotateX(0deg);
-  }
+.lp-laptop-teclas {
+  position: absolute;
+  top: 9%;
+  left: 9%;
+  right: 9%;
+  height: 44%;
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 5.6%, rgb(195 204 210 / 0.9) 5.6% 6.6%),
+    repeating-linear-gradient(180deg, transparent 0 17%, rgb(195 204 210 / 0.9) 17% 20%),
+    #8e9aa2;
 }
 
-.lp-laptop-base {
-  width: 112%;
-  height: 14px;
-  border-radius: 0 0 14px 14px;
-  background: linear-gradient(180deg, #d5dde2, #a9b4bb);
+.lp-laptop-touchpad {
+  position: absolute;
+  bottom: 9%;
+  left: 36%;
+  width: 28%;
+  height: 28%;
+  border-radius: 8px;
+  background: rgb(169 180 187 / 0.45);
+  box-shadow: inset 0 0 0 1px rgb(142 154 162 / 0.6);
 }
+
+/* ------------------------------------------ Tela interativa do notebook */
 
 .lp-mini-lateral {
   display: grid;
@@ -974,15 +1118,32 @@
   margin: 0 0 8px 6px;
 }
 
-.lp-mini-lateral span {
-  overflow: hidden;
-  padding: 5px 7px;
+.lp-mini-lateral button {
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 26px;
+  padding: 0 7px;
+  border: 0;
   border-radius: 6px;
+  background: transparent;
+  color: var(--suave);
+  font-size: 10px;
+  font-weight: var(--peso-medio);
+}
+
+.lp-mini-lateral button span {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.lp-mini-lateral span.ativo {
+.lp-mini-lateral button:hover:not(:disabled) {
+  background: var(--lateral);
+  color: var(--texto);
+}
+
+.lp-mini-lateral button[aria-pressed='true'] {
   background: var(--of-menta);
   color: var(--of-sobre-menta);
   font-weight: var(--peso-semi);
@@ -992,7 +1153,9 @@
   display: grid;
   gap: 9px;
   align-content: start;
+  min-width: 0;
   padding: 14px;
+  overflow: hidden;
 }
 
 .lp-mini-ola {
@@ -1008,10 +1171,11 @@
 }
 
 .lp-mini-kpis > div,
-.lp-mini-paineis > div {
+.lp-mini-painel {
   display: grid;
   gap: 3px;
   align-content: start;
+  min-width: 0;
   padding: 8px 10px;
   border: var(--borda);
   border-radius: 8px;
@@ -1019,7 +1183,7 @@
 }
 
 .lp-mini-kpis small,
-.lp-mini-paineis small {
+.lp-mini-painel small {
   color: var(--suave);
 }
 
@@ -1036,19 +1200,284 @@
 
 .lp-mini-paineis {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 8px;
 }
 
-.lp-mini-paineis svg {
-  display: block;
-  width: 100%;
-  height: 96px;
+.lp-mini-painel-topo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.lp-mini-paineis .lp-mini-rosca {
-  justify-self: center;
-  width: 96px;
+.lp-mini-faixas {
+  display: flex;
+  gap: 2px;
+}
+
+.lp-mini-faixas button {
+  min-height: 20px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--raio-pilula);
+  background: transparent;
+  color: var(--suave);
+  font-size: 9px;
+  font-weight: var(--peso-medio);
+}
+
+.lp-mini-faixas button:hover:not(:disabled) {
+  background: var(--lateral);
+  color: var(--texto);
+}
+
+.lp-mini-faixas button[aria-pressed='true'] {
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.lp-mini-leitura {
+  color: var(--suave);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-mini-evolucao svg {
+  display: block;
+  width: 100%;
+  height: 150px;
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+
+.lp-mini-cursor {
+  stroke: var(--linha-forte);
+  stroke-dasharray: 3 3;
+}
+
+.lp-mini-rosca-corpo {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.lp-mini-rosca-palco {
+  position: relative;
+}
+
+.lp-mini-rosca {
+  display: block;
+  width: 100px;
+}
+
+.lp-mini-rosca circle {
+  transition: stroke-width var(--transicao), opacity var(--transicao);
+}
+
+.lp-mini-rosca circle.apagada {
+  opacity: 0.35;
+}
+
+.lp-mini-rosca-centro {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.lp-mini-rosca-centro b {
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-mini-rosca-centro small {
+  font-size: 8px;
+}
+
+.lp-mini-legenda {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-mini-legenda button {
+  justify-content: flex-start;
+  gap: 5px;
+  width: 100%;
+  min-height: 18px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--texto);
+  font-size: 9px;
+  font-weight: var(--peso-medio);
+  white-space: nowrap;
+}
+
+.lp-mini-legenda button:hover:not(:disabled),
+.lp-mini-legenda button[aria-pressed='true'] {
+  background: var(--lateral);
+}
+
+.lp-mini-legenda i {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.lp-mini-lista,
+.lp-mini-contas {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-mini-lista li,
+.lp-mini-contas button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 4px;
+  border-radius: 6px;
+}
+
+.lp-mini-lista li:hover {
+  background: var(--lateral);
+}
+
+.lp-mini-lista .of-marca-categoria {
+  width: 22px;
+  height: 22px;
+}
+
+.lp-mini-lista-textos {
+  display: grid;
+  min-width: 0;
+  text-align: left;
+}
+
+.lp-mini-lista-textos b {
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: var(--peso-semi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lp-mini-lista-textos small {
+  font-size: 8.5px;
+}
+
+.lp-mini-lista li > b {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-mini-lista li > b.entrada {
+  color: var(--of-sobre-menta);
+}
+
+.lp-mini-total {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-mini-contas button {
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  color: var(--texto);
+  font-size: 10px;
+}
+
+.lp-mini-contas button:hover:not(:disabled),
+.lp-mini-contas button[aria-expanded='true'] {
+  background: var(--lateral);
+}
+
+.lp-mini-contas button > b {
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-mini-conta-parte {
+  display: grid;
+  gap: 3px;
+  padding: 2px 4px 6px;
+  color: var(--suave);
+  font-size: 9px;
+}
+
+.lp-mini-conta-parte i {
+  display: block;
+  height: 5px;
+  border-radius: var(--raio-pilula);
+  background: var(--of-verde);
+}
+
+.lp-mini-meta {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.lp-mini-meta-arvore svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 210px;
+}
+
+.lp-mini-meta-textos {
+  display: grid;
+  gap: 5px;
+  align-content: center;
+}
+
+.lp-mini-meta-textos > b {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-mini-meta-textos p {
+  color: var(--suave);
+  font-size: 9.5px;
+}
+
+.lp-mini-meta .of-progresso {
+  height: 5px;
+}
+
+button.lp-mini-botao {
+  justify-self: start;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--raio-pilula);
+  font-size: 10px;
+}
+
+button.lp-mini-botao.contorno {
+  border-color: var(--linha-forte);
+  background: transparent;
+  color: var(--texto);
+}
+
+button.lp-mini-botao.contorno:hover:not(:disabled) {
+  background: var(--lateral);
 }
 
 /* ------------------------------------------------------------ Simulador */
@@ -1981,11 +2410,47 @@ button.lp-simulador-refazer:hover:not(:disabled) {
     width: 272px;
   }
 
+  /* Tela estreita: as telas do app de exemplo viram abas no alto da tela
+     do notebook, e a tela fica mais alta para caber o conteúdo. */
   .lp-laptop-tela {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    aspect-ratio: 4 / 3;
+  }
+
+  .lp-laptop-corpo {
+    --proporcao-da-base: 1.47;
+  }
+
+  .lp-mini-evolucao svg {
+    height: 110px;
   }
 
   .lp-mini-lateral {
+    display: flex;
+    gap: 2px;
+    padding: 6px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: var(--borda);
+    scrollbar-width: none;
+  }
+
+  .lp-mini-lateral .of-monograma,
+  .lp-mini-ola {
+    display: none;
+  }
+
+  .lp-mini-lateral button {
+    flex: 1 0 auto;
+    justify-content: center;
+  }
+
+  .lp-mini-paineis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lp-mini-despesas {
     display: none;
   }
 

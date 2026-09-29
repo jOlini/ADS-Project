@@ -1,24 +1,14 @@
 // A cena WebGL do topo da landing: o campo de folhas, pontos e moedas que
-// sobe da esquerda para a direita como a curva do saldo, ondula devagar, se
-// levanta sob o ponteiro e abre anéis onde a pessoa toca ("rega"). WebGL 1 puro,
-// sem biblioteca: um programa, dois buffers e um desenho de pontos por quadro.
-// A conta de câmera, toque e distribuição das folhas está em regras/pomar.ts;
-// o relevo e a cor são calculados aqui, no shader, para cada folha.
+// sobe da esquerda para a direita como a curva do saldo, ondula devagar e se
+// levanta sob o ponteiro. Só o hover mexe no campo: clicar não faz nada (os
+// anéis de "rega" no toque saíram).
+// WebGL 1 puro, sem biblioteca: um programa, dois buffers e um desenho de
+// pontos por quadro. A conta de câmera, ponteiro e distribuição das folhas
+// está em regras/pomar.ts; o relevo e a cor são calculados aqui, no shader,
+// para cada folha.
 
 import { CAMPO, TIPO, pixelsPorUnidade, type Matriz4, type Pomar } from '../regras/pomar';
 import { abrirContexto, enviarAtributo, liberarContexto, montarPrograma } from './webgl';
-
-// Anéis de rega vivos ao mesmo tempo (o shader tem um laço fixo).
-export const MAXIMO_DE_GOTAS = 3;
-// Quanto dura um anel, em segundos (o shader para de somar depois disso).
-export const VIDA_DA_GOTA = 3;
-
-export interface Gota {
-  x: number;
-  z: number;
-  inicio: number;
-  forca: number;
-}
 
 export interface QuadroDaCena {
   // Relógio da cena (s): só anda com a cena visível, então nada pula ao voltar.
@@ -26,7 +16,6 @@ export interface QuadroDaCena {
   matriz: Matriz4;
   // Onde o ponteiro toca o chão e com que força (0 a 1).
   ponteiro: [number, number, number];
-  gotas: readonly Gota[];
   // Caixa do texto na tela (-1 a 1): as folhas por trás dele se apagam.
   mascara: [number, number, number, number];
   // 1 no tema claro; menos no escuro, onde a esmeralda é mais funda.
@@ -50,7 +39,6 @@ uniform float u_tempo;
 uniform float u_escala;
 uniform float u_profundidade;
 uniform vec3 u_ponteiro;
-uniform vec4 u_gotas[${MAXIMO_DE_GOTAS}];
 uniform vec4 u_mascara;
 varying float v_tipo;
 varying float v_giro;
@@ -80,18 +68,6 @@ void main() {
   float distancia = distance(p, u_ponteiro.xy);
   float brilho = u_ponteiro.z * exp(-distancia * distancia * 0.22);
   h += brilho * 0.8;
-
-  // Cada toque abre um anel que corre pelo campo e some.
-  for (int i = 0; i < ${MAXIMO_DE_GOTAS}; i++) {
-    vec4 gota = u_gotas[i];
-    float idade = u_tempo - gota.z;
-    if (gota.w > 0.0 && idade >= 0.0 && idade < ${VIDA_DA_GOTA}.0) {
-      float d = distance(p, gota.xy) - idade * 2.6;
-      float anel = exp(-d * d * 1.4) * exp(-idade * 0.9) * gota.w;
-      h += anel * 1.1;
-      brilho += anel;
-    }
-  }
 
   // Profundidade do campo é o z negativo do mundo (regras/pomar.ts).
   vec4 posicao = u_matriz * vec4(p.x, h, -p.y, 1.0);
@@ -206,7 +182,6 @@ export function criarCenaDoPomar(canvas: HTMLCanvasElement, pomar: Pomar): CenaD
     escala: local('u_escala'),
     profundidade: local('u_profundidade'),
     ponteiro: local('u_ponteiro'),
-    gotas: local('u_gotas'),
     mascara: local('u_mascara'),
     intensidade: local('u_intensidade'),
   };
@@ -217,8 +192,6 @@ export function criarCenaDoPomar(canvas: HTMLCanvasElement, pomar: Pomar): CenaD
   gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   gl.clearColor(0, 0, 0, 0);
 
-  const gotas = new Float32Array(MAXIMO_DE_GOTAS * 4);
-
   return {
     redimensionar(larguraCss, alturaCss, densidade) {
       canvas.width = Math.max(1, Math.round(larguraCss * densidade));
@@ -227,14 +200,9 @@ export function criarCenaDoPomar(canvas: HTMLCanvasElement, pomar: Pomar): CenaD
       gl.uniform1f(u.escala, pixelsPorUnidade(canvas.height));
     },
     desenhar(quadro) {
-      gotas.fill(0);
-      quadro.gotas.slice(0, MAXIMO_DE_GOTAS).forEach((gota, indice) => {
-        gotas.set([gota.x, gota.z, gota.inicio, gota.forca], indice * 4);
-      });
       gl.uniformMatrix4fv(u.matriz, false, quadro.matriz);
       gl.uniform1f(u.tempo, quadro.tempo);
       gl.uniform3fv(u.ponteiro, quadro.ponteiro);
-      gl.uniform4fv(u.gotas, gotas);
       gl.uniform4fv(u.mascara, quadro.mascara);
       gl.uniform1f(u.intensidade, quadro.intensidade);
       gl.clear(gl.COLOR_BUFFER_BIT);
