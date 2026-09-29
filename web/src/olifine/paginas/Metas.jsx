@@ -12,10 +12,12 @@ import { formatarData, hojeIso } from '../../regras/datas';
 import Arvore from '../componentes/Arvore';
 import Icone from '../../componentes/Icone';
 import {
+  aportesRapidos,
   concluida,
   faltaParaOAlvo,
   FASES,
   faseDaMeta,
+  faseDoValor,
   guardado,
   planoMensal,
   porcentagem,
@@ -28,9 +30,8 @@ import {
   validarMeta,
 } from '../regras/metas';
 import { useMetas } from '../useMetas';
+import { useProgressoAnimado } from '../useProgressoAnimado';
 
-// Valores rápidos de aporte, em centavos.
-const APORTES_RAPIDOS = [5000, 10000, 20000, 50000];
 const MES_E_ANO = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 const mesEAno = (iso) => MES_E_ANO.format(new Date(`${iso}T12:00:00Z`)).replace('.', '').replace(' de ', '/');
 
@@ -77,16 +78,19 @@ function FormularioDeMeta({ aoCriar, aoCancelar }) {
 
 // Régua das fases embaixo da árvore: cada marco no ponto do alvo em que a
 // fase começa; os alcançados ficam verdes. Os nomes ficam sob os marcos.
+// valor é o guardado que a tela mostra agora (anda junto com a árvore depois
+// de uma rega), então a barra e os marcos acompanham o crescimento.
 const posicaoDaFase = (fase) => (fase.id === 'broto' ? 0 : fase.aPartirDe * 100);
 
-function ReguaDeFases({ meta }) {
-  const atual = FASES.findIndex((fase) => fase.id === faseDaMeta(meta).id);
+function ReguaDeFases({ meta, valor }) {
+  const atual = FASES.findIndex((fase) => fase.id === faseDoValor(meta, valor).id);
   const marcos = FASES.filter((fase) => fase.id !== 'semente');
   const alcancada = (fase) => FASES.indexOf(fase) <= atual;
+  const preenchido = meta.alvo > 0 ? Math.min(100, (valor / meta.alvo) * 100) : 0;
   return (
     <div className="of-fases">
       <div className="of-fases-trilho" aria-hidden="true">
-        <i style={{ '--p': `${porcentagem(meta)}%` }} />
+        <i style={{ '--p': `${preenchido}%` }} />
         {marcos.map((fase) => (
           <span key={fase.id} className={`of-fases-marco${alcancada(fase) ? ' alcancado' : ''}`} style={{ left: `${posicaoDaFase(fase)}%` }} />
         ))}
@@ -112,11 +116,17 @@ function Estufa({ meta, rega, aoRegar, aoExcluir }) {
   const sequencia = sequenciaDeSemanas(meta.aportes, hoje);
   const completa = concluida(meta);
   const ultimos = [...meta.aportes].reverse().slice(0, 4);
+  const falta = faltaParaOAlvo(meta);
+  // Árvore, barra e valor guardado andam juntos até o novo progresso, numa
+  // mola só: cliques seguidos em "Regar" continuam o crescimento, sem travar.
+  const alvoDoProgresso = progresso(meta);
+  const mostrado = useProgressoAnimado(alvoDoProgresso, { rega });
+  const valorMostrado = mostrado === alvoDoProgresso ? guardado(meta) : Math.round(mostrado * meta.alvo);
 
   function regarOutro(evento) {
     evento.preventDefault();
     const valor = lerValor(outro);
-    const problema = validarAporte(valor);
+    const problema = validarAporte(valor, meta);
     setErro(problema);
     if (!problema) {
       aoRegar(valor);
@@ -144,7 +154,8 @@ function Estufa({ meta, rega, aoRegar, aoExcluir }) {
         <div className="of-estufa-arvore">
           <Arvore
             semente={sementeDaMeta(meta.id)}
-            progresso={progresso(meta)}
+            progresso={alvoDoProgresso}
+            mostrado={mostrado}
             rega={rega}
             rotulo={`Árvore da meta ${meta.nome}: fase ${fase.nome}, ${porcentagem(meta)}% do alvo.`}
           />
@@ -152,10 +163,10 @@ function Estufa({ meta, rega, aoRegar, aoExcluir }) {
 
         <div className="of-estufa-painel">
           <p className="of-estufa-guardado">
-            <b>{formatarBRL(guardado(meta))}</b>
+            <b>{formatarBRL(valorMostrado)}</b>
             <span>de {formatarBRL(meta.alvo)}</span>
           </p>
-          <ReguaDeFases meta={meta} />
+          <ReguaDeFases meta={meta} valor={valorMostrado} />
 
           <ul className="of-estufa-fatos">
             <li>
@@ -182,11 +193,18 @@ function Estufa({ meta, rega, aoRegar, aoExcluir }) {
 
           {!completa && (
             <div className="of-regar">
-              <p className="of-regar-titulo">Regar com um aporte</p>
+              <p className="of-regar-titulo">
+                Regar com um aporte
+                <span className="of-regar-falta">
+                  faltam <b>{formatarBRL(falta)}</b> para completar
+                </span>
+              </p>
+              {/* Nenhum valor passa do que falta: o último botão completa a meta. */}
               <div className="of-regar-rapidos">
-                {APORTES_RAPIDOS.filter((valor) => valor <= Math.max(faltaParaOAlvo(meta), 5000)).map((valor) => (
-                  <button key={valor} type="button" className="of-chip" onClick={() => aoRegar(valor)}>
-                    <Icone nome="gota" tamanho={14} />+ {formatarBRL(valor).replace(',00', '')}
+                {aportesRapidos(meta).map(({ valor, completa: completaAMeta }) => (
+                  <button key={valor} type="button" className={`of-chip${completaAMeta ? ' completa' : ''}`} onClick={() => aoRegar(valor)}>
+                    <Icone nome="gota" tamanho={14} />
+                    {completaAMeta ? `Completar ${formatarBRL(valor)}` : `+ ${formatarBRL(valor).replace(',00', '')}`}
                   </button>
                 ))}
               </div>
@@ -245,6 +263,11 @@ export default function Metas() {
   const meta = metas.find((item) => item.id === escolhida) ?? metas.find((item) => !concluida(item)) ?? metas[0] ?? null;
 
   function regar(valor) {
+    // A tela só oferece o que cabe; aqui é a última barreira (a meta não passa
+    // de 100%).
+    if (validarAporte(valor, meta)) {
+      return;
+    }
     const antes = faseDaMeta(meta);
     const aporte = aportar(meta.id, valor);
     setRegas((atual) => ({ ...atual, [meta.id]: (atual[meta.id] ?? 0) + 1 }));

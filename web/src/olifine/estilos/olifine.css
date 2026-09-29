@@ -1409,6 +1409,13 @@ a.of-regar-convite-link:hover {
   overflow: visible;
 }
 
+/* A árvore grande não desenha fora da caixa: o que se move (regador, gotas,
+   maçãs) fica dentro do SVG, e o Chrome não deixa rastro de quadro antigo
+   fora dela (o "fantasma" de uma animação por cima de overflow visível). */
+.of-arvore:not(.compacta) {
+  overflow: hidden;
+}
+
 .of-arvore-ceu {
   fill: var(--of-menta);
   opacity: 0.45;
@@ -1491,30 +1498,29 @@ a.of-regar-convite-link:hover {
   }
 }
 
-/* Colheita: depois da água e do crescimento (cerca de 1,9 s), as maçãs caem
-   em queda acelerada, giram um pouco e param na grama, sem quique. */
-.of-arvore-maca.caindo {
+/* Colheita: quando a árvore termina de crescer até 100%, parte das maçãs se
+   solta do galho (é o próprio fruto que desce, não uma cópia), cai
+   acelerando, gira um pouco e para na grama, sem quique. As outras ficam. */
+.of-arvore-queda {
+  transform-box: fill-box;
   transform-origin: center;
-  animation: of-colheita 820ms cubic-bezier(0.5, 0, 0.9, 0.6) calc(1900ms + var(--atraso)) both;
+  animation: of-colheita 820ms cubic-bezier(0.5, 0, 0.9, 0.6) var(--atraso) both;
 }
 
 @keyframes of-colheita {
   0% {
-    opacity: 0;
     transform: translate(0, 0) rotate(0deg);
   }
-  10% {
-    opacity: 1;
-  }
   100% {
-    opacity: 1;
     transform: translate(var(--desvio), var(--queda)) rotate(24deg);
   }
 }
 
+/* O regador entra pela direita e inclina para a árvore: o apoio fica perto
+   da alça, e o bico (à esquerda) desce. */
 .of-arvore-regador {
   transform-box: fill-box;
-  transform-origin: 30% 80%;
+  transform-origin: 85% 75%;
   animation: of-regador 1500ms var(--curva) both;
 }
 
@@ -1546,40 +1552,83 @@ a.of-regar-convite-link:hover {
   }
 }
 
+/* Gotas em parábola, a partir do bico inclinado: o <g> de fora anda para o
+   lado em ritmo constante e a gota de dentro cai acelerando (duas
+   animações, dois ritmos: uma queda de verdade). Saem quando o regador
+   acaba de inclinar (34% de 1,5 s). */
+.of-arvore-gota-lado {
+  animation: of-gota-lado 640ms linear calc(520ms + var(--atraso)) both;
+}
+
 .of-arvore-gota {
   fill: var(--of-agua);
-  opacity: 0;
-  animation: of-gota 720ms cubic-bezier(0.5, 0, 0.9, 0.6) calc(420ms + var(--atraso)) both;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: of-gota 640ms cubic-bezier(0.45, 0, 0.9, 0.5) calc(520ms + var(--atraso)) both;
+}
+
+@keyframes of-gota-lado {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--dx));
+  }
 }
 
 @keyframes of-gota {
   0% {
     opacity: 0;
-    transform: translate(0, -6px);
+    transform: translateY(0) scale(0.55);
   }
-  20% {
+  12% {
+    opacity: 0.95;
+    transform: translateY(2px) scale(1);
+  }
+  88% {
     opacity: 0.95;
   }
   100% {
     opacity: 0;
-    transform: translate(var(--desvio), 118px);
+    transform: translateY(var(--dy)) scale(0.8, 1.1);
+  }
+}
+
+/* Respingo onde a água chega: um anel que abre e some. */
+.of-arvore-respingo {
+  fill: none;
+  stroke: var(--of-agua);
+  stroke-width: 1.4;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: of-respingo 420ms var(--curva-saida) var(--atraso) both;
+}
+
+@keyframes of-respingo {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.3, 0.7);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .of-grafico-linha,
   .of-grafico-area,
-  .of-arvore-maca {
+  .of-arvore-maca,
+  .of-arvore-queda {
     animation: none;
   }
 
-  .of-arvore-rega,
-  .of-arvore-colheita {
+  .of-arvore-rega {
     display: none;
   }
 
-  .of-progresso i,
-  .of-fases-trilho i {
+  .of-progresso i {
     transition: none;
   }
 }
@@ -1648,6 +1697,9 @@ a.of-regar-convite-link:hover {
 }
 
 .of-estufa-arvore {
+  /* Camada própria: a animação da árvore repinta só esta caixa. */
+  contain: paint;
+  isolation: isolate;
   padding: var(--espaco-4);
   border-radius: 14px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--of-menta) 40%, var(--superficie)), var(--superficie) 85%);
@@ -1696,9 +1748,9 @@ a.of-regar-convite-link:hover {
   inset: 0;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--of-verde), var(--of-verde-vivo));
+  /* Anda junto com a árvore, quadro a quadro (useProgressoAnimado): --p
+     vem do mesmo valor animado que desenha a árvore, sem transição própria. */
   clip-path: inset(0 calc(100% - var(--p, 0%)) 0 0 round 9999px);
-  /* Anda junto com a árvore: espera a água cair e cresce no mesmo tempo. */
-  transition: clip-path 1400ms var(--curva) 520ms;
 }
 
 .of-fases-marco {
@@ -1779,9 +1831,24 @@ a.of-regar-convite-link:hover {
 }
 
 .of-regar-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2) var(--espaco-6);
+  align-items: baseline;
+  justify-content: space-between;
   color: var(--suave);
   font-size: var(--fonte-apoio);
   font-weight: var(--peso-semi);
+}
+
+.of-regar-falta {
+  font-weight: var(--peso-regular);
+}
+
+.of-regar-falta b {
+  color: var(--texto);
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
 }
 
 .of-regar-rapidos {
@@ -1803,6 +1870,14 @@ button.of-chip {
 
 button.of-chip .icone {
   color: var(--of-agua);
+}
+
+/* O botão que completa a meta: o valor exato que falta, já na cor da colheita. */
+button.of-chip.completa {
+  border-color: var(--of-verde);
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+  font-weight: var(--peso-semi);
 }
 
 button.of-chip:hover:not(:disabled) {
