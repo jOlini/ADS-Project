@@ -23,10 +23,12 @@ abre um menu. Detalhes em [Como executar](#como-executar).
 
 ## Proposta de valor
 
-- **Clareza em vez de planilha.** A Visão geral junta saldo, receitas e despesas do mês comparadas ao anterior,
-  evolução do saldo e gasto por categoria. Cada número mostra de onde veio, lançamento por lançamento.
-- **Do seu jeito, sem burocracia.** Contas, carteira de cartões de crédito com fatura e parcelas, categorias, racha
-  entre pessoas, edição e remoção em lote e importação do extrato do banco em CSV (as colunas de vários bancos
+- **Clareza em vez de planilha.** A Visão geral começa pelo **saldo livre até o fim do mês**: o saldo de hoje
+  mais o que ainda entra, menos o que ainda sai (contas lançadas com data futura e as faturas dos cartões), com
+  aviso quando o mês fecha no vermelho mesmo com o saldo de hoje positivo. Depois vêm receitas e despesas do mês
+  comparadas ao anterior, evolução do saldo e gasto por categoria. Cada número mostra de onde veio.
+- **Do seu jeito, sem burocracia.** Contas, carteira de cartões de crédito com fatura e parcelas, categorias, a
+  pessoa responsável por cada gasto, racha entre pessoas, edição e remoção em lote e importação do extrato do banco em CSV (as colunas de vários bancos
   reconhecidas sozinhas, a categoria sugerida pela descrição e pelo histórico, editável na conferência, sem
   duplicar; na fatura do cartão, a compra "03/12" já gera as parcelas das próximas faturas).
 - **Metas que dão vontade de cumprir.** Cada meta é uma árvore: cada aporte rega, ela brota, cresce e, completa,
@@ -398,8 +400,10 @@ Com o `web/.env` configurado, o atalho faz tudo: no Windows, dois cliques em `we
 http://localhost:5173/ADS-Project/ (`npm run dev` sobe o mesmo servidor sem abrir o navegador). Guia só da área
 do cliente: [`web/README.md`](web/README.md).
 
-A raiz (`/`) mostra a página de apresentação, com o simulador "Quanto sobra no seu mês?". A área logada tem a
-Visão geral (números do mês, evolução do saldo, despesas por categoria, últimas transações, metas e os dados do
+A raiz (`/`) mostra a página de apresentação, com o simulador "Quanto sobra no seu mês?": o pomar 3D do topo
+segue pela página como folhas e moedas ao vento atrás das seções (WebGL, carregado só ao rolar), cada bloco
+entra ao rolar e os cartões giram com o mouse; pedindo menos movimento ao sistema, tudo fica parado. A área
+logada tem a Visão geral (saldo livre até o fim do mês, números do mês, evolução do saldo, despesas por categoria, últimas transações, metas e os dados do
 cadastro), a aba Metas (as metas ficam no navegador até a API de metas e saem dele no logout) e, com a API,
 Lançamentos, Contas & Cartões, Categorias e Relatórios. O botão de lua ou sol no topo troca o tema.
 
@@ -498,10 +502,10 @@ poucos.
 | Front-end | `web/src/regras/tema.test.js` | Tema salvo ou do sistema e alternância |
 | Front-end | `web/src/regras/mascaras.test.ts` e `sanitizacao.test.ts` | Máscara de valor (milhar, vírgula, dois decimais, sinal, cursor, colar) e de inteiro, teclas barradas por tipo de campo, e a limpeza do texto antes de ir à API |
 | Front-end | `web/src/regras/arquivoDoExtrato.test.ts` e `conferenciaDaImportacao.test.ts` | Arquivo do extrato (extensão, tipo, planilha ou PDF renomeado, binário, UTF-8, Windows-1252 e UTF-16) e a edição de descrição e categoria na conferência |
-| Front-end | `web/src/regras/*.test.js` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |
+| Front-end | `web/src/regras/*.test.js` e `responsavel.test.ts` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, responsável e racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |
 | Front-end | `web/src/regras/espacos.test.ts` e `servicos/espacoAtivo.test.ts` | Espaços: qual abre, o nome na tela, quem renomeia e exclui, o formulário, a seção depois da troca, as metas de cada espaço e o último espaço guardado no navegador (sai no logout) |
 | Front-end | `web/src/servicos/livroCaixa.test.js` e `enderecoDaApi.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar, token que não renova e endereço pela rede local |
-| Front-end | `web/src/olifine/regras/*.test.js` e `*.test.ts` | OliFine: tendência, séries do gráfico de saldo, Visão geral, metas, a árvore que cresce, o simulador de orçamento e o pomar 3D da landing (câmera, toque no chão, movimento suave, quantas folhas e onde nascem) |
+| Front-end | `web/src/olifine/regras/*.test.js` e `*.test.ts` | OliFine: tendência, séries do gráfico de saldo, Visão geral, saldo livre do mês (datas futuras, faturas, falsa folga), metas, a árvore que cresce, o simulador de orçamento, o pomar 3D da landing (câmera, toque no chão, movimento suave, quantas folhas e onde nascem) e as folhas ao vento (quantas por tela, margens e paralaxe) |
 | Front-end | `web/src/componentes/*.test.js` | Error Boundary, avisos (toasts) e todo nome de ícone usado nas telas com desenho na família própria |
 
 Os mesmos testes rodam no GitHub Actions a cada commit de pull request e a cada push na `main`
@@ -608,15 +612,19 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
    `500,00` da conta corrente para a poupança. O extrato mostra cada dia com o saldo de todas as contas; a transferência não muda o
    total.
 3. Lance uma despesa `Churrasco` de `300,00` e, em **Dividir com pessoas**, adicione Ana, Bruno e Carla com
-   `100,00`, `150,00` e `50,00`. Com as partes passando de `300,00`, o formulário não deixa lançar.
+   `100,00`, `150,00` e `50,00`. Com as partes passando de `300,00`, o formulário não deixa lançar (e nenhum
+   campo pula de lugar com os avisos). Para só dizer de quem é um gasto, sem racha, use **Responsável**: o nome
+   aparece na linha do extrato, a busca acha por ele e as pessoas já usadas viram atalhos.
 4. Na busca do extrato, digite `bruno` ou `300`: ficam só os lançamentos com a pessoa ou o valor.
 5. No menu **⋯** da despesa `Mercado`, **Estorne**: entra um lançamento de `+ R$ 214,37` com a data de hoje e o
    original fica marcado como "Estornado". Lance algo errado e, no mesmo menu, **Exclua**: ele some do extrato e
    do saldo. **Editar**, no mesmo menu, corrige descrição, valor, data, categoria e meio. Marque duas linhas pelas
    caixas da esquerda e use **Remover selecionados** (ou **Remover todos**, para tudo o que está na tela): a
    confirmação diz o que sai junto.
-6. Na **Visão geral**, as despesas do mês aparecem separadas em à vista e no crédito, e o **+ Novo** do topo
-   escolhe entre lançamento, compra no crédito, conta e cartão, cada um no seu modal. Em **Categorias**, crie,
+6. Na **Visão geral**, o **Saldo livre até o fim do mês** abre a conta (saldo de hoje + a receber − a pagar):
+   lance uma despesa grande com a data de amanhã e o card fica vermelho, dizendo que o saldo de hoje está
+   positivo mas o mês fecha no negativo. As despesas do mês aparecem separadas em à vista e no crédito, e o
+   **+ Novo** do topo escolhe entre lançamento, compra no crédito, conta e cartão, cada um no seu modal. Em **Categorias**, crie,
    renomeie, desative ou remova uma categoria (a que já tem lançamentos não sai: o aviso manda desativar).
 7. Em **Importar CSV**, escolha um CSV com as colunas Data, Descrição e Valor (exemplo fictício abaixo) e a conta,
    e clique em **Continuar**: as colunas são reconhecidas sozinhas e a conferência já abre, com a categoria de cada
