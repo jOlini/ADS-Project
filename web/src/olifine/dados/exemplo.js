@@ -52,6 +52,17 @@ export const LANCAMENTOS_DE_EXEMPLO = [
   linha('2026-09-02', 'Academia do bairro', 'Saúde', -9990),
 ];
 
+// Contas já lançadas para depois de hoje e a dívida do cartão até a fatura
+// atual: o saldo livre da Visão geral as desconta. Ficam fora dos
+// LANCAMENTOS_DE_EXEMPLO, então a landing e os números do mês não mudam. O
+// aluguel de outubro é do mês seguinte e não entra na conta de setembro.
+export const PREVISTOS_DE_EXEMPLO = [
+  linha('2026-09-28', 'Mensalidade da escola', 'Contas da casa', -89000),
+  linha('2026-09-30', 'Condomínio', 'Moradia', -52000),
+  linha('2026-10-05', 'Aluguel de outubro', 'Moradia', -185000),
+];
+export const CARTOES_DE_EXEMPLO = [{ usado_centavos: 238450, parcelamentos_futuros_centavos: 64000 }];
+
 // Saldo no fim de cada mês, de outubro de 2025 a setembro de 2026 (o último
 // é o saldo de hoje), e as receitas de cada mês. A despesa sai da conta:
 // receita menos o quanto o saldo subiu. Setembro bate com os lançamentos.

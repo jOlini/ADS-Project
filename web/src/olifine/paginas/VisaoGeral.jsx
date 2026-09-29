@@ -34,14 +34,18 @@ import Arvore from '../componentes/Arvore';
 import GraficoDeSaldo from '../componentes/GraficoDeSaldo';
 import Icone from '../../componentes/Icone';
 import Rosca from '../componentes/Rosca';
+import SaldoLivre from '../componentes/SaldoLivre';
 import {
+  CARTOES_DE_EXEMPLO,
   CONTAS_DE_EXEMPLO,
   HOJE_DE_EXEMPLO,
   LANCAMENTOS_DE_EXEMPLO,
   MESES_DE_EXEMPLO,
+  PREVISTOS_DE_EXEMPLO,
   SALDO_DE_EXEMPLO,
 } from '../dados/exemplo';
 import { iconeDaLinha } from '../regras/icones';
+import { calcularSaldoLivre } from '../regras/saldoLivre';
 import { parteInvestida, separarSaldos } from '../regras/saldos';
 import { guardado, porcentagem, progresso, proximaFase, resumoDasMetas, sementeDaMeta } from '../regras/metas';
 import { somarDias } from '../regras/serie';
@@ -106,7 +110,8 @@ function SeloDeTendencia({ variacao, maiorEhMelhor = true, referencia }) {
   );
 }
 
-// Visão geral da OliFine: os quatro números do mês com a tendência, a
+// Visão geral da OliFine: o saldo livre até o fim do mês (o que sobra depois
+// das contas previstas), os quatro números do mês com a tendência, a
 // evolução do saldo, as despesas por categoria, as últimas transações, as
 // metas e o compromisso nos cartões. Com a API, dados de verdade; sem ela
 // (Pages), a tela vazia oferece o modo de exemplo, sempre marcado.
@@ -147,12 +152,18 @@ export default function VisaoGeral() {
           hoje: HOJE_DE_EXEMPLO,
         }),
         contas: CONTAS_DE_EXEMPLO,
+        // Como na API, o saldo das contas já inclui o que tem data futura.
+        projecao: {
+          saldo: SALDO_DE_EXEMPLO + PREVISTOS_DE_EXEMPLO.reduce((soma, linha) => soma + linha.valor, 0),
+          linhas: [...LANCAMENTOS_DE_EXEMPLO, ...PREVISTOS_DE_EXEMPLO],
+          cartoes: CARTOES_DE_EXEMPLO,
+        },
       };
     }
     if (!livro.dados) {
       return null;
     }
-    const { contas, categorias, lancamentos, relatorio } = livro.dados;
+    const { contas, categorias, lancamentos, relatorio, cartoes } = livro.dados;
     const mes = mesDe(comoData(hojeReal));
     const dasContas = paraExtrato(lancamentosDasContas(lancamentos, contas), contas, categorias);
     const comCartoes = paraExtrato(lancamentos, contas, categorias);
@@ -174,6 +185,9 @@ export default function VisaoGeral() {
         saldo: conta.saldo_centavos,
         ativa: conta.ativa,
       })),
+      // O que o saldo livre do mês precisa: o extrato das contas com as datas
+      // futuras (a listagem não tem data final) e as faturas dos cartões.
+      projecao: { saldo: saldoTotal(contas), linhas: dasContas, cartoes },
     };
   }, [exemplo, livro.dados, hojeReal]);
 
@@ -224,6 +238,16 @@ export default function VisaoGeral() {
   // Disponível (corrente, carteira, poupança) x investido (regras/saldos.ts).
   const saldos = comNumeros ? separarSaldos(visao.contas) : null;
   const investida = saldos ? parteInvestida(saldos) : null;
+  // Quanto sobra até o fim do mês (regras/saldoLivre.ts).
+  const livreDoMes = comNumeros
+    ? calcularSaldoLivre({
+        saldo: visao.projecao.saldo,
+        linhasDasContas: visao.projecao.linhas,
+        cartoes: visao.projecao.cartoes,
+        investido: saldos?.investido.total ?? 0,
+        hoje,
+      })
+    : null;
 
   const opcoesDoNovo = [
     {
@@ -295,6 +319,8 @@ export default function VisaoGeral() {
           </button>
         </div>
       )}
+
+      <SaldoLivre resultado={livreDoMes} investido={saldos?.investido.total ?? 0} />
 
       <section className="of-kpis" aria-label="Números do mês">
         <article className="of-kpi of-kpi-saldo">
