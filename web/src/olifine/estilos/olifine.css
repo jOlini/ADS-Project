@@ -15,6 +15,12 @@
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--fundo);
+  transition: grid-template-columns 240ms var(--curva);
+}
+
+/* Barra recolhida: só a coluna dos ícones. */
+.of-app.lateral-recolhida {
+  grid-template-columns: var(--largura-lateral-recolhida) minmax(0, 1fr);
 }
 
 .of-lateral {
@@ -29,13 +35,125 @@
   padding: var(--espaco-11) var(--espaco-8) var(--espaco-8);
   background: var(--superficie);
   border-right: var(--borda);
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
+.of-lateral-topo {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  justify-content: space-between;
+}
+
 .of-lateral-marca {
+  min-width: 0;
   padding: var(--espaco-2) var(--espaco-5);
   text-decoration: none;
   border-radius: var(--raio-pequeno);
+}
+
+button.of-lateral-alternar .seta-da-lateral {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: rotate 240ms var(--curva);
+}
+
+/* ------------------------------------------- Barra lateral recolhida */
+
+/* Os nomes saem da vista (continuam para o leitor de tela), os ícones crescem
+   12% e cada item vira um alvo quadrado de 48 px, centrado na coluna. */
+.lateral-recolhida .of-lateral {
+  align-items: center;
+  padding-inline: var(--espaco-5);
+}
+
+.lateral-recolhida .of-lateral-topo {
+  flex-direction: column;
+  gap: var(--espaco-6);
+}
+
+.lateral-recolhida .of-lateral-marca {
+  padding: var(--espaco-2);
+}
+
+.lateral-recolhida .of-lateral .of-logo-textos,
+.lateral-recolhida .of-lateral .of-menu-rotulo,
+.lateral-recolhida .of-lateral-usuario-textos,
+.lateral-recolhida .of-menu-item em {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.lateral-recolhida button.of-lateral-alternar .seta-da-lateral {
+  rotate: 180deg;
+}
+
+.lateral-recolhida .of-menu {
+  justify-items: center;
+}
+
+.lateral-recolhida .of-menu-item,
+.lateral-recolhida button.of-lateral-sair {
+  justify-content: center;
+  width: 48px;
+  min-height: 48px;
+  padding: 0;
+}
+
+.lateral-recolhida .of-menu-item .icone,
+.lateral-recolhida .of-lateral-sair .icone {
+  scale: 1.12;
+}
+
+.lateral-recolhida .of-lateral-pe {
+  justify-items: center;
+}
+
+.lateral-recolhida .of-lateral-usuario {
+  padding: 0;
+}
+
+/* O nome da aba ao lado do ícone, fora da barra (posição fixa, a partir do
+   item): a barra rola e cortaria um balão preso a ela. */
+.of-dica-lateral {
+  position: fixed;
+  z-index: var(--camada-fixa);
+  padding: var(--espaco-3) var(--espaco-5);
+  border-radius: var(--raio-pequeno);
+  background: var(--of-esmeralda);
+  color: #ffffff;
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-semi);
+  white-space: nowrap;
+  pointer-events: none;
+  translate: 0 -50%;
+  box-shadow: 0 6px 16px -8px rgb(31 87 70 / 0.6);
+  animation: of-dica-entra 140ms var(--curva-chegada) both;
+}
+
+.of-dica-lateral::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -4px;
+  width: 8px;
+  height: 8px;
+  background: inherit;
+  border-radius: 2px;
+  translate: 0 -50%;
+  rotate: 45deg;
+}
+
+@keyframes of-dica-entra {
+  from {
+    opacity: 0;
+    translate: -4px -50%;
+  }
 }
 
 .of-menu {
@@ -552,7 +670,9 @@ button.of-espaco-excluir .icone {
 }
 
 @media (max-width: 900px) {
-  .of-app {
+  /* No celular não há barra lateral (nem recolhida): uma coluna só. */
+  .of-app,
+  .of-app.lateral-recolhida {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -2201,8 +2321,14 @@ a.of-regar-convite-link:hover {
   .of-grafico-linha,
   .of-grafico-area,
   .of-arvore-maca,
-  .of-arvore-queda {
+  .of-arvore-queda,
+  .of-dica-lateral {
     animation: none;
+  }
+
+  .of-app,
+  button.of-lateral-alternar .seta-da-lateral {
+    transition: none;
   }
 
   .of-arvore-rega {

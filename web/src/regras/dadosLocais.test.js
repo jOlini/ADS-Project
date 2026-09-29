@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHAVE_DO_TEMA, chavesParaApagar } from './dadosLocais';
+import { CHAVE_DA_LATERAL, CHAVE_DO_TEMA, chavesParaApagar } from './dadosLocais';
 
 // Nomes fictícios: nenhum uid real entra no repositório público.
 const LOCAIS = [
@@ -7,6 +7,7 @@ const LOCAIS = [
   'olifine:metas:outra-conta',
   'olifine:tentativas:1a2b3c4d',
   CHAVE_DO_TEMA,
+  CHAVE_DA_LATERAL,
   'outro-site-do-mesmo-dominio',
 ];
 
@@ -19,10 +20,11 @@ describe('chavesParaApagar', () => {
     ]);
   });
 
-  it('mantém a preferência de tema e o que não é do app', () => {
+  it('mantém as preferências de tela (tema, barra lateral) e o que não é do app', () => {
     const apagadas = chavesParaApagar(LOCAIS);
 
     expect(apagadas).not.toContain(CHAVE_DO_TEMA);
+    expect(apagadas).not.toContain(CHAVE_DA_LATERAL);
     expect(apagadas).not.toContain('outro-site-do-mesmo-dominio');
   });
 

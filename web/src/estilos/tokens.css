@@ -252,6 +252,7 @@
   --tamanho-data-miniatura: 44px; /* dia no "A vencer" */
 
   --largura-lateral: 248px;
+  --largura-lateral-recolhida: 84px;
   /* Teto da coluna de conteúdo da área logada. Numa tela larga, ou com o zoom
      do navegador em 50% a 80%, o conteúdo fica centrado nesta largura em vez
      de esticar (valor e descrição a milhares de pixels um do outro). Numa
