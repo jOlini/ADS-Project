@@ -10,12 +10,10 @@ import {
   quantidadeDeFolhas,
   type Ponteiro,
 } from '../regras/pomar';
-import type { CenaDoPomar, Gota } from './cenaDoPomar';
+import type { CenaDoPomar } from './cenaDoPomar';
 
 // Quem pede menos movimento vê o campo parado neste instante.
 const TEMPO_PARADO = 8;
-// Onde o toque não vira rega: links, botões e o celular com os números.
-const SEM_REGA = 'a, button, input, label, select, textarea, .lp-palco';
 // Quadros medidos antes de decidir se a máquina aguenta o campo cheio.
 const QUADROS_DE_MEDIDA = 90;
 // Acima disso por quadro (ms, mediana), o campo fica mais ralo e mais leve.
@@ -35,7 +33,9 @@ function poucoMovimento(): MediaQueryList | null {
 
 // O campo 3D do topo da landing (a cena em cenaDoPomar.ts) e a inclinação do
 // celular. Um laço só de requestAnimationFrame cuida dos dois, e só roda com
-// o topo na tela e a aba à vista. Sem WebGL, a inclinação continua e o topo
+// o topo na tela e a aba à vista. A interação é só de hover: com o mouse por
+// perto, as folhas e as moedas sob ele se levantam e clareiam devagar, e
+// voltam ao sair; clicar no campo não faz nada. Sem WebGL, a inclinação continua e o topo
 // fica com os contornos em SVG; pedindo menos movimento, o campo é desenhado
 // uma vez e nada se mexe.
 export default function CampoDoPomar({ palco, texto }: Props) {
@@ -67,7 +67,6 @@ export default function CampoDoPomar({ palco, texto }: Props) {
     // Último ponto do chão sob o mouse: ao sair do topo, a elevação some
     // devagar ali mesmo, em vez de sumir de uma vez.
     let toque: [number, number] = [0, -99];
-    const gotas: Gota[] = [];
     const media = poucoMovimento();
 
     const aspecto = () => canvas.clientWidth / Math.max(1, canvas.clientHeight);
@@ -98,7 +97,6 @@ export default function CampoDoPomar({ palco, texto }: Props) {
         tempo,
         matriz: matrizDaCena(quadroDaCamera, aspecto()),
         ponteiro: [toque[0], toque[1], forca],
-        gotas,
         mascara,
         intensidade,
         folhas,
@@ -157,7 +155,6 @@ export default function CampoDoPomar({ palco, texto }: Props) {
         ponteiro.x = 0;
         ponteiro.y = 0;
         forca = 0;
-        gotas.length = 0;
         inclinar(0, 0);
         pintar();
       }
@@ -174,22 +171,6 @@ export default function CampoDoPomar({ palco, texto }: Props) {
     };
     const aoSair = () => {
       mouseNoTopo = false;
-    };
-    // Tocar no campo rega: abre um anel onde o dedo (ou o clique) caiu.
-    const aoTocar = (evento: PointerEvent) => {
-      if (!cena || media?.matches || (evento.target as Element | null)?.closest?.(SEM_REGA)) {
-        return;
-      }
-      const caixa = canvas.getBoundingClientRect();
-      const local = {
-        x: ((evento.clientX - caixa.left) / caixa.width) * 2 - 1,
-        y: 1 - ((evento.clientY - caixa.top) / caixa.height) * 2,
-      };
-      const chao = pontoNoChao(local, enquadramento(ponteiro, rolagem()), aspecto());
-      if (chao) {
-        gotas.unshift({ x: chao[0], z: chao[1], inicio: tempo, forca: 1 });
-        gotas.length = Math.min(gotas.length, 3);
-      }
     };
     const aoMudarVisibilidade = () => atualizarLaco();
     const observadorDeTela = new IntersectionObserver(([entrada]) => {
@@ -219,7 +200,6 @@ export default function CampoDoPomar({ palco, texto }: Props) {
     lerTema();
     topo.addEventListener('pointermove', aoMover);
     topo.addEventListener('pointerleave', aoSair);
-    topo.addEventListener('pointerdown', aoTocar);
     canvas.addEventListener('webglcontextlost', aoPerderContexto);
     document.addEventListener('visibilitychange', aoMudarVisibilidade);
     media?.addEventListener('change', atualizarLaco);
@@ -254,7 +234,6 @@ export default function CampoDoPomar({ palco, texto }: Props) {
       parar();
       topo.removeEventListener('pointermove', aoMover);
       topo.removeEventListener('pointerleave', aoSair);
-      topo.removeEventListener('pointerdown', aoTocar);
       canvas.removeEventListener('webglcontextlost', aoPerderContexto);
       document.removeEventListener('visibilitychange', aoMudarVisibilidade);
       media?.removeEventListener('change', atualizarLaco);
