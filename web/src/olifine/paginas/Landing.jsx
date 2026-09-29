@@ -4,6 +4,7 @@ import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
 import AlternadorDeTema from '../../componentes/AlternadorDeTema';
 import Arvore from '../componentes/Arvore';
 import CampoDoPomar from '../componentes/CampoDoPomar';
+import FolhasAoVento from '../componentes/FolhasAoVento';
 import Icone from '../../componentes/Icone';
 import Logo, { MarcaOliFine, SLOGAN } from '../componentes/Logo';
 import { HOJE_DE_EXEMPLO, LANCAMENTOS_DE_EXEMPLO, MESES_DE_EXEMPLO, METAS_DE_EXEMPLO, SALDO_DE_EXEMPLO } from '../dados/exemplo';
@@ -13,6 +14,7 @@ import { planoMensal, porcentagem } from '../regras/metas';
 import { FAIXAS, simularOrcamento, textoDaLeitura, textoDoPrazo, VALORES_INICIAIS } from '../regras/simulador';
 import { fatiasDaRosca, montarVisao } from '../regras/visao';
 import { leituraDaVariacao, textoDaVariacao } from '../regras/tendencia';
+import { useMovimentoDaLanding } from '../useMovimentoDaLanding';
 import '../estilos/landing.css';
 
 // Números fictícios da demonstração: os mesmos da Visão geral em modo de
@@ -347,7 +349,7 @@ function Simulador() {
   const mudar = (campo, valor) => setValores((atuais) => ({ ...atuais, [campo]: valor }));
 
   return (
-    <div className="lp-simulador">
+    <div className="lp-simulador" data-revela="">
       <form className="lp-simulador-controles" onSubmit={(evento) => evento.preventDefault()} aria-label="Valores da simulação">
         <Controle campo="renda" rotulo="Renda do mês" valor={valores.renda} aoMudar={mudar} />
         <Controle campo="fixos" rotulo="Gastos fixos (moradia, contas, escola)" valor={valores.fixos} aoMudar={mudar} />
@@ -430,14 +432,22 @@ function Ondas() {
 // Landing page institucional da OliFine (só com o tema OliFine; no tema
 // anterior, "/" continua indo para o login). Sem preço, depoimento ou número
 // inventado: o que aparece é o app, com dados fictícios marcados.
+//
+// O 3D do topo segue pela página: as folhas ao vento (FolhasAoVento) passam
+// atrás de todas as seções, cada bloco entra ao rolar (data-revela, com
+// --ordem para escalonar) e os cartões giram com o mouse (data-inclina). O
+// movimento está em useMovimentoDaLanding.ts e em landing.css.
 export default function Landing() {
   const contexto = useOutletContext();
   const logado = Boolean(contexto?.usuario);
+  const raiz = useRef(null);
   const topo = useRef(null);
   const textoDoTopo = useRef(null);
+  const conteudo = useRef(null);
+  useMovimentoDaLanding(raiz);
 
   return (
-    <div className="lp">
+    <div className="lp" ref={raiz}>
       <header className="lp-topo" ref={topo}>
         <Contornos />
         <CampoDoPomar palco={topo} texto={textoDoTopo} />
@@ -535,15 +545,15 @@ export default function Landing() {
         <Ondas />
       </header>
 
-      <main>
+      <main ref={conteudo}>
         <section className="lp-secao lp-beneficios" id="recursos" aria-labelledby="lp-beneficios-titulo">
-          <h2 id="lp-beneficios-titulo">
+          <h2 id="lp-beneficios-titulo" data-revela="">
             Mais que controle.
             <br />É clareza para suas decisões.
           </h2>
           <div className="lp-beneficios-grade">
-            {BENEFICIOS.map((beneficio) => (
-              <article key={beneficio.id} className="lp-beneficio">
+            {BENEFICIOS.map((beneficio, indice) => (
+              <article key={beneficio.id} className="lp-beneficio" data-revela="" data-inclina="" style={{ '--ordem': indice }}>
                 <div className="lp-beneficio-demo">{beneficio.demo}</div>
                 <h3>{beneficio.titulo}</h3>
                 <p>{beneficio.texto}</p>
@@ -553,7 +563,7 @@ export default function Landing() {
         </section>
 
         <section className="lp-secao lp-demonstracao" id="demonstracao" aria-labelledby="lp-demo-titulo">
-          <div className="lp-demonstracao-texto">
+          <div className="lp-demonstracao-texto" data-revela="esquerda">
             <h2 id="lp-demo-titulo">Do número à decisão.</h2>
             <p>
               A Visão geral junta o que importa no mês: quanto você tem, quanto entrou e saiu comparado ao mês anterior,
@@ -574,11 +584,13 @@ export default function Landing() {
               </li>
             </ul>
           </div>
-          <Laptop />
+          <div className="lp-laptop-palco" data-revela="direita">
+            <Laptop />
+          </div>
         </section>
 
         <section className="lp-secao lp-simulacao" id="simulador" aria-labelledby="lp-simulador-titulo">
-          <div className="lp-simulacao-texto">
+          <div className="lp-simulacao-texto" data-revela="">
             <h2 id="lp-simulador-titulo">Quanto sobra no seu mês?</h2>
             <p className="lp-secao-apoio">
               Mova a renda e os gastos e veja na hora a sobra, quanto ela vira em um ano e em quanto tempo você monta uma
@@ -590,13 +602,13 @@ export default function Landing() {
 
         <section className="lp-secao lp-seguranca" id="seguranca" aria-labelledby="lp-seguranca-titulo">
           <Contornos className="seguranca" />
-          <div className="lp-seguranca-texto">
+          <div className="lp-seguranca-texto" data-revela="">
             <h2 id="lp-seguranca-titulo">Seus dados protegidos. A decisão, sempre sua.</h2>
             <p>Conexão criptografada, cada acesso conferido e total controle sobre a privacidade das suas informações.</p>
           </div>
           <div className="lp-seguranca-grade">
-            {SEGURANCA.map((item) => (
-              <article key={item.titulo}>
+            {SEGURANCA.map((item, indice) => (
+              <article key={item.titulo} data-revela="" data-inclina="" style={{ '--ordem': indice }}>
                 <span className="lp-seguranca-icone" aria-hidden="true">
                   <Icone nome={item.icone} tamanho={22} />
                 </span>
@@ -608,10 +620,14 @@ export default function Landing() {
         </section>
 
         <section className="lp-secao lp-planos" id="planos" aria-labelledby="lp-planos-titulo">
-          <h2 id="lp-planos-titulo">Escolha o plano para a sua jornada.</h2>
-          <p className="lp-secao-apoio">Comece de graça com tudo o que já existe hoje.</p>
+          <h2 id="lp-planos-titulo" data-revela="">
+            Escolha o plano para a sua jornada.
+          </h2>
+          <p className="lp-secao-apoio" data-revela="" style={{ '--ordem': 1 }}>
+            Comece de graça com tudo o que já existe hoje.
+          </p>
           <div className="lp-planos-grade">
-            <article className="lp-plano">
+            <article className="lp-plano" data-revela="" data-inclina="" style={{ '--ordem': 1 }}>
               <h3>Gratuito</h3>
               <p className="lp-plano-apoio">O essencial para organizar o seu dinheiro.</p>
               <p className="lp-plano-preco">
@@ -631,7 +647,7 @@ export default function Landing() {
               </Link>
             </article>
 
-            <article className="lp-plano destaque">
+            <article className="lp-plano destaque" data-revela="" data-inclina="" style={{ '--ordem': 2 }}>
               <p className="lp-plano-selo">Em breve</p>
               <h3>Família</h3>
               <p className="lp-plano-apoio">Para organizar o dinheiro da casa junto com quem mora com você.</p>
@@ -645,10 +661,16 @@ export default function Landing() {
           </div>
         </section>
 
+        {/* A revelação fica nos filhos: a faixa em si não pode ganhar
+            transform, senão o fundo dela passaria por cima das folhas. */}
         <section className="lp-chamada" aria-labelledby="lp-chamada-titulo">
-          <h2 id="lp-chamada-titulo">Comece hoje a entender melhor o seu dinheiro.</h2>
-          <p>Sua próxima decisão financeira pode começar com uma visão mais clara.</p>
-          <Link to={logado ? '/principal' : '/cadastro'} className="lp-botao grande">
+          <h2 id="lp-chamada-titulo" data-revela="escala">
+            Comece hoje a entender melhor o seu dinheiro.
+          </h2>
+          <p data-revela="escala" style={{ '--ordem': 1 }}>
+            Sua próxima decisão financeira pode começar com uma visão mais clara.
+          </p>
+          <Link to={logado ? '/principal' : '/cadastro'} className="lp-botao grande" data-revela="escala" style={{ '--ordem': 2 }}>
             {logado ? 'Abrir o app' : 'Começar gratuitamente'}
             <Icone nome="setaDireita" tamanho={18} />
           </Link>
@@ -656,11 +678,11 @@ export default function Landing() {
       </main>
 
       <footer className="lp-rodape">
-        <div>
+        <div data-revela="">
           <Logo tamanho={26} />
           <p>{SLOGAN}.</p>
         </div>
-        <nav aria-label="Rodapé">
+        <nav aria-label="Rodapé" data-revela="" style={{ '--ordem': 1 }}>
           <a href="#recursos">Recursos</a>
           <a href="#planos">Planos</a>
           <Link to="/login">Entrar</Link>
@@ -668,6 +690,10 @@ export default function Landing() {
         </nav>
         <p className="lp-rodape-direitos">© 2026 OliFine. Todos os direitos reservados.</p>
       </footer>
+
+      {/* Por último de propósito: a camada fica atrás de tudo (z-index -1) e,
+          entre as de mesma camada, por cima do fundo das faixas escuras. */}
+      <FolhasAoVento area={conteudo} />
     </div>
   );
 }

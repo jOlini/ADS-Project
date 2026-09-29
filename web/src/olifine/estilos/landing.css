@@ -1,8 +1,10 @@
 /*
  * Landing page da OliFine. Campo esmeralda com o pomar 3D e ondas no topo, o
  * app de verdade num celular que gira com o ponteiro, seções claras entre
- * campos escuros e o fechamento com a chamada. Tokens de estilos/tokens.css;
- * nada aqui vale fora da landing.
+ * campos escuros e o fechamento com a chamada. Abaixo do topo, as folhas ao
+ * vento passam atrás de todas as seções, cada bloco entra ao rolar e os
+ * cartões giram com o mouse (Movimento ao rolar, no fim do arquivo). Tokens
+ * de estilos/tokens.css; nada aqui vale fora da landing.
  */
 
 .lp {
@@ -14,6 +16,9 @@
   background: var(--fundo);
   color: var(--texto);
   overflow-x: clip;
+  /* Contexto de empilhamento próprio: a camada das folhas (z-index -1) fica
+     por cima do fundo da página e por baixo de todo o conteúdo. */
+  isolation: isolate;
 }
 
 .lp h1,
@@ -52,11 +57,39 @@
   font-weight: var(--peso-semi);
   text-decoration: none;
   white-space: nowrap;
-  transition: background-color var(--transicao), border-color var(--transicao), color var(--transicao);
+  transition:
+    background-color var(--transicao),
+    border-color var(--transicao),
+    color var(--transicao),
+    box-shadow 250ms var(--curva-chegada),
+    transform 250ms var(--curva-chegada);
 }
 
 .lp-botao:hover {
   background: #84d2a5;
+}
+
+/* Botões sobem um passo com a sombra verde, afundam ao apertar e a seta anda
+   para a frente. Pedindo menos movimento, só a cor muda. */
+@media (prefers-reduced-motion: no-preference) {
+  .lp-botao:hover {
+    box-shadow: 0 14px 30px -14px rgb(22 101 52 / 0.6);
+    transform: translateY(-2px);
+  }
+
+  .lp-botao:active {
+    box-shadow: none;
+    transform: translateY(0) scale(0.97);
+    transition-duration: 90ms;
+  }
+
+  .lp-botao > .icone:last-child {
+    transition: transform 250ms var(--curva-chegada);
+  }
+
+  .lp-botao:hover > .icone:last-child {
+    transform: translateX(3px);
+  }
 }
 
 .lp-botao.grande {
@@ -1295,10 +1328,19 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   display: grid;
   gap: var(--espaco-20);
   color: var(--lp-sobre-esmeralda);
+}
+
+/* Fundo de ponta a ponta, com o conteúdo na largura da página. Fica numa
+   camada abaixo das folhas ao vento (z-index -1, antes do canvas na página),
+   para elas passarem por cima da faixa escura; por isso a faixa não pode
+   criar contexto de empilhamento (nada de clip-path, transform ou filter). */
+.lp-seguranca::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(50% - 50vw);
+  z-index: -1;
   background: var(--of-esmeralda-funda);
-  /* Fundo de ponta a ponta, com o conteúdo na largura da página. */
-  box-shadow: 0 0 0 100vmax var(--of-esmeralda-funda);
-  clip-path: inset(0 -100vmax);
+  pointer-events: none;
 }
 
 .lp-seguranca-texto,
@@ -1457,13 +1499,24 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   justify-items: center;
   gap: var(--espaco-6);
   max-width: var(--lp-largura);
+  position: relative;
   margin: 0 auto var(--espaco-32);
   padding: var(--espaco-32) var(--lp-margem);
   border-radius: 28px;
+  text-align: center;
+}
+
+/* O fundo da chamada numa camada abaixo das folhas, como o da Segurança. */
+.lp-chamada::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
   background:
     radial-gradient(60% 80% at 50% 120%, rgb(100 191 141 / 0.25), transparent 70%),
     var(--of-menta);
-  text-align: center;
+  pointer-events: none;
 }
 
 .lp-chamada p {
@@ -1519,8 +1572,275 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   .lp-contornos .claro,
   .lp-onda,
   .lp-linha,
-  .lp-area {
+  .lp-area,
+  .lp-seguranca-icone {
     animation: none;
+  }
+}
+
+/* ------------------------------------------------------ Folhas ao vento */
+
+/* A camada 3D do resto da página (componentes/FolhasAoVento.tsx): presa à
+   janela, atrás de todo o conteúdo. Aparece num esmaecer quando a cena
+   desenha; sem WebGL, fica vazia e a página segue como antes. A altura é a
+   da janela com as barras do navegador recolhidas, para o canvas não mudar
+   de tamanho a cada rolagem no celular. */
+.lp-folhas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1400ms var(--curva-chegada);
+}
+
+.lp-folhas[data-vivo] {
+  opacity: 1;
+}
+
+/* ----------------------------------------------------- Movimento ao rolar */
+
+/* Revelação (useMovimentoDaLanding.ts): o bloco entra subindo e girando de
+   leve em 3D, com o --ordem escalonando os irmãos. O estado escondido só
+   existe com a raiz marcada pelo hook; sem ela (sem JavaScript, pedindo
+   menos movimento) tudo aparece no lugar. As propriedades individuais
+   (translate, rotate, scale) somam com o transform da inclinação, sem
+   brigar com ela. */
+.lp [data-revela],
+.lp [data-inclina] {
+  --atraso: calc(var(--ordem, 0) * 90ms);
+  transition-property: opacity, translate, rotate, scale, transform, box-shadow, border-color, background-color, color;
+  transition-duration: 700ms, 900ms, 900ms, 900ms, 500ms, 300ms, 300ms, 200ms, 200ms;
+  transition-timing-function: var(--curva-chegada);
+  transition-delay: var(--atraso), var(--atraso), var(--atraso), var(--atraso), 0ms, 0ms, 0ms, 0ms, 0ms;
+}
+
+.lp[data-revelacao='ativa'] [data-revela]:not([data-revelado]) {
+  opacity: 0;
+  translate: 0 36px;
+  rotate: x 14deg;
+}
+
+.lp[data-revelacao='ativa'] [data-revela='esquerda']:not([data-revelado]) {
+  translate: -44px 0;
+  rotate: y 12deg;
+}
+
+.lp[data-revelacao='ativa'] [data-revela='direita']:not([data-revelado]) {
+  translate: 44px 0;
+  rotate: y -14deg;
+}
+
+.lp[data-revelacao='ativa'] [data-revela='escala']:not([data-revelado]) {
+  translate: 0 20px;
+  rotate: none;
+  scale: 0.94;
+}
+
+/* Perspectiva nos pais de quem gira, para o giro ter profundidade. Nunca na
+   faixa da Segurança nem na chamada (criaria contexto de empilhamento e o
+   fundo delas cobriria as folhas). */
+.lp-beneficios,
+.lp-beneficios-grade,
+.lp-demonstracao,
+.lp-simulacao,
+.lp-seguranca-grade,
+.lp-planos,
+.lp-planos-grade,
+.lp-rodape {
+  perspective: 1400px;
+}
+
+.lp-laptop-palco {
+  min-width: 0;
+}
+
+/* Dentro dos cartões de Recursos, as barras crescem e a lista escorrega
+   depois que o cartão chega. */
+.lp .lp-beneficio .lp-demo-barras i,
+.lp .lp-beneficio .lp-demo-lista li {
+  transition:
+    transform 900ms var(--curva-chegada) calc(var(--atraso, 0ms) + 250ms),
+    opacity 600ms var(--curva-chegada) calc(var(--atraso, 0ms) + 250ms);
+}
+
+.lp .lp-demo-barras i {
+  transform-origin: left;
+}
+
+.lp[data-revelacao='ativa'] .lp-beneficio:not([data-revelado]) .lp-demo-barras i {
+  transform: scaleX(0);
+}
+
+.lp[data-revelacao='ativa'] .lp-beneficio:not([data-revelado]) .lp-demo-lista li {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+.lp .lp-beneficio .lp-demo-lista li:nth-child(2) {
+  transition-delay: calc(var(--atraso, 0ms) + 330ms);
+}
+
+.lp .lp-beneficio .lp-demo-lista li:nth-child(3) {
+  transition-delay: calc(var(--atraso, 0ms) + 410ms);
+}
+
+/* O simulador entra deitado e se levanta conforme a seção sobe na tela
+   (animação ligada à rolagem, como a tampa do notebook). */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .lp-simulador {
+      transform-origin: 50% 100%;
+      animation: lp-levanta linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 38%;
+    }
+  }
+}
+
+@keyframes lp-levanta {
+  from {
+    transform: perspective(1600px) rotateX(16deg);
+  }
+
+  to {
+    transform: perspective(1600px) rotateX(0deg);
+  }
+}
+
+/* Inclinação dos cartões com o mouse: gira na direção do ponteiro, sobe um
+   passo e acende um brilho onde o mouse está. Só com mouse de verdade. */
+.lp-beneficio,
+.lp-seguranca-grade article {
+  position: relative;
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .lp [data-inclina] {
+    --brilho: rgb(100 191 141 / 0.16);
+    transform:
+      perspective(1000px)
+      rotateX(calc(var(--inclina-y, 0) * -6deg))
+      rotateY(calc(var(--inclina-x, 0) * 8deg))
+      translateY(calc(var(--erguer, 0) * -4px));
+  }
+
+  .lp [data-inclina]:hover {
+    --erguer: 1;
+    box-shadow: 0 34px 60px -34px rgb(16 60 44 / 0.45);
+  }
+
+  .lp-beneficio:hover,
+  .lp-plano:not(.destaque):hover {
+    border-color: color-mix(in srgb, var(--of-verde) 45%, var(--linha));
+  }
+
+  .lp-seguranca-grade article,
+  .lp-plano.destaque {
+    --brilho: rgb(255 255 255 / 0.1);
+  }
+
+  .lp-seguranca-grade article:hover {
+    border-color: rgb(132 210 165 / 0.35);
+    background: rgb(255 255 255 / 0.06);
+  }
+
+  .lp [data-inclina]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(380px circle at var(--brilho-x, 50%) var(--brilho-y, 0%), var(--brilho), transparent 60%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 300ms ease;
+  }
+
+  .lp [data-inclina]:hover::after {
+    opacity: 1;
+  }
+}
+
+/* Ícones da Segurança: flutuam devagar, cada um no seu tempo, e dão uma volta
+   inteira (como uma moeda) quando o cartão recebe o mouse. */
+@media (prefers-reduced-motion: no-preference) {
+  .lp-seguranca-icone {
+    animation: lp-paira 6s ease-in-out infinite;
+    animation-delay: calc(var(--ordem, 0) * -2s);
+  }
+
+  .lp-seguranca-grade article:hover .lp-seguranca-icone {
+    animation: lp-vira 900ms var(--curva-chegada);
+  }
+
+  /* Links do menu e do rodapé: um traço cresce embaixo no hover. */
+  .lp-nav-links a,
+  .lp-rodape nav a {
+    position: relative;
+  }
+
+  .lp-nav-links a::after,
+  .lp-rodape nav a::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: -4px;
+    left: 0;
+    height: 1.5px;
+    border-radius: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 300ms var(--curva-chegada);
+  }
+
+  .lp-nav-links a:hover::after,
+  .lp-rodape nav a:hover::after {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+
+  /* O monograma do rodapé gira em 3D ao passar o mouse. */
+  .lp-rodape .of-monograma {
+    transition: transform 800ms var(--curva-chegada);
+  }
+
+  .lp-rodape div:hover .of-monograma {
+    transform: perspective(300px) rotateY(360deg);
+  }
+}
+
+@keyframes lp-paira {
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes lp-vira {
+  from {
+    transform: perspective(240px) rotateY(0deg);
+  }
+
+  to {
+    transform: perspective(240px) rotateY(360deg);
+  }
+}
+
+/* Impressão: tudo no lugar, sem a camada das folhas. */
+@media print {
+  .lp [data-revela] {
+    opacity: 1 !important;
+    translate: none !important;
+    rotate: none !important;
+    scale: none !important;
+  }
+
+  .lp-folhas {
+    display: none;
   }
 }
 
