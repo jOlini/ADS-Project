@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import Icone from './Icone';
-import { useCliqueFora, usePosicaoFlutuante, usePresenca } from './flutuante';
+import { mostrarNoPainel, useCliqueFora, usePosicaoFlutuante, usePresenca } from './flutuante';
 import { opcaoPorDigitacao, primeiraHabilitada, proximaHabilitada, ultimaHabilitada } from '../regras/seletor';
 
 // Menu de ações de uma linha (padrão "menu button" do WAI-ARIA). Cada item
@@ -26,9 +26,13 @@ export default function Menu({ rotulo, itens, texto, icone = 'mais' }) {
   useCliqueFora([botao, menu], fechar, aberto);
 
   // O foco segue o item ativo (no menu, o foco anda de verdade entre os itens).
+  // Numa janela baixa, em que o menu rola por dentro (sem barra à mostra), o
+  // item ativo é trazido para a vista sem rolar a página.
   useEffect(() => {
     if (aberto && ativo >= 0) {
-      menu.current?.querySelectorAll('[role="menuitem"]')[ativo]?.focus({ preventScroll: true });
+      const item = menu.current?.querySelectorAll('[role="menuitem"]')[ativo];
+      item?.focus({ preventScroll: true });
+      mostrarNoPainel(menu.current, item);
     }
   }, [aberto, ativo]);
 

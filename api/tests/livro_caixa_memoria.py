@@ -184,9 +184,9 @@ class LivroCaixaMemoria:
         return len(parcelas)
 
     def listar_pessoas(self, espaco_id):
-        return list(
-            {parte.pessoa for l in self.lancamentos.values() if l.espaco_id == espaco_id for parte in l.divisao}
-        )
+        do_espaco = [l for l in self.lancamentos.values() if l.espaco_id == espaco_id]
+        nas_divisoes = {parte.pessoa for l in do_espaco for parte in l.divisao}
+        return list(nas_divisoes | {l.responsavel for l in do_espaco if l.responsavel})
 
     def buscar_estornos(self, espaco_id, ids):
         return {

@@ -122,7 +122,7 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
 | `espacos` | Espaços (pessoal, família, empresa), com o tipo, o nome e os membros | um espaço pessoal por `uid` (único), `membros.uid` |
 | `contas` | Contas e cartões (limite, fechamento, vencimento) | `espaco_id` + data de criação |
 | `categorias` | Categorias de receita e despesa, com cor | `espaco_id` + tipo + nome |
-| `lancamentos` | Lançamento com as partidas embutidas (gravação atômica), divisão entre pessoas, compra parcelada | `espaco_id` + data; `espaco_id` + `chave_importacao` (único); um estorno por lançamento (único) |
+| `lancamentos` | Lançamento com as partidas embutidas (gravação atômica), responsável, divisão entre pessoas, compra parcelada | `espaco_id` + data; `espaco_id` + `chave_importacao` (único); um estorno por lançamento (único) |
 
 Toda consulta do livro-caixa filtra por `espaco_id`, inclusive a busca por id: um id de outro espaço devolve
 `404`, igual a um id inexistente (sem revelar que ele existe).
@@ -179,7 +179,13 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
   celular gira com o ponteiro por CSS 3D. A conta de câmera, toque e distribuição das folhas é pura e testada
   (`olifine/regras/pomar.ts`); o `CampoDoPomar.tsx` pausa o desenho fora da tela e com a aba escondida, afina o
   campo em máquina lenta e, pedindo menos movimento, desenha um quadro parado. Sem WebGL, só com desenho por
-  software ou com o contexto perdido, o topo fica com os contornos em SVG.
+  software ou com o contexto perdido, o topo fica com os contornos em SVG. Abaixo do topo, as folhas ao vento
+  (`olifine/componentes/cenaDasFolhas.ts`, cerca de 2 kB comprimido) passam atrás de todas as seções num canvas
+  fixo à janela: o módulo só é baixado quando a pessoa rola perto do conteúdo, o laço só roda com essa parte na
+  tela, a densidade de pixels fica em 1,5 e a quantidade depende da tela e da memória (`regras/folhasAoVento.ts`).
+  As duas cenas usam as mesmas peças de WebGL (`olifine/componentes/webgl.ts`). A revelação ao rolar e a
+  inclinação dos cartões (`olifine/useMovimentoDaLanding.ts`) usam `IntersectionObserver` e transições de
+  `opacity`, `translate` e `rotate`, que não refazem o layout.
 - **Caminho da publicação:** `VITE_BASE` no build (`/ADS-Project/` no Pages, `/` num domínio próprio). O React
   Router, os arquivos de `public/` e os links usam o `BASE_URL` gravado pelo Vite; nenhum caminho fica escrito à
   mão (`regras/enderecoDoApp.js`).

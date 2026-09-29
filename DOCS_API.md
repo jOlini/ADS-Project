@@ -465,13 +465,13 @@ pessoal (`PF`), criado no primeiro acesso, e os de família (`FAMILIA`) e de emp
 | `PUT` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Renomear, recolorir, desativar ou reativar | `200 OK` | `400`, `401`, `404` |
 | `DELETE` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Excluir categoria sem lançamentos (com lançamentos: `409`, desative) | `204 No Content` | `401`, `404`, `409` |
 | `GET` | `/espacos/{espaco_id}/lancamentos?de=&ate=&limite=&conta_id=` | Listar lançamentos do mais recente ao mais antigo (período e conta opcionais, até 1000) | `200 OK` | `400`, `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência à vista nas contas (com meio e divisão entre pessoas, opcionais) | `201 Created` + `Location` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência à vista nas contas (com meio, responsável e divisão entre pessoas, opcionais) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/lancamentos/exclusao-em-lote` | Excluir vários lançamentos de uma vez (`ids`), com as regras da exclusão de um | `200 OK` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Consultar lançamento | `200 OK` | `401`, `404` |
-| `PATCH` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Editar descrição, data, valor, categoria ou meio (só os campos enviados) | `200 OK` | `400`, `401`, `404` |
+| `PATCH` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Editar descrição, data, valor, categoria, meio ou responsável (só os campos enviados) | `200 OK` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}/estorno` | Estornar: cria o lançamento inverso, com a data de hoje (parcela de compra no cartão: `409`) | `201 Created` + `Location` | `401`, `404`, `409` |
 | `DELETE` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Excluir: apaga o lançamento de vez (e o estorno dele, se houver; numa parcela, a compra inteira) | `204 No Content` | `401`, `404` |
-| `GET` | `/espacos/{espaco_id}/pessoas` | Listar os nomes já usados em divisões (para a tela sugerir) | `200 OK` | `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/pessoas` | Listar os nomes já usados em divisões e como responsável (para a tela sugerir) | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/importacoes/estrutura` | Mostrar o começo do CSV em células e sugerir as colunas (nada é gravado) | `200 OK` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/importacoes` | Importar o extrato do banco em CSV, ou só simular (`simular: true`) | `200 OK` (relatório por linha) | `400`, `401`, `404` |
 
@@ -537,10 +537,10 @@ Content-Type: application/json
 
 | Lançamento | O que muda |
 |---|---|
-| Receita e despesa das contas | Descrição, data, valor, categoria (do mesmo tipo) e meio (`null` tira o meio) |
-| Transferência (e pagamento de fatura) | Descrição, data, valor (as duas contas acompanham) e meio |
-| Estorno, ou lançamento estornado | Só descrição e meio: o estorno espelha o original |
-| Parcela de compra no cartão | Descrição e categoria, na **compra inteira** (todas as parcelas); data e valor não |
+| Receita e despesa das contas | Descrição, data, valor, categoria (do mesmo tipo), meio (`null` tira o meio) e responsável (`null` devolve a quem lançou) |
+| Transferência (e pagamento de fatura) | Descrição, data, valor (as duas contas acompanham) e meio; sem responsável |
+| Estorno, ou lançamento estornado | Só descrição, meio e responsável: o estorno espelha o original |
+| Parcela de compra no cartão | Descrição, categoria e responsável, na **compra inteira** (todas as parcelas); data e valor não |
 | Compra no cartão | Sem meio (ela é o crédito) |
 
 **Excluir em lote** (`POST /lancamentos/exclusao-em-lote` com `{"ids": [...]}`, de 1 a 1000): cada id segue a regra
@@ -559,10 +559,11 @@ apagá-la deixaria o extrato sem o "para onde foi".
 
 | Situação | Campo | Mensagem |
 |---|---|---|
-| `PATCH` sem nenhum campo | `lancamento` | Informe o que mudar: descrição, data, valor, categoria ou meio. |
-| Valor, data ou categoria de um estornado (ou estorno) | o campo | Lançamento estornado (ou estorno) só muda a descrição e o meio: o estorno espelha o original. |
+| `PATCH` sem nenhum campo | `lancamento` | Informe o que mudar: descrição, data, valor, categoria, meio ou responsável. |
+| Valor, data ou categoria de um estornado (ou estorno) | o campo | Lançamento estornado (ou estorno) só muda a descrição, o meio e o responsável: o estorno espelha o original. |
 | Valor ou data de uma parcela | o campo | Parcela de compra no cartão não muda data nem valor. Para isso, exclua a compra e lance de novo. |
 | Meio numa compra do cartão | `meio` | Compra no cartão não tem meio de pagamento: ela entra na fatura. |
+| Responsável numa transferência | `responsavel` | Transferência entre contas próprias não tem responsável. |
 | Novo valor abaixo das partes do racha | `valor_centavos` | As partes da divisão somam mais que o novo valor. |
 
 ### Dinheiro em centavos e partidas dobradas
@@ -613,6 +614,7 @@ Content-Type: application/json
     { "conta_id": null, "categoria_id": "6ab54c4ff2c9fd0fd74cd085", "valor_centavos": 21437 }
   ],
   "divisao": [],
+  "responsavel": null,
   "estorno_de": null,
   "estornado_por": null,
   "criado_em": "2026-09-24T16:14:07.635000Z"
@@ -668,7 +670,7 @@ Content-Type: application/json
   da data da compra e cada uma das outras na fatura seguinte; o centavo que sobra da divisão vai para a primeira
   (R$ 10,00 em 3x = 3,34 + 3,33 + 3,33). Todas levam o mesmo `compra_id`, com `parcela` e `parcelas`, e ocupam o
   limite desde já, como no banco. Excluir qualquer parcela exclui a compra inteira; parcela não se estorna
-  (`409`). Racha (`divisao`) só na compra à vista.
+  (`409`). Racha (`divisao`) só na compra à vista; o `responsavel` vale para todas as parcelas.
 - **Extratos separados:** a fatura (`GET .../faturas/{AAAA-MM}`) traz as compras, os créditos (estorno,
   reembolso) e os pagamentos do período; `total_centavos` é compras menos créditos, e `pagamentos_centavos` é o
   que entrou no período. O extrato de uma conta (`GET /lancamentos?conta_id=`) traz o pagamento como
@@ -741,6 +743,28 @@ o saldo da conta muda pelo valor inteiro, e as partidas continuam as mesmas duas
 | Mesmo nome duas vezes | `divisao.<n>.pessoa` | Esta pessoa já está na divisão. |
 | Divisão numa transferência | `divisao` | Transferência entre contas não se divide entre pessoas. |
 | Mais de 20 pessoas | `divisao` | Use no máximo 20 itens. |
+
+### Responsável pelo lançamento
+
+Receita, despesa e compra no cartão aceitam `responsavel`: o nome de quem fez o gasto (ou de quem é a receita),
+com o valor **inteiro**. Antes, vincular um gasto a alguém pedia uma divisão de uma pessoa só; agora a divisão
+fica para o racha de verdade. É informação do lançamento, como o meio: não muda saldo nem partidas.
+
+```json
+{ "tipo": "DESPESA", "descricao": "Farmácia", "data": "2026-09-19", "valor_centavos": 8990,
+  "conta_id": "<id da conta>", "categoria_id": "<id de Saúde>", "responsavel": "Bruno" }
+```
+
+- Nome de 1 a 60 caracteres, com a mesma limpeza do texto livre (sem `<`, `>`, invisíveis nem começo de
+  fórmula). Sem o campo (ou `null`), o lançamento é de quem lançou.
+- `PATCH` troca o responsável ou, com `null`, devolve o lançamento a quem lançou. Na parcela de uma compra, a
+  troca vale para todas as parcelas.
+- O estorno leva o responsável junto. `GET /pessoas` passa a devolver também os responsáveis já usados.
+
+| Situação | Campo | Mensagem |
+|---|---|---|
+| Responsável numa transferência | `responsavel` | Transferência entre contas próprias não tem responsável. |
+| Nome vazio (depois da limpeza) ou com mais de 60 caracteres | `responsavel` | (validação do tamanho) |
 
 ### Importação do extrato (CSV)
 
@@ -970,7 +994,8 @@ do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
   `test_financeiro_reconhecimento.py` (cabeçalho de cada banco, colunas pelo conteúdo, arquivo que não é CSV),
   `test_financeiro_categorizacao.py` (categoria pela coluna, pelo histórico e pelas regras, ajustes e o teto de
   importações), `test_sanitizacao.py` (XSS, fórmula, invisíveis e operador do MongoDB) e
-  `test_financeiro_racha_e_exclusao.py` (divisão entre pessoas, exclusão e importação com colunas indicadas) e
+  `test_financeiro_racha_e_exclusao.py` (divisão entre pessoas, exclusão e importação com colunas indicadas),
+  `test_financeiro_responsavel.py` (responsável no lançamento, na compra parcelada, na edição e no estorno) e
   `test_financeiro_cartoes.py` (ciclo da fatura, parcelas, painel do cartão, compra, pagamento e fatura em CSV).
   Os ID tokens de teste são assinados por uma chave RSA gerada na hora, no lugar das chaves do Google.
 - **Manual (Swagger):** com `FIREBASE_PROJECT_ID` no `api/.env`, obtenha um ID token de uma conta **de teste**

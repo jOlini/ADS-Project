@@ -4,6 +4,7 @@
 // o que mudou.
 import { dataExiste } from './datas';
 import { lerValor, valorParaCampo } from './dinheiro';
+import { erroDoResponsavel, responsavelParaApi } from './responsavel';
 
 // O que cada lançamento deixa mudar:
 // - estorno e lançamento estornado: descrição e meio (o estorno espelha o
@@ -11,7 +12,9 @@ import { lerValor, valorParaCampo } from './dinheiro';
 // - parcela de compra no cartão: descrição e categoria, que valem para a
 //   compra inteira (data e valor vêm do parcelamento);
 // - compra no cartão: sem meio (ela é o crédito);
-// - transferência: sem categoria.
+// - transferência: sem categoria e sem responsável.
+// O responsável muda em todos os outros (na parcela, vale para a compra
+// inteira): é só de quem é o lançamento, não mexe em valor nenhum.
 export function camposEditaveis(lancamento, { noCartao = false } = {}) {
   const espelhado = Boolean(lancamento.estorno_de || lancamento.estornado_por);
   const parcela = Boolean(lancamento.compra_id);
@@ -20,10 +23,11 @@ export function camposEditaveis(lancamento, { noCartao = false } = {}) {
     valor: !espelhado && !parcela,
     categoria: !espelhado && lancamento.tipo !== 'TRANSFERENCIA',
     meio: !noCartao,
+    responsavel: lancamento.tipo !== 'TRANSFERENCIA',
   };
 }
 
-export const ORDEM_DA_EDICAO = ['descricao', 'valor', 'data', 'categoria_id', 'meio'];
+export const ORDEM_DA_EDICAO = ['descricao', 'valor', 'data', 'categoria_id', 'responsavel', 'meio'];
 
 const TAMANHO_DA_DESCRICAO = 120;
 
@@ -34,6 +38,7 @@ export function formularioDaEdicao(lancamento) {
     data: lancamento.data,
     categoria_id: lancamento.categoria_id ?? '',
     meio: lancamento.meio ?? '',
+    responsavel: lancamento.responsavel ?? '',
   };
 }
 
@@ -69,6 +74,10 @@ export function validarEdicao(formulario, lancamento, campos) {
   if (campos.categoria && !formulario.categoria_id) {
     erros.categoria_id = 'Escolha a categoria.';
   }
+  const erroDoNome = campos.responsavel ? erroDoResponsavel(formulario.responsavel) : '';
+  if (erroDoNome) {
+    erros.responsavel = erroDoNome;
+  }
   return erros;
 }
 
@@ -91,6 +100,12 @@ export function corpoDaEdicao(formulario, lancamento, campos) {
   }
   if (campos.meio && formulario.meio !== (lancamento.meio ?? '')) {
     corpo.meio = formulario.meio || null;
+  }
+  // Apagar o nome devolve o lançamento a quem lançou (null na API). Só a
+  // grafia mudando ("ana" para "Ana") também vai: é o que a pessoa quis ver.
+  const responsavel = responsavelParaApi(formulario.responsavel);
+  if (campos.responsavel && responsavel !== (lancamento.responsavel ?? null)) {
+    corpo.responsavel = responsavel;
   }
   return corpo;
 }

@@ -340,6 +340,15 @@ button.link:hover:not(:disabled) {
   align-items: center;
 }
 
+/* Botões do topo da página ("Nova conta" e "Novo cartão"): lado a lado com o
+   vão dos grupos de ações, e um embaixo do outro só quando não cabem. */
+.acoes-da-pagina {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-5);
+  align-items: center;
+}
+
 .mes {
   display: inline-flex;
   gap: var(--espaco-3);
@@ -892,6 +901,16 @@ form {
 .campo > .erro-do-campo > .icone {
   flex: none;
   margin-top: 0.15em;
+}
+
+/* Dica que depende do que a pessoa digita (o valor de cada parcela): a
+   linha existe desde o começo e o texto cabe numa linha só, então aparecer,
+   mudar ou sumir não mexe na altura do campo nem no vizinho da linha. */
+.campo > .dica-do-campo.reservada {
+  min-height: var(--altura-da-mensagem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .acoes-do-formulario {

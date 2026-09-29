@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import AvisoComAtalho from './AvisoComAtalho';
 import Campo from './Campo';
+import CampoDeResponsavel from './CampoDeResponsavel';
 import DivisaoEntrePessoas from './DivisaoEntrePessoas';
 import Seletor from './Seletor';
 import SeletorDeData from './SeletorDeData';
@@ -21,6 +22,8 @@ const formularioVazio = (contas) => ({
   conta_id: contas.length === 1 ? contas[0].id : '',
   categoria_id: '',
   conta_destino_id: '',
+  // Vazio = quem lançou.
+  responsavel: '',
   divisao: [],
   // O meio mais comum já vem marcado; a pessoa troca com um clique.
   meio: 'PIX',
@@ -30,7 +33,7 @@ const opcoesDeConta = (contas) => contas.map((conta) => ({ valor: conta.id, rotu
 
 // Formulário do "+ Novo lançamento" (dentro do modal): receita, despesa ou
 // transferência entre contas, sempre à vista (PIX, débito, dinheiro ou
-// TED/DOC), com o racha entre pessoas nas duas primeiras.
+// TED/DOC), com o responsável e o racha entre pessoas nas duas primeiras.
 // Confere tudo antes de ir à API e põe o foco no primeiro campo com erro.
 // aoLancar recebe o lançamento criado. Compras no crédito não entram aqui: com
 // cartões cadastrados, o formulário aponta a fatura (temCartoes).
@@ -60,10 +63,14 @@ export default function FormularioDeLancamento({ espacoId, contas, temCartoes = 
   function mudar(campo, valor, campoDoErro = campo) {
     setFormulario((atual) => {
       const novo = { ...atual, [campo]: valor };
-      // Trocar o tipo apaga a categoria escolhida: despesa e receita têm listas próprias.
+      // Trocar o tipo apaga a categoria escolhida: despesa e receita têm listas
+      // próprias. Transferência entre contas próprias não tem responsável.
       if (campo === 'tipo') {
         novo.categoria_id = '';
         novo.conta_destino_id = '';
+        if (valor === 'TRANSFERENCIA') {
+          novo.responsavel = '';
+        }
       }
       return novo;
     });
@@ -147,6 +154,12 @@ export default function FormularioDeLancamento({ espacoId, contas, temCartoes = 
             onChange={(evento) => mudar('categoria_id', evento.target.value)} erro={erros.categoria_id} />
         )}
       </div>
+
+      {!transferencia && (
+        <CampoDeResponsavel valor={formulario.responsavel} aoMudar={(nome) => mudar('responsavel', nome)}
+          erro={erros.responsavel} pessoasConhecidas={pessoasConhecidas}
+          dica={formulario.tipo === 'RECEITA' ? 'De quem é a receita. Vazio, fica com você.' : 'Quem fez o gasto. Vazio, fica com você.'} />
+      )}
 
       <SeletorDeMeio valor={formulario.meio} aoMudar={(meio) => mudar('meio', meio)} erro={erros.meio} />
 

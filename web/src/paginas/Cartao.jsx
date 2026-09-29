@@ -86,7 +86,12 @@ export default function Cartao() {
     [espacoId, cartaoId, referencia],
   );
   const fatura = useCarga(buscarDaFatura);
-  const acoes = useAcoesDoExtrato({ espacoId, categorias: cartao.dados?.categorias ?? [], aoMudar: recarregar });
+  const acoes = useAcoesDoExtrato({
+    espacoId,
+    categorias: cartao.dados?.categorias ?? [],
+    pessoasConhecidas: cartao.dados?.pessoas,
+    aoMudar: recarregar,
+  });
 
   function recarregar() {
     cartao.recarregar();

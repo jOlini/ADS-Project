@@ -857,6 +857,208 @@ a.of-kpi-link:hover {
   color: var(--of-sobre-rosa);
 }
 
+/* ---------------------------------------------------------- Saldo livre */
+
+/* "Quanto está sobrando" até o fim do mês (componentes/SaldoLivre.tsx): o
+   número grande à esquerda, a conta aberta à direita e o medidor embaixo. A
+   saúde do mês troca só o acento (faixa, selo, número e barra): verde com
+   folga, âmbar pedindo atenção, vermelho quando o mês fecha no negativo. */
+.of-saldo-livre {
+  --acento: var(--marca);
+  --acento-suave: var(--of-menta);
+  --sobre-acento: var(--of-sobre-menta);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: var(--espaco-8) var(--espaco-16);
+  align-items: center;
+  padding: var(--espaco-10) var(--espaco-12) var(--espaco-10) var(--espaco-14);
+  box-shadow: inset 4px 0 0 var(--acento), var(--sombra);
+}
+
+.of-saldo-livre.atencao {
+  --acento: var(--aviso);
+  --acento-suave: color-mix(in srgb, var(--aviso) 14%, var(--superficie));
+  --sobre-acento: var(--aviso);
+}
+
+.of-saldo-livre.negativo {
+  --acento: var(--erro);
+  --acento-suave: var(--of-rosa-suave);
+  --sobre-acento: var(--of-sobre-rosa);
+  background: color-mix(in srgb, var(--erro) 5%, var(--superficie));
+  border-color: color-mix(in srgb, var(--erro) 30%, transparent);
+}
+
+.of-saldo-livre-principal {
+  display: grid;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+.of-saldo-livre-topo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4) var(--espaco-6);
+  align-items: center;
+}
+
+.of-saldo-livre-topo h2 {
+  display: flex;
+  gap: var(--espaco-5);
+  align-items: center;
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-medio);
+}
+
+.of-saldo-livre-topo .of-kpi-icone {
+  background: var(--acento-suave);
+  color: var(--sobre-acento);
+}
+
+.of-saldo-livre-selo {
+  display: inline-flex;
+  gap: var(--espaco-2);
+  align-items: center;
+  padding: 1px var(--espaco-5);
+  border-radius: var(--raio-pilula);
+  background: var(--acento-suave);
+  color: var(--sobre-acento);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+  white-space: nowrap;
+}
+
+.of-saldo-livre-valor {
+  margin-top: var(--espaco-3);
+  font-size: clamp(1.875rem, 1.4rem + 1.4vw, 2.375rem);
+  font-weight: var(--peso-forte);
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.of-saldo-livre.negativo .of-saldo-livre-valor {
+  color: var(--erro);
+}
+
+.of-saldo-livre-leitura {
+  max-width: 52ch;
+  color: var(--texto);
+  font-size: var(--fonte-rotulo);
+  text-wrap: pretty;
+}
+
+.of-saldo-livre-nota {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A conta, uma linha por parcela, com os valores alinhados à direita. */
+.of-saldo-livre-conta {
+  display: grid;
+  margin: 0;
+  font-size: var(--fonte-rotulo);
+}
+
+.of-saldo-livre-conta > div {
+  display: flex;
+  gap: var(--espaco-6);
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--espaco-4) 0;
+}
+
+.of-saldo-livre-conta > div + div {
+  border-top: 1px dashed var(--linha);
+}
+
+.of-saldo-livre-conta dt {
+  display: grid;
+  gap: 1px;
+  color: var(--suave);
+}
+
+.of-saldo-livre-conta dt > span {
+  display: inline-block;
+  width: 1ch;
+  margin-right: var(--espaco-2);
+  color: var(--texto);
+  font-weight: var(--peso-semi);
+}
+
+.of-saldo-livre-conta dt small {
+  font-size: var(--fonte-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-saldo-livre-conta dd {
+  margin: 0;
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.of-saldo-livre-conta .soma dd {
+  color: var(--of-sobre-menta);
+}
+
+.of-saldo-livre-conta .subtrai dd {
+  color: var(--of-sobre-rosa);
+}
+
+.of-saldo-livre-conta > .resultado {
+  border-top: 1.5px solid var(--linha-forte);
+}
+
+.of-saldo-livre-conta > .resultado dt,
+.of-saldo-livre-conta > .resultado dd {
+  color: var(--texto);
+  font-weight: var(--peso-forte);
+}
+
+.of-saldo-livre.negativo .of-saldo-livre-conta > .resultado dd {
+  color: var(--erro);
+}
+
+/* Medidor: quanto do dinheiro do mês (saldo de hoje + a receber) já tem
+   destino. */
+.of-saldo-livre-medidor {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--espaco-3);
+}
+
+.of-saldo-livre-medidor small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-saldo-livre-barra {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
+}
+
+.of-saldo-livre-barra i {
+  display: block;
+  width: var(--p);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--acento);
+}
+
+@media (max-width: 900px) {
+  .of-saldo-livre {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--espaco-9) var(--espaco-10) var(--espaco-9) var(--espaco-12);
+  }
+}
+
 /* ---------------------------------------------------------------- Grade */
 
 .of-grade {

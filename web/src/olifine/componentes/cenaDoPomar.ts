@@ -6,6 +6,7 @@
 // o relevo e a cor são calculados aqui, no shader, para cada folha.
 
 import { CAMPO, TIPO, pixelsPorUnidade, type Matriz4, type Pomar } from '../regras/pomar';
+import { abrirContexto, enviarAtributo, liberarContexto, montarPrograma } from './webgl';
 
 // Anéis de rega vivos ao mesmo tempo (o shader tem um laço fixo).
 export const MAXIMO_DE_GOTAS = 3;
@@ -175,79 +176,16 @@ void main() {
 }
 `;
 
-function compilar(gl: WebGLRenderingContext, tipo: number, fonte: string): WebGLShader | null {
-  const sombreador = gl.createShader(tipo);
-  if (!sombreador) {
-    return null;
-  }
-  gl.shaderSource(sombreador, fonte);
-  gl.compileShader(sombreador);
-  if (!gl.getShaderParameter(sombreador, gl.COMPILE_STATUS)) {
-    // Em desenvolvimento, o motivo aparece no console; publicado, a landing
-    // só volta aos contornos em SVG.
-    if (import.meta.env.DEV) {
-      console.warn('Pomar: shader recusado', gl.getShaderInfoLog(sombreador));
-    }
-    gl.deleteShader(sombreador);
-    return null;
-  }
-  return sombreador;
-}
-
-function montarPrograma(gl: WebGLRenderingContext): WebGLProgram | null {
-  const vertices = compilar(gl, gl.VERTEX_SHADER, SOMBREADOR_DE_VERTICES);
-  const fragmentos = compilar(gl, gl.FRAGMENT_SHADER, SOMBREADOR_DE_FRAGMENTOS);
-  const programa = gl.createProgram();
-  if (!vertices || !fragmentos || !programa) {
-    return null;
-  }
-  gl.attachShader(programa, vertices);
-  gl.attachShader(programa, fragmentos);
-  gl.linkProgram(programa);
-  // Depois de ligado, o programa guarda o que precisa dos dois.
-  gl.deleteShader(vertices);
-  gl.deleteShader(fragmentos);
-  if (!gl.getProgramParameter(programa, gl.LINK_STATUS)) {
-    if (import.meta.env.DEV) {
-      console.warn('Pomar: programa recusado', gl.getProgramInfoLog(programa));
-    }
-    gl.deleteProgram(programa);
-    return null;
-  }
-  return programa;
-}
-
-function enviarAtributo(gl: WebGLRenderingContext, programa: WebGLProgram, nome: string, dados: Float32Array): WebGLBuffer | null {
-  const buffer = gl.createBuffer();
-  const local = gl.getAttribLocation(programa, nome);
-  if (!buffer || local < 0) {
-    return null;
-  }
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, dados, gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(local);
-  gl.vertexAttribPointer(local, 3, gl.FLOAT, false, 0, 0);
-  return buffer;
-}
-
 // Cria a cena no canvas. Devolve null quando não dá para desenhar bem: sem
 // WebGL, só com desenho por software (failIfMajorPerformanceCaveat: a máquina
 // sem placa de vídeo ficaria lenta) ou com o shader recusado. Nesses casos a
 // landing mantém os contornos em SVG, que já são o visual de antes.
 export function criarCenaDoPomar(canvas: HTMLCanvasElement, pomar: Pomar): CenaDoPomar | null {
-  const gl = canvas.getContext('webgl', {
-    alpha: true,
-    antialias: false,
-    depth: false,
-    stencil: false,
-    premultipliedAlpha: true,
-    powerPreference: 'low-power',
-    failIfMajorPerformanceCaveat: true,
-  });
+  const gl = abrirContexto(canvas);
   if (!gl) {
     return null;
   }
-  const programa = montarPrograma(gl);
+  const programa = montarPrograma(gl, SOMBREADOR_DE_VERTICES, SOMBREADOR_DE_FRAGMENTOS, 'Pomar');
   if (!programa) {
     return null;
   }
@@ -305,8 +243,7 @@ export function criarCenaDoPomar(canvas: HTMLCanvasElement, pomar: Pomar): CenaD
     destruir() {
       buffers.forEach((buffer) => gl.deleteBuffer(buffer));
       gl.deleteProgram(programa);
-      // Devolve o contexto na hora (o navegador limita quantos ficam abertos).
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      liberarContexto(gl);
     },
   };
 }

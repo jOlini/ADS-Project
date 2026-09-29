@@ -47,7 +47,7 @@ export function limparDigitacao(texto: unknown): string {
 // Campos de texto livre dos corpos enviados à API do livro-caixa. O resto
 // (ids, datas, tipos, o texto do CSV, que a API lê e limpa célula por célula)
 // vai como está.
-export const CAMPOS_DE_TEXTO = new Set(['nome', 'descricao', 'pessoa']);
+export const CAMPOS_DE_TEXTO = new Set(['nome', 'descricao', 'pessoa', 'responsavel']);
 
 // Corpo com os campos de texto livre limpos, em qualquer profundidade (a
 // divisão do racha é uma lista de { pessoa, valor_centavos }).
