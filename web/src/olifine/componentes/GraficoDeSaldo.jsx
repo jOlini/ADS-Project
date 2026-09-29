@@ -3,7 +3,6 @@ import { useTamanho } from '../../componentes/useTamanho';
 import { formatarBRL } from '../../regras/dinheiro';
 import { caminhoSuave, valorCurto } from '../regras/curva';
 import { reguaDoGrafico } from '../regras/serie';
-import { leituraDaVariacao, textoDaVariacao } from '../regras/tendencia';
 
 const MARGEM = { cima: 18, direita: 14, baixo: 30, esquerda: 66 };
 
@@ -35,8 +34,15 @@ function indicesDoEixo(quantos, largura) {
 
 // Evolução do saldo como instrumento: régua discreta, traço verde com área
 // esmeralda transparente, e um cursor que lê qualquer ponto com o mouse, o
-// dedo ou as setas do teclado. Em repouso, o balão mostra o último ponto.
-export default function GraficoDeSaldo({ serie, variacao, descricao }) {
+// dedo ou as setas do teclado. Em repouso, nada de cursor nem de balão: um
+// ponto aceso parado parecia um ponteiro esquecido sobre o gráfico.
+//
+// A caixa (.of-grafico) é a moldura responsiva: largura 100% e tamanho só do
+// CSS, medido pelo ResizeObserver (useTamanho). O SVG fica por cima, em
+// posição absoluta, e não empurra a caixa: antes, com o tamanho em pixels
+// dentro do fluxo, o zoom e a janela estreita não conseguiam encolher o
+// gráfico e ele vazava do cartão.
+export default function GraficoDeSaldo({ serie, descricao }) {
   const caixa = useRef(null);
   const { largura, altura } = useTamanho(caixa);
   const [cursor, setCursor] = useState(null);
@@ -51,10 +57,9 @@ export default function GraficoDeSaldo({ serie, variacao, descricao }) {
   const base = MARGEM.cima + util.altura;
   const area = pontos.length > 1 ? `${linha}L${pontos.at(-1).x} ${base}L${pontos[0].x} ${base}Z` : '';
 
-  const atual = cursor ?? serie.length - 1;
-  const ponto = pontos[atual];
-  const dado = serie[atual];
-  const leitura = leituraDaVariacao(variacao);
+  // Só existe ponto lido com o mouse, o dedo ou o teclado em cima do gráfico.
+  const ponto = cursor === null ? null : pontos[cursor];
+  const dado = cursor === null ? null : serie[cursor];
 
   function aoMover(evento) {
     const retangulo = caixa.current.getBoundingClientRect();
@@ -86,6 +91,7 @@ export default function GraficoDeSaldo({ serie, variacao, descricao }) {
       aria-roledescription="gráfico"
       aria-label={`${descricao}. Use as setas para ler cada ponto.`}
       onPointerMove={aoMover}
+      onPointerDown={aoMover}
       onPointerLeave={() => setCursor(null)}
       onKeyDown={aoTeclar}
       onBlur={() => setCursor(null)}
@@ -140,16 +146,12 @@ export default function GraficoDeSaldo({ serie, variacao, descricao }) {
           aria-hidden="true"
         >
           <b>{formatarBRL(dado.saldo)}</b>
-          {cursor === null && leitura ? (
-            <span className={`of-tendencia ${leitura}`}>{textoDaVariacao(variacao)}</span>
-          ) : (
-            <small>{rotuloLongo(dado.data)}</small>
-          )}
+          <small>{rotuloLongo(dado.data)}</small>
         </div>
       )}
 
       <p className="apenas-leitor" aria-live="polite">
-        {cursor !== null && dado ? `${rotuloLongo(dado.data)}: ${formatarBRL(dado.saldo)}` : ''}
+        {dado ? `${rotuloLongo(dado.data)}: ${formatarBRL(dado.saldo)}` : ''}
       </p>
     </div>
   );
