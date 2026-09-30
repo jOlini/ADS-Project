@@ -77,7 +77,7 @@ button.discreto-botao:active:not(:disabled) {
    lugar: sobem e acendem a borda. Cartões que só mostram dados não se mexem
    (subir prometeria um clique que não existe); só a borda acende de leve. */
 
-:is(a.of-kpi-link, .of-metas-resumo a, .of-metas-lista button, a.of-regar-convite-link, .of-atalho, a.nome-do-cartao) {
+:is(.of-kpi-link, .of-metas-resumo a, .of-metas-lista button, a.of-regar-convite-link, .of-atalho, a.nome-do-cartao) {
   transition:
     background-color var(--tempo) var(--curva),
     border-color var(--tempo) var(--curva),
@@ -85,7 +85,9 @@ button.discreto-botao:active:not(:disabled) {
     transform var(--tempo-medio) var(--curva-chegada);
 }
 
-a.of-kpi-link:hover {
+/* Metas: o card é um article com o link esticado por cima; sobe quando o
+   link (e não o "i") está sob o ponteiro. */
+.of-kpi-link:has(.of-kpi-alvo:hover) {
   transform: translateY(var(--elevacao));
   border-color: color-mix(in srgb, var(--of-verde) 45%, var(--linha));
   box-shadow: var(--sombra-elevada);
@@ -96,7 +98,7 @@ a.of-kpi-link:hover {
   box-shadow: var(--sombra);
 }
 
-:is(a.of-kpi-link, .of-metas-resumo a, .of-metas-lista button):active:not(:disabled) {
+:is(.of-kpi-link:has(.of-kpi-alvo:active), .of-metas-resumo a, .of-metas-lista button):active:not(:disabled) {
   transform: translateY(0) scale(0.99);
   transition-duration: var(--tempo-curto);
 }

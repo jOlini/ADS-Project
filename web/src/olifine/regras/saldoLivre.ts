@@ -149,22 +149,66 @@ export function calcularSaldoLivre({
   };
 }
 
-// Frase da leitura, dita sem alarme e com o número que importa.
-export function leituraDoSaldoLivre(resultado: SaldoLivre, formatar: (centavos: number) => string): string {
-  if (resultado.folgaAparente) {
-    return `O saldo de hoje está positivo, mas as contas previstas passam dele em ${formatar(-resultado.livre)} até o fim do mês.`;
+// Como o card do saldo livre se apresenta: positivo (verde, seguro para
+// gastar), neutro (sobra pouco ou nada) ou negativo (vermelho, vai faltar).
+export type EstadoDoSaldoLivre = 'positivo' | 'neutro' | 'negativo';
+
+export interface LeituraDoSaldoLivre {
+  estado: EstadoDoSaldoLivre;
+  // O selo curto ("Seguro para gastar").
+  titulo: string;
+  // A frase, sem jargão, com o número que importa e o que fazer.
+  texto: string;
+}
+
+// A leitura do saldo livre para quem não entende de finanças: o sinal do
+// saldo livre (sem o investido) decide a cor, e a frase diz o valor, até
+// quando e o que fazer. `ate` é o último dia do mês já escrito ("30/09").
+export function leituraDoSaldoLivre(
+  resultado: SaldoLivre,
+  formatar: (centavos: number) => string,
+  ate: string,
+): LeituraDoSaldoLivre {
+  const livre = resultado.livreSemInvestido;
+  if (livre < 0) {
+    const faltam = formatar(-livre);
+    if (resultado.folgaAparente) {
+      return {
+        estado: 'negativo',
+        titulo: 'Vai faltar dinheiro',
+        texto: `Hoje a conta parece boa, mas as contas que vencem até ${ate} são maiores: faltam ${faltam}. Evite gastos novos e veja o que dá para adiar.`,
+      };
+    }
+    if (resultado.livre < 0) {
+      return {
+        estado: 'negativo',
+        titulo: 'Vai faltar dinheiro',
+        texto: `As contas até ${ate} são maiores que o dinheiro que você tem: faltam ${faltam}. Evite gastos novos e veja o que dá para adiar ou negociar.`,
+      };
+    }
+    return {
+      estado: 'negativo',
+      titulo: 'Só fecha usando o investido',
+      texto: `O dinheiro do dia a dia não cobre as contas até ${ate}: faltam ${faltam}. Para não mexer no investido, evite gastos novos.`,
+    };
   }
-  if (resultado.saude === 'negativo') {
-    return `As contas previstas passam do que você tem em ${formatar(-resultado.livre)} até o fim do mês.`;
+  if (livre === 0) {
+    return {
+      estado: 'neutro',
+      titulo: 'Tudo já tem destino',
+      texto: `Todo o dinheiro até ${ate} já vai para as contas. Antes de gastar, espere entrar mais dinheiro.`,
+    };
   }
-  if (resultado.livreSemInvestido < 0) {
-    return 'Só sobra usando o dinheiro investido. Vale rever os gastos até o fim do mês.';
+  if (resultado.saude !== 'folga') {
+    return {
+      estado: 'neutro',
+      titulo: 'Sobra pouco',
+      texto: `Dá para gastar até ${formatar(livre)} até ${ate} sem faltar para as contas, mas a folga é curta. Gaste com calma.`,
+    };
   }
-  if (resultado.saude === 'atencao') {
-    return 'Sobra pouco depois das contas previstas. Vale segurar os gastos até o fim do mês.';
-  }
-  if (resultado.aPagar === 0 && resultado.aReceber === 0) {
-    return 'Nenhuma conta prevista até o fim do mês: todo o saldo está livre.';
-  }
-  return 'Depois das contas previstas, este é o dinheiro livre até o fim do mês.';
+  return {
+    estado: 'positivo',
+    titulo: 'Seguro para gastar',
+    texto: `Você pode gastar até ${formatar(livre)} até ${ate} sem faltar dinheiro para as contas previstas.`,
+  };
 }

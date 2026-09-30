@@ -656,6 +656,11 @@ button.of-chave-da-familia:hover:not(:disabled) {
   transform: translateX(14px);
 }
 
+/* Free: a chave com o cadeado, que leva à explicação do Plano Família. */
+.of-chave-da-familia.bloqueada > .icone:last-child {
+  color: var(--suave);
+}
+
 button.of-espaco-botao {
   flex: none;
   gap: var(--espaco-4);
@@ -1029,9 +1034,9 @@ button.of-espaco-excluir .icone {
 
 /* ----------------------------------------------------------------- KPIs */
 
-/* Grade dos números: o saldo total (widget de consolidação) ocupa duas
-   colunas e duas linhas à esquerda; Receitas e Despesas ficam em cima à
-   direita e Metas embaixo delas, nas duas colunas. */
+/* Grade dos números: o saldo livre (card principal) ocupa duas colunas e
+   duas linhas à esquerda; Receitas e Despesas ficam em cima à direita e
+   Metas embaixo delas, nas duas colunas. */
 .of-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1056,8 +1061,18 @@ button.of-espaco-excluir .icone {
   transition: border-color var(--transicao);
 }
 
-a.of-kpi-link:hover {
-  border-color: var(--linha-forte);
+/* O rótulo e o "i" da dica na mesma linha, com o "i" no canto. */
+.of-kpi-topo {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.of-kpi-topo > .of-kpi-rotulo {
+  min-width: 0;
+  margin: 0;
 }
 
 .of-kpi-rotulo {
@@ -1138,65 +1153,337 @@ a.of-kpi-link:hover {
   color: var(--of-sobre-rosa);
 }
 
-/* -------------------------------------------------- Saldo consolidado */
+/* Metas: o link se estica por cima do card inteiro (::after), e o "i" fica
+   por cima do link, porque botão dentro de link não é válido. */
+.of-kpi-link {
+  position: relative;
+}
 
-/* O saldo total como widget (componentes/SaldoConsolidado.tsx): ocupa duas
-   colunas e duas linhas da grade dos números, com o patrimônio em destaque e
-   as três leituras do mês embaixo (saldo livre, investido, fechamento). A
-   saúde do mês troca só o acento (faixa da esquerda, selo e número do
-   fechamento): verde com folga, âmbar pedindo atenção, vermelho no
-   negativo. */
+.of-kpi-alvo {
+  color: inherit;
+  text-decoration: none;
+}
+
+.of-kpi-alvo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--raio-grande);
+}
+
+.of-kpi-alvo:focus-visible {
+  outline: none;
+}
+
+.of-kpi-alvo:focus-visible::after {
+  outline: var(--espessura-do-foco) solid var(--of-verde);
+  outline-offset: 2px;
+}
+
+.of-kpi-link .of-dica-botao {
+  z-index: 1;
+}
+
+/* ------------------------------------------------ Visão geral: altura fixa */
+
+/* Cada card da Visão geral tem altura fixa e sempre as mesmas partes (com ou
+   sem números, carregando ou não): nada aparece nem some depois de carregar,
+   e a página não pula (CLS). O saldo livre ocupa duas linhas da grade. Texto
+   de apoio fica numa linha só, com reticências; a explicação inteira está no
+   "i", que flutua por cima e não mexe na altura. */
+.of-kpis-da-visao {
+  --altura-do-kpi: 12rem;
+  grid-auto-rows: var(--altura-do-kpi);
+}
+
+.of-kpis-da-visao > .of-kpi {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.of-kpis-da-visao .of-kpi-rodape {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* À vista e no crédito cabem em até duas linhas no card estreito, quebrando
+   só entre os dois valores. */
+.of-kpis-da-visao .of-kpi-origem {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.of-kpis-da-visao .of-kpi-origem > span {
+  white-space: nowrap;
+}
+
+.of-kpi-rodape-texto {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------- O "i" */
+
+/* O botão da dica (componentes/Dica.jsx): pequeno no desenho, com a área de
+   toque maior pelo ::before, sem mexer no layout. */
+button.of-dica-botao {
+  position: relative;
+  flex: none;
+  width: 26px;
+  min-height: 0;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--suave);
+  transition:
+    color var(--transicao),
+    background-color var(--transicao);
+}
+
+button.of-dica-botao::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+button.of-dica-botao:hover:not(:disabled),
+button.of-dica-botao[aria-expanded='true'] {
+  background: var(--lateral);
+  color: var(--texto);
+}
+
+button.of-dica-botao:focus-visible {
+  outline: var(--espessura-do-foco) solid var(--of-verde);
+  outline-offset: 1px;
+}
+
+/* O balão vai para o fim do <body>: não herda nada do card, então cor e
+   letra são dele. */
+.of-dica {
+  display: grid;
+  gap: var(--espaco-3);
+  width: min(320px, 100vw - 24px);
+  min-width: 0;
+  padding: var(--espaco-7) var(--espaco-8);
+  color: var(--texto);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-regular);
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+}
+
+.of-dica-titulo {
+  margin: 0;
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+}
+
+.of-dica-texto {
+  display: grid;
+  gap: var(--espaco-5);
+  color: var(--suave);
+  text-wrap: pretty;
+}
+
+.of-dica-texto p {
+  margin: 0;
+}
+
+/* A conta do saldo livre, dentro da dica: de cima para baixo. */
+.of-conta-do-mes {
+  display: grid;
+  margin: 0;
+  color: var(--texto);
+}
+
+.of-conta-do-mes > div {
+  display: flex;
+  gap: var(--espaco-6);
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--espaco-3) 0;
+}
+
+.of-conta-do-mes > div + div {
+  border-top: 1px dashed var(--linha);
+}
+
+.of-conta-do-mes dt {
+  display: grid;
+  gap: 1px;
+  color: var(--suave);
+}
+
+.of-conta-do-mes dt > span {
+  display: inline-block;
+  width: 1ch;
+  margin-right: var(--espaco-2);
+  color: var(--texto);
+  font-weight: var(--peso-semi);
+}
+
+.of-conta-do-mes dt small {
+  font-size: var(--fonte-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-conta-do-mes dd {
+  margin: 0;
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.of-conta-do-mes .soma dd {
+  color: var(--of-sobre-menta);
+}
+
+.of-conta-do-mes .subtrai dd {
+  color: var(--of-sobre-rosa);
+}
+
+.of-conta-do-mes > .resultado {
+  border-top: 1.5px solid var(--linha-forte);
+}
+
+.of-conta-do-mes > .resultado dt,
+.of-conta-do-mes > .resultado dd {
+  color: var(--texto);
+  font-weight: var(--peso-forte);
+}
+
+/* Medidor: quanto do dinheiro do mês (saldo de hoje + a receber) já tem
+   destino. */
+.of-conta-do-mes-medidor {
+  display: grid;
+  gap: var(--espaco-3);
+}
+
+.of-conta-do-mes-medidor small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-conta-do-mes-barra {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
+}
+
+.of-conta-do-mes-barra i {
+  display: block;
+  width: var(--p);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--marca);
+}
+
+.of-conta-do-mes-barra.neutro i {
+  background: var(--suave);
+}
+
+.of-conta-do-mes-barra.negativo i {
+  background: var(--erro);
+}
+
+/* ------------------------------------------------- Saldo livre (card) */
+
+/* O saldo livre como card principal (componentes/SaldoConsolidado.tsx): o
+   valor em destaque, a leitura numa frase e os três números de apoio
+   (patrimônio total, investido, fechamento). O estado troca só o acento:
+   verde no positivo, neutro quando sobra pouco ou nada e vermelho quando vai
+   faltar dinheiro. Linhas: topo, valor, leitura (o espaço que sobra) e
+   números de apoio presos embaixo. */
 .of-consolidado {
   --acento: var(--marca);
   --acento-suave: var(--of-menta);
   --sobre-acento: var(--of-sobre-menta);
+  --cor-do-valor: var(--marca);
   container: consolidado / inline-size;
   grid-column: span 2;
   grid-row: span 2;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: var(--espaco-4);
-  align-content: start;
+  align-content: stretch;
 }
 
-.of-consolidado.atencao {
-  --acento: var(--aviso);
-  --acento-suave: color-mix(in srgb, var(--aviso) 14%, var(--superficie));
-  --sobre-acento: var(--aviso);
+.of-consolidado.neutro {
+  --acento: var(--suave);
+  --acento-suave: var(--lateral);
+  --sobre-acento: var(--texto);
+  --cor-do-valor: var(--texto);
 }
 
 .of-consolidado.negativo {
   --acento: var(--erro);
   --acento-suave: var(--of-rosa-suave);
   --sobre-acento: var(--of-sobre-rosa);
-}
-
-.of-consolidado-topo {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espaco-2) var(--espaco-6);
-  align-items: center;
-  justify-content: space-between;
-}
-
-.of-consolidado-topo h2 {
-  margin: 0;
-}
-
-.of-consolidado-apoio {
-  color: var(--suave);
-  font-size: var(--fonte-micro);
+  --cor-do-valor: var(--erro);
 }
 
 .of-consolidado .of-kpi-valor {
+  margin-top: var(--espaco-2);
+  color: var(--cor-do-valor);
   font-size: clamp(1.75rem, 1.3rem + 1.1vw, 2.25rem);
   letter-spacing: -0.04em;
 }
 
-/* As três leituras do mês, lado a lado, como selos do widget. */
+/* A leitura: o selo do estado e a frase simples, com teto de linhas (a conta
+   inteira fica no "i"). */
+.of-saldo-livre-leitura {
+  align-self: start;
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+  max-height: 100%;
+  overflow: hidden;
+  padding: var(--espaco-5) var(--espaco-6);
+  border-left: 3px solid var(--acento);
+  border-radius: var(--raio-pequeno);
+  background: var(--acento-suave);
+}
+
+.of-saldo-livre-selo {
+  display: inline-flex;
+  gap: var(--espaco-2);
+  align-items: center;
+  color: var(--sobre-acento);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-forte);
+}
+
+.of-saldo-livre-leitura p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--texto);
+  font-size: var(--fonte-apoio);
+  line-height: 1.4;
+  text-wrap: pretty;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* Os três números de apoio, lado a lado, presos ao pé do card. */
 .of-consolidado-metricas {
+  align-self: end;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--espaco-5);
-  margin: var(--espaco-5) 0 0;
+  margin: 0;
 }
 
 .of-metrica {
@@ -1204,7 +1491,7 @@ a.of-kpi-link:hover {
   gap: var(--espaco-1);
   align-content: start;
   min-width: 0;
-  padding: var(--espaco-6) var(--espaco-7);
+  padding: var(--espaco-5) var(--espaco-6);
   border-radius: var(--raio);
   background: var(--lateral);
 }
@@ -1213,9 +1500,27 @@ a.of-kpi-link:hover {
   display: flex;
   gap: var(--espaco-3);
   align-items: center;
+  min-width: 0;
   color: var(--suave);
   font-size: var(--fonte-micro);
   font-weight: var(--peso-medio);
+}
+
+.of-metrica dt > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.of-metrica dt > .icone {
+  flex: none;
+}
+
+.of-metrica dt button.of-dica-botao {
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
 }
 
 .of-metrica dd {
@@ -1223,7 +1528,7 @@ a.of-kpi-link:hover {
 }
 
 .of-metrica > dd:not(.of-metrica-apoio) {
-  margin-top: var(--espaco-2);
+  margin-top: var(--espaco-1);
   overflow: hidden;
   font-size: var(--fonte-numero-compacto);
   font-weight: var(--peso-forte);
@@ -1233,182 +1538,63 @@ a.of-kpi-link:hover {
   text-overflow: ellipsis;
 }
 
-.of-metrica.livre {
-  background: color-mix(in srgb, var(--of-menta) 70%, var(--superficie));
-}
-
-.of-metrica.livre dt {
-  color: var(--of-sobre-menta);
-}
-
-.of-metrica.negativa > dd:not(.of-metrica-apoio),
 .of-metrica.fechamento.negativo > dd:not(.of-metrica-apoio) {
   color: var(--erro);
 }
 
+/* Uma linha só, com reticências: a tendência do patrimônio, a parte
+   investida e o selo do fechamento. */
 .of-metrica-apoio {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--espaco-2) var(--espaco-3);
   align-items: center;
+  min-width: 0;
+  overflow: hidden;
   color: var(--suave);
   font-size: var(--fonte-micro);
+  white-space: nowrap;
+}
+
+.of-metrica-apoio > span:last-child,
+.of-metrica-apoio .of-kpi-rodape {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.of-metrica-apoio .of-kpi-rodape {
+  flex-wrap: nowrap;
+  margin: 0;
+  font-size: inherit;
+}
+
+/* O selo do fechamento segue a saúde do mês (e não o saldo livre). */
+.of-metrica.fechamento {
+  --selo: var(--of-menta);
+  --sobre-selo: var(--of-sobre-menta);
+}
+
+.of-metrica.fechamento.atencao {
+  --selo: color-mix(in srgb, var(--aviso) 14%, var(--superficie));
+  --sobre-selo: var(--aviso);
+}
+
+.of-metrica.fechamento.negativo {
+  --selo: var(--of-rosa-suave);
+  --sobre-selo: var(--of-sobre-rosa);
 }
 
 .of-metrica-selo {
+  flex: none;
   display: inline-flex;
   gap: var(--espaco-1);
   align-items: center;
   padding: 0 var(--espaco-4) 0 var(--espaco-3);
   border-radius: var(--raio-pilula);
-  background: var(--acento-suave);
-  color: var(--sobre-acento);
+  background: var(--selo);
+  color: var(--sobre-selo);
   font-weight: var(--peso-semi);
   white-space: nowrap;
-}
-
-.of-consolidado-leitura {
-  display: flex;
-  gap: var(--espaco-4);
-  align-items: flex-start;
-  margin-top: var(--espaco-2);
-  padding: var(--espaco-5) var(--espaco-6);
-  border-radius: var(--raio-pequeno);
-  background: var(--acento-suave);
-  color: var(--texto);
-  font-size: var(--fonte-apoio);
-  text-wrap: pretty;
-}
-
-.of-consolidado-leitura .icone {
-  flex: none;
-  margin-top: 1px;
-  color: var(--sobre-acento);
-}
-
-/* A conta aberta, recolhida por padrão. */
-.of-consolidado-conta {
-  margin-top: var(--espaco-2);
-  font-size: var(--fonte-apoio);
-}
-
-.of-consolidado-conta summary {
-  display: inline-flex;
-  gap: var(--espaco-2);
-  align-items: center;
-  min-height: 32px;
-  color: var(--of-sobre-menta);
-  font-weight: var(--peso-semi);
-  list-style: none;
-  cursor: pointer;
-  border-radius: var(--raio-mini);
-}
-
-.of-consolidado-conta summary::-webkit-details-marker {
-  display: none;
-}
-
-.of-consolidado-conta summary .icone {
-  transition: rotate var(--transicao);
-}
-
-.of-consolidado-conta[open] summary .icone {
-  rotate: 180deg;
-}
-
-.of-consolidado-conta summary:focus-visible {
-  outline: var(--espessura-do-foco) solid var(--of-verde);
-  outline-offset: 2px;
-}
-
-.of-consolidado-conta dl {
-  display: grid;
-  margin: var(--espaco-2) 0 0;
-}
-
-.of-consolidado-conta dl > div {
-  display: flex;
-  gap: var(--espaco-6);
-  align-items: baseline;
-  justify-content: space-between;
-  padding: var(--espaco-3) 0;
-}
-
-.of-consolidado-conta dl > div + div {
-  border-top: 1px dashed var(--linha);
-}
-
-.of-consolidado-conta dt {
-  display: grid;
-  gap: 1px;
-  color: var(--suave);
-}
-
-.of-consolidado-conta dt > span {
-  display: inline-block;
-  width: 1ch;
-  margin-right: var(--espaco-2);
-  color: var(--texto);
-  font-weight: var(--peso-semi);
-}
-
-.of-consolidado-conta dt small {
-  font-size: var(--fonte-micro);
-  font-variant-numeric: tabular-nums;
-}
-
-.of-consolidado-conta dd {
-  margin: 0;
-  font-weight: var(--peso-semi);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.of-consolidado-conta .soma dd {
-  color: var(--of-sobre-menta);
-}
-
-.of-consolidado-conta .subtrai dd {
-  color: var(--of-sobre-rosa);
-}
-
-.of-consolidado-conta dl > .resultado {
-  border-top: 1.5px solid var(--linha-forte);
-}
-
-.of-consolidado-conta dl > .resultado dt,
-.of-consolidado-conta dl > .resultado dd {
-  color: var(--texto);
-  font-weight: var(--peso-forte);
-}
-
-/* Medidor: quanto do dinheiro do mês (saldo de hoje + a receber) já tem
-   destino. */
-.of-consolidado-medidor {
-  display: grid;
-  gap: var(--espaco-3);
-  margin-top: var(--espaco-5);
-}
-
-.of-consolidado-medidor small {
-  color: var(--suave);
-  font-size: var(--fonte-micro);
-}
-
-.of-consolidado-barra {
-  display: block;
-  height: 8px;
-  overflow: hidden;
-  border-radius: var(--raio-pilula);
-  background: var(--lateral);
-}
-
-.of-consolidado-barra i {
-  display: block;
-  width: var(--p);
-  height: 100%;
-  border-radius: inherit;
-  background: var(--acento);
 }
 
 /* ---------------------------------------------------------------- Grade */
@@ -3289,7 +3475,6 @@ button.of-chip:hover:not(:disabled) {
 
   .of-consolidado {
     grid-column: 1 / -1;
-    grid-row: auto;
   }
 
   .of-grade,
@@ -3335,73 +3520,58 @@ button.of-chip:hover:not(:disabled) {
     color: #ecf5f0;
   }
 
-  .of-kpi-saldo .of-consolidado-apoio,
   .of-kpi-saldo .of-metrica dt,
   .of-kpi-saldo .of-metrica-apoio,
-  .of-kpi-saldo .of-consolidado-conta dt,
-  .of-kpi-saldo .of-consolidado-medidor small {
+  .of-kpi-saldo button.of-dica-botao {
     color: rgb(255 255 255 / 0.8);
+  }
+
+  .of-kpi-saldo button.of-dica-botao:hover:not(:disabled),
+  .of-kpi-saldo button.of-dica-botao[aria-expanded='true'] {
+    background: rgb(255 255 255 / 0.16);
+    color: #ffffff;
   }
 
   .of-kpi-saldo .of-metrica {
     background: rgb(255 255 255 / 0.1);
   }
 
-  .of-kpi-saldo .of-metrica.livre {
-    background: rgb(255 255 255 / 0.18);
-  }
-
-  .of-kpi-saldo .of-metrica.livre dt,
-  .of-kpi-saldo .of-consolidado-conta summary,
-  .of-kpi-saldo .of-consolidado-conta dt > span,
-  .of-kpi-saldo .of-consolidado-conta dl > .resultado dt,
-  .of-kpi-saldo .of-consolidado-conta dl > .resultado dd {
+  .of-kpi-saldo .of-kpi-valor {
     color: #ffffff;
   }
 
-  .of-kpi-saldo .of-metrica.negativa > dd:not(.of-metrica-apoio),
-  .of-kpi-saldo .of-metrica.fechamento.negativo > dd:not(.of-metrica-apoio),
-  .of-kpi-saldo .of-consolidado-conta .subtrai dd {
+  .of-kpi-saldo.negativo .of-kpi-valor,
+  .of-kpi-saldo .of-metrica.fechamento.negativo > dd:not(.of-metrica-apoio) {
     color: #ffd2cf;
   }
 
-  .of-kpi-saldo .of-consolidado-conta .soma dd {
-    color: #c6f1d9;
-  }
-
-  .of-kpi-saldo .of-metrica-selo,
-  .of-kpi-saldo .of-consolidado-leitura {
+  .of-kpi-saldo .of-metrica-selo {
     background: rgb(255 255 255 / 0.16);
     color: #ffffff;
   }
 
-  .of-kpi-saldo.negativo .of-metrica-selo {
-    background: #feeae9;
-    color: #963a35;
+  .of-kpi-saldo .of-saldo-livre-leitura {
+    border-left-color: #ffffff;
+    background: rgb(255 255 255 / 0.14);
   }
 
-  .of-kpi-saldo .of-consolidado-leitura .icone {
+  .of-kpi-saldo .of-saldo-livre-selo,
+  .of-kpi-saldo .of-saldo-livre-leitura p {
     color: #ffffff;
   }
 
-  .of-kpi-saldo .of-consolidado-conta dl > div + div {
-    border-top-color: rgb(255 255 255 / 0.22);
+  /* No negativo, o alerta vermelho claro se destaca do campo esmeralda. */
+  .of-kpi-saldo.negativo .of-saldo-livre-leitura {
+    border-left-color: #c2413a;
+    background: #feeae9;
   }
 
-  .of-kpi-saldo .of-consolidado-conta dl > .resultado {
-    border-top-color: rgb(255 255 255 / 0.5);
+  .of-kpi-saldo.negativo .of-saldo-livre-selo {
+    color: #963a35;
   }
 
-  .of-kpi-saldo .of-consolidado-barra {
-    background: rgb(255 255 255 / 0.18);
-  }
-
-  .of-kpi-saldo:not(.negativo) .of-consolidado-barra i {
-    background: #ffffff;
-  }
-
-  .of-kpi-saldo.negativo .of-consolidado-barra i {
-    background: #ffb4ae;
+  .of-kpi-saldo.negativo .of-saldo-livre-leitura p {
+    color: #4a1d1a;
   }
 
   .of-atalhos {
@@ -3437,6 +3607,23 @@ button.of-chip:hover:not(:disabled) {
 
   .of-kpi:not(.of-kpi-saldo) {
     padding: var(--espaco-8);
+  }
+
+  /* No celular, cada card com a própria altura fixa: o do saldo leva os
+     atalhos e os números de apoio um embaixo do outro. */
+  .of-kpis-da-visao {
+    --altura-do-kpi: 10.75rem;
+    --altura-do-saldo: 31.5rem;
+    grid-auto-rows: auto;
+  }
+
+  .of-kpis-da-visao > .of-kpi {
+    height: var(--altura-do-kpi);
+  }
+
+  .of-kpis-da-visao > .of-consolidado {
+    grid-row: auto;
+    height: var(--altura-do-saldo);
   }
 
   .of-kpi:not(.of-kpi-saldo) .of-kpi-valor {
@@ -3482,7 +3669,12 @@ button.of-chip:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr) auto;
     column-gap: var(--espaco-6);
     align-items: center;
-    padding: var(--espaco-4) var(--espaco-6);
+    padding: var(--espaco-3) var(--espaco-6);
+  }
+
+  .of-saldo-livre-leitura p {
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
   }
 
   .of-metrica dt,
@@ -3500,5 +3692,34 @@ button.of-chip:hover:not(:disabled) {
 @media (max-width: 420px) {
   .of-kpi:not(.of-kpi-saldo) .of-kpi-rodape {
     font-size: var(--fonte-micro);
+  }
+}
+
+/* Celular estreito: Receitas e Despesas lado a lado cortariam os valores.
+   Cada card vai para a largura toda, com a mesma altura fixa. */
+@media (max-width: 480px) {
+  .of-kpis-da-visao {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .of-kpis-da-visao > .of-kpi {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Card do saldo no celular: sem o ícone de cada número de apoio, o nome
+   cabe inteiro ao lado do valor. */
+@container consolidado (max-width: 320px) {
+  .of-metrica {
+    column-gap: var(--espaco-4);
+    padding-inline: var(--espaco-4);
+  }
+
+  .of-metrica dt > .icone {
+    display: none;
+  }
+
+  .of-metrica > dd:not(.of-metrica-apoio) {
+    font-size: var(--fonte-corpo);
   }
 }

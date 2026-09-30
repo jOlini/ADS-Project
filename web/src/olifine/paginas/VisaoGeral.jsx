@@ -13,6 +13,7 @@ import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
 import { formatarData, hojeIso } from '../../regras/datas';
 import { donoDasMetas } from '../../regras/espacos';
 import { comAFamilia, filtrarPorPessoa, gastoPorPessoa, pessoasDaFamilia, TITULAR, TODOS } from '../../regras/familia';
+import { familiaLiberada, planoDoCliente } from '../../regras/planos';
 import { normalizarTexto } from '../../regras/texto';
 import {
   contasBancarias,
@@ -37,6 +38,7 @@ import FolhasEmVolta from '../componentes/FolhasEmVolta';
 import GraficoDeSaldo from '../componentes/GraficoDeSaldo';
 import Icone from '../../componentes/Icone';
 import Rosca from '../componentes/Rosca';
+import Dica from '../componentes/Dica';
 import SaldoConsolidado from '../componentes/SaldoConsolidado';
 import SimboloDoVazio from '../componentes/SimboloDoVazio';
 import {
@@ -134,22 +136,28 @@ function GastoPorPessoa({ gastos, mes }) {
   );
 }
 
+// Uma linha só (o texto cortado com reticências no card estreito): a altura
+// do card não muda com o tamanho do mês por extenso.
 function SeloDeTendencia({ variacao, maiorEhMelhor = true, referencia }) {
   const leitura = leituraDaVariacao(variacao, { maiorEhMelhor });
   if (!leitura) {
-    return <p className="of-kpi-rodape">Sem mês anterior para comparar</p>;
+    return (
+      <p className="of-kpi-rodape">
+        <span className="of-kpi-rodape-texto">Sem mês anterior</span>
+      </p>
+    );
   }
   return (
     <p className="of-kpi-rodape">
       <span className={`of-tendencia ${leitura}`}>{textoDaVariacao(variacao)}</span>
-      em relação a {referencia}
+      <span className="of-kpi-rodape-texto">sobre {referencia}</span>
     </p>
   );
 }
 
-// Visão geral da OliFine: o saldo total como widget de consolidação (com o
-// saldo livre, o investido e o fechamento previsto do mês), os números do mês
-// com a tendência, a evolução do saldo, as despesas por categoria, as últimas
+// Visão geral da OliFine: o saldo livre como card principal (com o
+// patrimônio total, o investido e o fechamento previsto do mês), os números
+// do mês com a tendência (cada card com o "i" que explica o número), a evolução do saldo, as despesas por categoria, as últimas
 // transações, as metas e o compromisso nos cartões. Com a API, dados de verdade; sem ela
 // (Pages), a tela vazia oferece o modo de exemplo, sempre marcado.
 //
@@ -157,7 +165,7 @@ function SeloDeTendencia({ variacao, maiorEhMelhor = true, referencia }) {
 // vista, compra no crédito, conta ou cartão), cada um no seu modal, sem sair
 // da tela.
 export default function VisaoGeral() {
-  const { usuario, pessoa, espaco } = useOutletContext();
+  const { usuario, pessoa, espaco, espacos } = useOutletContext();
   const [exemplo, setExemplo] = useState(
     () => !apiConfigurada && new URLSearchParams(window.location.search).has('exemplo'),
   );
@@ -305,6 +313,8 @@ export default function VisaoGeral() {
     futuras: cartoes.reduce((soma, cartao) => soma + cartao.parcelamentos_futuros_centavos, 0),
   };
   const contasAtivas = cadastros ? contasBancarias(cadastros.contas).filter((conta) => conta.ativa) : [];
+  // O racha com nome e parte de cada pessoa é do Plano Família (a API confere).
+  const divisaoPorPessoa = familiaLiberada(planoDoCliente(espacos));
   // Disponível (corrente, carteira, poupança) x investido (regras/saldos.ts).
   const saldos = comNumeros ? separarSaldos(visao.contas) : null;
   const investida = saldos ? parteInvestida(saldos) : null;
@@ -403,7 +413,7 @@ export default function VisaoGeral() {
         </div>
       )}
 
-      <section className="of-kpis" aria-label="Números do mês">
+      <section className="of-kpis of-kpis-da-visao" aria-label="Números do mês">
         <SaldoConsolidado
           saldo={comNumeros ? visao.saldo : null}
           resultado={livreDoMes}
@@ -413,7 +423,9 @@ export default function VisaoGeral() {
             comNumeros ? (
               <SeloDeTendencia variacao={visao.variacao.saldo} referencia={mesAnterior} />
             ) : (
-              <p className="of-kpi-rodape">Soma das suas contas</p>
+              <p className="of-kpi-rodape">
+                <span className="of-kpi-rodape-texto">Soma das suas contas</span>
+              </p>
             )
           }
         >
@@ -451,50 +463,84 @@ export default function VisaoGeral() {
           </div>
         </SaldoConsolidado>
 
+        {/* Cada card tem sempre as mesmas linhas, com ou sem números: a
+            altura fixa do CSS não precisa esconder nada que chegue depois. */}
         <article className="of-kpi">
-          <p className="of-kpi-rotulo">
-            <span className="of-kpi-icone entrada" aria-hidden="true">
-              <Icone nome="entrada" tamanho={18} />
-            </span>
-            Receitas
-          </p>
+          <div className="of-kpi-topo">
+            <p className="of-kpi-rotulo">
+              <span className="of-kpi-icone entrada" aria-hidden="true">
+                <Icone nome="entrada" tamanho={18} />
+              </span>
+              Receitas
+            </p>
+            <Dica titulo="Receitas">
+              <p>
+                Todo o dinheiro que entrou no mês: salário, vendas, rendimentos. Transferência entre as suas próprias
+                contas não conta, porque o dinheiro só mudou de lugar.
+              </p>
+            </Dica>
+          </div>
           <p className="of-kpi-valor">{comNumeros ? formatarBRL(visao.totais.entradas) : 'R$ —'}</p>
+          <p className="of-kpi-origem">O que entrou em {NOME_DO_MES.format(comoData(hoje))}</p>
           {comNumeros ? (
             <SeloDeTendencia variacao={visao.variacao.receitas} referencia={mesAnterior} />
           ) : (
-            <p className="of-kpi-rodape">O que entrou no mês</p>
+            <p className="of-kpi-rodape">
+              <span className="of-kpi-rodape-texto">Sem números ainda</span>
+            </p>
           )}
         </article>
 
         <article className="of-kpi">
-          <p className="of-kpi-rotulo">
-            <span className="of-kpi-icone saida" aria-hidden="true">
-              <Icone nome="saida" tamanho={18} />
-            </span>
-            Despesas
-          </p>
-          <p className="of-kpi-valor">{comNumeros ? formatarBRL(visao.totais.saidas) : 'R$ —'}</p>
-          {comNumeros ? (
-            <>
-              {/* O que saiu das contas e o que foi para as faturas (o
-                  pagamento da fatura não conta de novo). */}
-              <p className="of-kpi-origem">
-                {formatarBRL(visao.totais.aVista)} à vista · {formatarBRL(visao.totais.noCredito)} no crédito
+          <div className="of-kpi-topo">
+            <p className="of-kpi-rotulo">
+              <span className="of-kpi-icone saida" aria-hidden="true">
+                <Icone nome="saida" tamanho={18} />
+              </span>
+              Despesas
+            </p>
+            <Dica titulo="Despesas">
+              <p>
+                Todo o dinheiro que saiu no mês, à vista (PIX, débito, dinheiro) e no crédito. A compra no cartão conta
+                no mês da parcela, e o pagamento da fatura não conta de novo.
               </p>
-              <SeloDeTendencia variacao={visao.variacao.despesas} maiorEhMelhor={false} referencia={mesAnterior} />
-            </>
+            </Dica>
+          </div>
+          <p className="of-kpi-valor">{comNumeros ? formatarBRL(visao.totais.saidas) : 'R$ —'}</p>
+          {/* O que saiu das contas e o que foi para as faturas (o pagamento
+              da fatura não conta de novo). */}
+          <p className="of-kpi-origem">
+            <span>{comNumeros ? formatarBRL(visao.totais.aVista) : 'R$ —'} à vista ·</span>{' '}
+            <span>{comNumeros ? formatarBRL(visao.totais.noCredito) : 'R$ —'} no crédito</span>
+          </p>
+          {comNumeros ? (
+            <SeloDeTendencia variacao={visao.variacao.despesas} maiorEhMelhor={false} referencia={mesAnterior} />
           ) : (
-            <p className="of-kpi-rodape">O que saiu no mês, à vista e no crédito</p>
+            <p className="of-kpi-rodape">
+              <span className="of-kpi-rodape-texto">Sem números ainda</span>
+            </p>
           )}
         </article>
 
-        <Link to="/metas" className="of-kpi of-kpi-link">
-          <p className="of-kpi-rotulo">
-            <span className="of-kpi-icone meta" aria-hidden="true">
-              <Icone nome="broto" tamanho={18} />
-            </span>
-            Metas
-          </p>
+        {/* O card inteiro leva às metas (o link se estica por cima dele), e o
+            "i" fica por cima do link: botão dentro de link não é válido. */}
+        <article className="of-kpi of-kpi-link">
+          <div className="of-kpi-topo">
+            <p className="of-kpi-rotulo">
+              <span className="of-kpi-icone meta" aria-hidden="true">
+                <Icone nome="broto" tamanho={18} />
+              </span>
+              <Link to="/metas" className="of-kpi-alvo">
+                Metas
+              </Link>
+            </p>
+            <Dica titulo="Metas">
+              <p>
+                Quantas metas você está regando agora e quantas já concluiu. Cada meta é uma árvore: cada valor guardado
+                a faz crescer.
+              </p>
+            </Dica>
+          </div>
           <p className="of-kpi-valor">
             {resumo.total > 0 ? (
               <>
@@ -506,15 +552,17 @@ export default function VisaoGeral() {
           </p>
           <p className="of-kpi-rodape">
             {resumo.total === 0 ? (
-              'Plante a primeira meta'
+              <span className="of-kpi-rodape-texto">Plante a primeira meta</span>
             ) : (
               <>
                 <span className="of-tendencia bom">em andamento</span>
-                {resumo.concluidas > 0 && `${resumo.concluidas} concluída${resumo.concluidas > 1 ? 's' : ''}`}
+                {resumo.concluidas > 0 && (
+                  <span className="of-kpi-rodape-texto">{`${resumo.concluidas} concluída${resumo.concluidas > 1 ? 's' : ''}`}</span>
+                )}
               </>
             )}
           </p>
-        </Link>
+        </article>
       </section>
 
       <div className="of-grade">
@@ -725,12 +773,14 @@ export default function VisaoGeral() {
           aoFechar={fecharModal} ocupado={modalOcupado}>
           {modal === 'lancamento' && (
             <FormularioDeLancamento espacoId={espacoId} contas={contasAtivas} temCartoes={cartoes.length > 0}
-              categorias={cadastros.categorias} pessoasConhecidas={comAFamilia(cadastros.pessoas, pessoasDaCasa)} aoLancar={aposCriar}
+              categorias={cadastros.categorias} pessoasConhecidas={comAFamilia(cadastros.pessoas, pessoasDaCasa)}
+              divisaoPorPessoa={divisaoPorPessoa} aoLancar={aposCriar}
               aoCancelar={fecharModal} aoMudarOcupado={setModalOcupado} />
           )}
           {modal === 'compra' && (
             <CompraNoCartao espacoId={espacoId} cartoes={cartoes} categorias={cadastros.categorias}
-              pessoasConhecidas={comAFamilia(cadastros.pessoas, pessoasDaCasa)} aoComprar={aposCriar} aoCancelar={fecharModal}
+              pessoasConhecidas={comAFamilia(cadastros.pessoas, pessoasDaCasa)} divisaoPorPessoa={divisaoPorPessoa}
+              aoComprar={aposCriar} aoCancelar={fecharModal}
               aoMudarOcupado={setModalOcupado} />
           )}
           {modal === 'conta' && (
