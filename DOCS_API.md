@@ -2,7 +2,8 @@
 
 API REST do Pessoal Finance. Partes 1 a 5: gestão de usuários do back-office, com autenticação por JWT e
 controle de acesso por perfil (RBAC). Parte 6: livro-caixa do cliente final (contas, categorias e lançamentos),
-acessado com o ID token do Firebase, com o Modo Família do espaço pessoal. Parte 7: relatórios do livro-caixa
+acessado com o ID token do Firebase, com o Modo Família do espaço pessoal e os planos (Free, Família e
+Empresarial). Parte 7: relatórios do livro-caixa
 (Dashboard). Parte 8: e-mails da conta do cliente (confirmação e senha nova) e o modo de produção. Parte 9:
 monitoramento, alertas e telemetria. Parte 10: gestão das empresas do espaço empresarial (custos, sociedade e
 aportes, impostos e pessoal).
@@ -248,6 +249,7 @@ Justificativa:
 | Criar usuário | `POST /usuarios` | ✔ | ✘ | ✘ |
 | Atualizar usuário | `PUT /usuarios/{id}` | ✔ | ✔ (sem mudar perfil) | ✘ |
 | Excluir usuário | `DELETE /usuarios/{id}` | ✔ | ✘ | ✘ |
+| Trocar o plano de um cliente final | `PUT /clientes/{uid}/plano` | ✔ | ✘ | ✘ |
 
 - **Administrador:** acesso total ao cadastro de usuários.
 - **Operador:** acesso intermediário: consulta todos e atualiza nome e e-mail.
@@ -545,9 +547,9 @@ diferença de caixa nem de acento); sem responsável, é do titular. Os relatór
 | Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
 |---|---|---|---|---|
 | `GET` | `/espacos/{espaco_id}/familia` | Consultar o modo (`ativa`), as pessoas e `maximo_de_pessoas` | `200 OK` | `401`, `404` (empresa) |
-| `PUT` | `/espacos/{espaco_id}/familia` | Ligar ou desligar (`ativa`); desligado, as pessoas ficam guardadas | `200 OK` | `400`, `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/familia/pessoas` | Incluir pessoa (`nome`, `cor`) | `201 Created` + `Location` | `400`, `401`, `404`, `409` (limite) |
-| `PUT` | `/espacos/{espaco_id}/familia/pessoas/{pessoa_id}` | Trocar nome e cor; com o nome novo, os lançamentos dela passam para ele (`lancamentos_renomeados`) | `200 OK` | `400`, `401`, `404` |
+| `PUT` | `/espacos/{espaco_id}/familia` | Ligar ou desligar (`ativa`); desligado, as pessoas ficam guardadas | `200 OK` | `400`, `401`, `403` (ligar no Free), `404` |
+| `POST` | `/espacos/{espaco_id}/familia/pessoas` | Incluir pessoa (`nome`, `cor`) | `201 Created` + `Location` | `400`, `401`, `403` (Free), `404`, `409` (limite) |
+| `PUT` | `/espacos/{espaco_id}/familia/pessoas/{pessoa_id}` | Trocar nome e cor; com o nome novo, os lançamentos dela passam para ele (`lancamentos_renomeados`) | `200 OK` | `400`, `401`, `403` (Free), `404` |
 | `DELETE` | `/espacos/{espaco_id}/familia/pessoas/{pessoa_id}` | Tirar da família (os lançamentos ficam, com o nome escrito) | `204 No Content` | `401`, `404` |
 
 - **Assinatura:** uma só, a do titular, cobre a casa inteira: o titular e até 5 pessoas (`maximo_de_pessoas`).
@@ -557,6 +559,43 @@ diferença de caixa nem de acento); sem responsável, é do titular. Os relatór
 - **Nome novo em cascata:** o `PUT` troca o nome no `responsavel` e nas partes das divisões de todos os
   lançamentos do espaço (no MongoDB, com a ordenação do português de força 1: sem caixa nem acento).
 - **Só no pessoal:** numa empresa, as rotas da família respondem `404`.
+- **Só com o plano:** ligar o modo, incluir e editar pessoas pedem o Plano Família ou o Empresarial (seção
+  seguinte). No Free, `403`; desligar e tirar uma pessoa continuam liberados, porque apagar dado é sempre
+  possível. Sem o plano, `familia.ativa` sai `false` mesmo com o modo gravado ligado, e as pessoas ficam guardadas
+  para quando o plano voltar.
+
+### Planos: Free, Família e Empresarial
+
+O plano é da pessoa e fica no espaço pessoal dela (`plano` no `GET /espacos`, `null` nas empresas). Todo espaço
+pessoal nasce `FREE`. O cliente não troca o próprio plano: sem checkout ainda, só o **ADMINISTRADOR** do
+back-office troca, com o JWT dele. O ID token do Firebase não abre a rota (`401`), então ninguém se promove
+sozinho.
+
+| Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
+|---|---|---|---|---|
+| `PUT` | `/clientes/{uid}/plano` | Trocar o plano do cliente (`FREE`, `FAMILIA` ou `EMPRESARIAL`) | `200 OK` (`uid`, `plano`) | `400`, `401`, `403` (não ADMINISTRADOR), `404` (cliente que nunca entrou no app) |
+
+```http
+PUT /clientes/uid-da-ana/plano
+Authorization: Bearer <JWT do ADMINISTRADOR>
+Content-Type: application/json
+
+{ "plano": "FAMILIA" }
+```
+
+**Trava anti-bypass.** Esconder um botão na tela não basta: a API confere o plano em cada recurso e responde
+`403` no Free, mesmo que a pessoa chame a rota direto.
+
+| Recurso | Free | Família | Empresarial |
+|---|---|---|---|
+| Contas, cartões, lançamentos, importação, relatórios, metas | ✔ | ✔ | ✔ |
+| Divisão do gasto (`divisao`, com nome e parte de cada pessoa) | `403`; só `dividido_entre` | ✔ | ✔ |
+| Modo Família: ligar, incluir e editar pessoas | `403` | ✔ | ✔ |
+| Filtro por pessoa nos relatórios (`membro`) | `403` | ✔ | ✔ |
+
+- O Empresarial inclui tudo do Família. Numa empresa, vale o plano do espaço pessoal de quem lança.
+- Voltar ao Free esconde a família sem apagar ninguém; com o plano de volta, o modo gravado volta junto.
+- Espaço gravado antes dos planos (sem o campo) ou com um valor desconhecido conta como `FREE`.
 
 ### Edição, exclusão em lote e remoção de cadastros
 
@@ -754,7 +793,8 @@ Painel do cartão (`GET /cartoes/{cartao_id}`), todos os valores em centavos:
 ### Divisão entre pessoas (racha)
 
 Receita e despesa aceitam `divisao`: a lista de quem entra no racha e com quanto. É informação do lançamento:
-o saldo da conta muda pelo valor inteiro, e as partidas continuam as mesmas duas.
+o saldo da conta muda pelo valor inteiro, e as partidas continuam as mesmas duas. A divisão com nome e parte de
+cada pessoa é do Plano Família ou do Empresarial: no Free, `403` (seção "Planos").
 
 ```json
 { "tipo": "DESPESA", "descricao": "Churrasco", "data": "2026-09-19", "valor_centavos": 30000,
@@ -772,6 +812,10 @@ o saldo da conta muda pelo valor inteiro, e as partidas continuam as mesmas duas
   inteiro positivo em centavos.
 - O estorno leva a divisão junto (o racha também é desfeito). `GET /pessoas` devolve os nomes já usados,
   sem repetição, para a tela sugerir.
+- **No Free, `dividido_entre`:** só em quantas pessoas o gasto foi dividido, contando quem lançou (inteiro de 2 a
+  20), como anotação. Sem nomes, não separa o gasto de ninguém nem entra em `GET /pessoas`. Vale nos três planos,
+  mas não junto com `divisao` (`400`), nem na transferência nem na compra parcelada (`400` em `dividido_entre`).
+  O estorno leva a anotação junto.
 
 | Situação | Campo | Mensagem |
 |---|---|---|
@@ -779,6 +823,8 @@ o saldo da conta muda pelo valor inteiro, e as partidas continuam as mesmas duas
 | Mesmo nome duas vezes | `divisao.<n>.pessoa` | Esta pessoa já está na divisão. |
 | Divisão numa transferência | `divisao` | Transferência entre contas não se divide entre pessoas. |
 | Mais de 20 pessoas | `divisao` | Use no máximo 20 itens. |
+| `divisao` e `dividido_entre` juntos | `dividido_entre` | Use a divisão por pessoa ou o número de pessoas, não os dois. |
+| `dividido_entre` numa compra parcelada | `dividido_entre` | A divisão entre pessoas vale só para compra à vista. |
 
 ### Responsável pelo lançamento
 
@@ -1032,7 +1078,8 @@ do Firebase não abre `/usuarios` (HS256 exigido). Os dois casos têm teste.
   importações), `test_sanitizacao.py` (XSS, fórmula, invisíveis e operador do MongoDB) e
   `test_financeiro_racha_e_exclusao.py` (divisão entre pessoas, exclusão e importação com colunas indicadas),
   `test_financeiro_responsavel.py` (responsável no lançamento, na compra parcelada, na edição e no estorno) e
-  `test_financeiro_cartoes.py` (ciclo da fatura, parcelas, painel do cartão, compra, pagamento e fatura em CSV).
+  `test_financeiro_cartoes.py` (ciclo da fatura, parcelas, painel do cartão, compra, pagamento e fatura em CSV) e
+  `test_financeiro_planos.py` (quem troca o plano e a trava do Free na família, no filtro e na divisão).
   Os ID tokens de teste são assinados por uma chave RSA gerada na hora, no lugar das chaves do Google.
 - **Manual (Swagger):** com `FIREBASE_PROJECT_ID` no `api/.env`, obtenha um ID token de uma conta **de teste**
   da área do cliente pela API REST do Firebase Authentication (`<VITE_FIREBASE_API_KEY>` do `web/.env`):
@@ -1064,8 +1111,8 @@ Swagger).
 
 | Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
 |---|---|---|---|---|
-| `GET` | `/espacos/{espaco_id}/relatorios/mensal?de=&ate=&conta_id=&membro=` | Receitas, despesas, sobra e saldo no fim de cada mês do período | `200 OK` | `400`, `401`, `404` |
-| `GET` | `/espacos/{espaco_id}/relatorios/categorias?de=&ate=&conta_id=&membro=` | Gasto por categoria no período, do maior para o menor, com a fatia de cada uma | `200 OK` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/relatorios/mensal?de=&ate=&conta_id=&membro=` | Receitas, despesas, sobra e saldo no fim de cada mês do período | `200 OK` | `400`, `401`, `403` (`membro` no Free), `404` |
+| `GET` | `/espacos/{espaco_id}/relatorios/categorias?de=&ate=&conta_id=&membro=` | Gasto por categoria no período, do maior para o menor, com a fatia de cada uma | `200 OK` | `400`, `401`, `403` (`membro` no Free), `404` |
 | `GET` | `/espacos/{espaco_id}/relatorios/cartoes` | Por cartão: dívida de hoje, o que falta pagar das faturas fechadas e a fatura atual e as seguintes, com as parcelas já lançadas | `200 OK` | `401`, `404` |
 
 - **Período em meses** (`de` e `ate`, formato `AAAA-MM`, os dois inclusive). Sem `ate`, vale o mês de hoje no fuso do
@@ -1076,7 +1123,7 @@ Swagger).
 - **Filtro por pessoa** (`membro`, opcional, Modo Família): o id de uma pessoa da família ou `titular` (os
   lançamentos sem responsável). Receitas, despesas e o gasto por categoria passam a ser só dela; o
   `saldo_final_centavos` continua o das contas, que são da casa. Pessoa desconhecida é `400` em `membro`; numa
-  empresa, também.
+  empresa, também. No Free, qualquer `membro` é `403`: o filtro é do Plano Família (Parte 6, "Planos").
 
 ### Regras dos números
 
