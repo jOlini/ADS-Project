@@ -4,6 +4,7 @@ Dinheiro é sempre inteiro em centavos, nunca float: 0.1 + 0.2 não dá 0.3 em
 ponto flutuante, e um centavo perdido num saldo é erro de verdade.
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
@@ -22,9 +23,9 @@ LIMITE_EM_CENTAVOS = 100_000_000_000
 TAMANHO_MAXIMO_DO_CSV = 500_000
 # Pessoas numa divisão (racha) de um lançamento.
 MAXIMO_DE_PESSOAS = 20
-# Espaços que uma pessoa cria além do pessoal (família e empresa). Barra quem
-# criaria livros-caixa vazios sem fim com a mesma conta.
-MAXIMO_DE_ESPACOS_CRIADOS = 5
+# Empresas que uma pessoa cadastra no espaço empresarial. Barra quem criaria
+# livros-caixa vazios sem fim com a mesma conta.
+MAXIMO_DE_EMPRESAS = 5
 # Parcelas de uma compra no cartão de crédito (4 anos).
 MAXIMO_DE_PARCELAS = 48
 # Lançamentos numa exclusão em lote (o teto de uma consulta do extrato).
@@ -34,12 +35,26 @@ MAXIMO_DE_AJUSTES = 1000
 
 
 class TipoEspaco(StrEnum):
-    """Cada espaço é um livro-caixa separado: trocar de espaço é trocar de
-    livro, e nada de um aparece no outro."""
+    """Só dois tipos: o espaço pessoal e o empresarial. Cada documento é um
+    livro-caixa separado: trocar de livro é trocar de documento, e nada de um
+    aparece no outro.
+
+    O pessoal é um por pessoa e leva o Modo Família dentro dele (a família não
+    é um terceiro tipo). O espaço empresarial é o conjunto das empresas da
+    pessoa, e cada empresa é um livro-caixa próprio: contas, caixa e DRE de dois
+    CNPJs nunca se misturam."""
 
     PF = "PF"  # pessoal: um por pessoa, criado sozinho no primeiro acesso
-    FAMILIA = "FAMILIA"  # o dinheiro da casa, fora do pessoal de cada um
-    PJ = "PJ"  # uma empresa
+    PJ = "PJ"  # uma empresa do espaço empresarial
+
+
+class RegimeTributario(StrEnum):
+    """Regime da empresa: decide os tributos sugeridos na aba Impostos."""
+
+    MEI = "MEI"
+    SIMPLES = "SIMPLES"  # Simples Nacional
+    PRESUMIDO = "PRESUMIDO"  # Lucro Presumido
+    REAL = "REAL"  # Lucro Real
 
 
 class Papel(StrEnum):
@@ -143,6 +158,9 @@ class Espaco:
     criado_em: datetime
     # uid do dono quando é o espaço pessoal (um por pessoa, índice único).
     pessoal_de: str | None = None
+    # Só na empresa: CNPJ (só os caracteres, sem pontuação) e regime.
+    cnpj: str | None = None
+    regime: RegimeTributario | None = None
     id: str | None = None
 
     def papel_de(self, uid: str) -> Papel | None:
@@ -290,16 +308,54 @@ Data = Annotated[date, BeforeValidator(_data_sem_numero)]
 DiaDoMes = Annotated[int, Field(strict=True, ge=1, le=31)]
 
 
+def _cnpj(valor):
+    # CNPJ numérico ou alfanumérico (o da Receita Federal desde julho de 2026):
+    # 12 caracteres de 0 a 9 ou A a Z e 2 dígitos verificadores. Pontuação e
+    # espaço não contam; o que fica gravado são os 14 caracteres. Texto vazio
+    # é "sem CNPJ".
+    if not isinstance(valor, str):
+        return valor
+    limpo = re.sub(r"[.\-/\s]", "", valor).upper()
+    if not limpo:
+        return None
+    if not re.fullmatch(r"[0-9A-Z]{12}[0-9]{2}", limpo) or len(set(limpo)) == 1 or not _digitos_conferem(limpo):
+        raise ValueError("CNPJ inválido. Confira os 14 caracteres.")
+    return limpo
+
+
+def _digitos_conferem(cnpj: str) -> bool:
+    # Cada caractere vale o código ASCII menos 48 (os dígitos continuam 0 a 9),
+    # com os pesos de sempre do CNPJ.
+    valores = [ord(caractere) - 48 for caractere in cnpj]
+    for tamanho in (12, 13):
+        pesos = [(indice % 8) + 2 for indice in range(tamanho)][::-1]
+        resto = sum(valor * peso for valor, peso in zip(valores[:tamanho], pesos, strict=True)) % 11
+        if valores[tamanho] != (0 if resto < 2 else 11 - resto):
+            return False
+    return True
+
+
+Cnpj = Annotated[str | None, BeforeValidator(_cnpj)]
+
+
 class NovoEspaco(Entrada):
-    """Espaço de família ou de empresa. O pessoal não entra por aqui: ele já
-    existe desde o primeiro acesso (servicos.criar_espaco recusa PF)."""
+    """Empresa do espaço empresarial (tipo PJ). O pessoal não entra por aqui:
+    ele já existe desde o primeiro acesso (servicos.criar_espaco recusa PF).
+    CNPJ e regime são opcionais; o regime decide os tributos sugeridos."""
 
     tipo: TipoEspaco
     nome: Nome
+    cnpj: Cnpj = None
+    regime: RegimeTributario | None = None
 
 
 class AtualizacaoEspaco(Entrada):
-    nome: Nome
+    """PATCH: o nome e, na empresa, o CNPJ e o regime enviados. cnpj: null (ou
+    vazio) tira o CNPJ."""
+
+    nome: Nome | None = None
+    cnpj: Cnpj = None
+    regime: RegimeTributario | None = None
 
 
 class NovaConta(Entrada):
@@ -495,6 +551,9 @@ class EspacoResposta(BaseModel):
     moeda: str
     fuso: str
     papel: Papel
+    # Só na empresa; null no pessoal.
+    cnpj: str | None
+    regime: RegimeTributario | None
 
     @classmethod
     def de(cls, espaco: Espaco, uid: str) -> "EspacoResposta":
@@ -505,6 +564,8 @@ class EspacoResposta(BaseModel):
             moeda=espaco.moeda,
             fuso=espaco.fuso,
             papel=espaco.papel_de(uid),
+            cnpj=espaco.cnpj,
+            regime=espaco.regime,
         )
 
 

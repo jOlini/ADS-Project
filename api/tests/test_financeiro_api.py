@@ -116,6 +116,8 @@ def test_primeiro_acesso_cria_o_espaco_pessoal_com_as_categorias_iniciais(api, c
         "moeda": "BRL",
         "fuso": "America/Sao_Paulo",
         "papel": "DONO",
+        "cnpj": None,
+        "regime": None,
     }
     categorias = api.get(f"/espacos/{primeiro[0]['id']}/categorias", headers=cabecalho).json()
     assert len(categorias) == len(CATEGORIAS_INICIAIS)

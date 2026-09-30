@@ -47,20 +47,6 @@ CATEGORIAS_INICIAIS: list[tuple[str, TipoCategoria, CorCategoria]] = [
     ("Outras receitas", TipoCategoria.RECEITA, CorCategoria.NEUTRO),
 ]
 
-# Família: as despesas da casa e o que cada um põe nela (contribuições).
-CATEGORIAS_DA_FAMILIA: list[tuple[str, TipoCategoria, CorCategoria]] = [
-    ("Moradia", TipoCategoria.DESPESA, CorCategoria.MORADIA),
-    ("Mercado", TipoCategoria.DESPESA, CorCategoria.MERCADO),
-    ("Contas da casa", TipoCategoria.DESPESA, CorCategoria.CASA),
-    ("Educação", TipoCategoria.DESPESA, CorCategoria.LAZER),
-    ("Saúde", TipoCategoria.DESPESA, CorCategoria.SAUDE),
-    ("Transporte", TipoCategoria.DESPESA, CorCategoria.TRANSPORTE),
-    ("Mesada", TipoCategoria.DESPESA, CorCategoria.NEUTRO),
-    ("Outras despesas", TipoCategoria.DESPESA, CorCategoria.NEUTRO),
-    ("Contribuições", TipoCategoria.RECEITA, CorCategoria.ENTRADA),
-    ("Outras receitas", TipoCategoria.RECEITA, CorCategoria.NEUTRO),
-]
-
 # Empresa: o vocabulário do caixa de um negócio pequeno (vendas, serviços,
 # impostos, fornecedores, folha), no lugar de salário e mercado.
 CATEGORIAS_DA_EMPRESA: list[tuple[str, TipoCategoria, CorCategoria]] = [
@@ -79,12 +65,8 @@ CATEGORIAS_DA_EMPRESA: list[tuple[str, TipoCategoria, CorCategoria]] = [
 
 
 def categorias_iniciais(tipo: TipoEspaco) -> list[tuple[str, TipoCategoria, CorCategoria]]:
-    """As categorias que nascem com cada tipo de espaço."""
-    if tipo == TipoEspaco.FAMILIA:
-        return CATEGORIAS_DA_FAMILIA
-    if tipo == TipoEspaco.PJ:
-        return CATEGORIAS_DA_EMPRESA
-    return CATEGORIAS_INICIAIS
+    """As categorias que nascem com o espaço pessoal e com cada empresa."""
+    return CATEGORIAS_DA_EMPRESA if tipo == TipoEspaco.PJ else CATEGORIAS_INICIAIS
 
 
 OBRIGATORIO = "Campo obrigatório."

@@ -29,6 +29,7 @@ from app.financeiro.modelos import (
     Papel,
     Parte,
     Partida,
+    RegimeTributario,
     TipoCategoria,
     TipoConta,
     TipoEspaco,
@@ -122,6 +123,12 @@ def _object_id(id: str) -> ObjectId | None:
     return ObjectId(id) if ObjectId.is_valid(id) else None
 
 
+# Só os tipos de hoje (pessoal e empresa). Um espaço de família gravado quando
+# a família era um tipo à parte fica fora da lista e responde 404: a família
+# passou a ser o Modo Família do espaço pessoal. O documento continua no banco.
+_TIPOS_ATUAIS = {"tipo": {"$in": [tipo.value for tipo in TipoEspaco]}}
+
+
 class LivroCaixaMongo:
     def __init__(self, banco: Database):
         self._espacos = banco["espacos"]
@@ -159,7 +166,7 @@ class LivroCaixaMongo:
 
     def buscar_espaco(self, id: str) -> Espaco | None:
         oid = _object_id(id)
-        documento = self._espacos.find_one({"_id": oid}) if oid else None
+        documento = self._espacos.find_one({"_id": oid, **_TIPOS_ATUAIS}) if oid else None
         return _para_espaco(documento) if documento else None
 
     def buscar_espaco_pessoal(self, uid: str) -> Espaco | None:
@@ -167,7 +174,7 @@ class LivroCaixaMongo:
         return _para_espaco(documento) if documento else None
 
     def listar_espacos_do_membro(self, uid: str) -> list[Espaco]:
-        documentos = self._espacos.find({"membros.uid": uid}).sort("criado_em", ASCENDING)
+        documentos = self._espacos.find({"membros.uid": uid, **_TIPOS_ATUAIS}).sort("criado_em", ASCENDING)
         return [_para_espaco(documento) for documento in documentos]
 
     def inserir_espaco(self, espaco: Espaco) -> Espaco:
@@ -178,6 +185,7 @@ class LivroCaixaMongo:
             "fuso": espaco.fuso,
             "membros": [{"uid": membro.uid, "papel": membro.papel.value} for membro in espaco.membros],
             "criado_em": espaco.criado_em,
+            **_dados_da_empresa(espaco),
         }
         if espaco.pessoal_de:
             documento["pessoal_de"] = espaco.pessoal_de
@@ -189,7 +197,9 @@ class LivroCaixaMongo:
         return espaco
 
     def atualizar_espaco(self, espaco: Espaco) -> Espaco:
-        self._espacos.update_one({"_id": _object_id(espaco.id)}, {"$set": {"nome": espaco.nome}})
+        self._espacos.update_one(
+            {"_id": _object_id(espaco.id)}, {"$set": {"nome": espaco.nome, **_dados_da_empresa(espaco)}}
+        )
         return espaco
 
     def excluir_espaco(self, id: str) -> bool:
@@ -463,7 +473,16 @@ def _para_espaco(documento: dict) -> Espaco:
         membros=[Membro(uid=m["uid"], papel=Papel(m["papel"])) for m in documento["membros"]],
         criado_em=documento["criado_em"],
         pessoal_de=documento.get("pessoal_de"),
+        cnpj=documento.get("cnpj"),
+        regime=RegimeTributario(documento["regime"]) if documento.get("regime") else None,
     )
+
+
+def _dados_da_empresa(espaco: Espaco) -> dict:
+    """CNPJ e regime, só no documento da empresa."""
+    if espaco.tipo != TipoEspaco.PJ:
+        return {}
+    return {"cnpj": espaco.cnpj, "regime": espaco.regime.value if espaco.regime else None}
 
 
 def _documento_da_conta(conta: Conta) -> dict:

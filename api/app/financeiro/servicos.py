@@ -14,7 +14,7 @@ from app.financeiro import cartoes, importacao, parcelamento, regras, relatorios
 from app.financeiro.categorizacao import AJUSTE, Categorizador
 from app.financeiro.cartoes import PeriodoDaFatura, Referencia, ResumoDaFatura, ResumoDoCartao
 from app.financeiro.modelos import (
-    MAXIMO_DE_ESPACOS_CRIADOS,
+    MAXIMO_DE_EMPRESAS,
     AtualizacaoCategoria,
     AtualizacaoConta,
     AtualizacaoEspaco,
@@ -54,12 +54,14 @@ LIMITE_DO_CARTAO = 5000
 # na importação (categorizacao.py).
 LIMITE_DO_HISTORICO = 2000
 
-PESSOAL_JA_EXISTE = "O espaço pessoal já existe: ele é criado no primeiro acesso. Escolha família ou empresa."
+PESSOAL_JA_EXISTE = (
+    "O espaço pessoal já existe: ele é criado no primeiro acesso. Aqui entram as empresas do espaço empresarial."
+)
 PESSOAL_FIXO = "O espaço pessoal não muda de nome nem pode ser excluído."
-SO_O_DONO = "Só quem criou o espaço pode renomeá-lo ou excluí-lo."
-ESPACO_COM_DADOS = "Só dá para excluir um espaço vazio. Exclua antes as contas e os lançamentos dele."
-LIMITE_DE_ESPACOS = (
-    f"Você já criou {MAXIMO_DE_ESPACOS_CRIADOS} espaços além do pessoal. Exclua um espaço vazio para criar outro."
+SO_O_DONO = "Só quem cadastrou a empresa pode editá-la ou excluí-la."
+ESPACO_COM_DADOS = "Só dá para excluir uma empresa sem movimento. Exclua antes as contas e os lançamentos dela."
+LIMITE_DE_EMPRESAS = (
+    f"Você já cadastrou {MAXIMO_DE_EMPRESAS} empresas. Exclua uma empresa sem movimento para cadastrar outra."
 )
 
 
@@ -85,18 +87,19 @@ class ServicoLivroCaixa:
         return self.repositorio.listar_espacos_do_membro(uid)
 
     def criar_espaco(self, uid: str, dados: NovoEspaco) -> Espaco:
-        """Espaço de família ou de empresa, com quem criou como dono e as
-        categorias do tipo. Cada um é um livro-caixa separado do pessoal."""
+        """Empresa do espaço empresarial, com quem cadastrou como dono e as
+        categorias de empresa. Cada empresa é um livro-caixa separado do
+        pessoal e das outras empresas."""
         if dados.tipo == TipoEspaco.PF:
             raise ErroValidacao({"tipo": PESSOAL_JA_EXISTE})
         # Garante o pessoal antes (e primeiro na lista, que sai por data).
-        criados = [
+        empresas = [
             espaco
             for espaco in self.espacos_do_cliente(uid)
-            if espaco.tipo != TipoEspaco.PF and espaco.papel_de(uid) == Papel.DONO
+            if espaco.tipo == TipoEspaco.PJ and espaco.papel_de(uid) == Papel.DONO
         ]
-        if len(criados) >= MAXIMO_DE_ESPACOS_CRIADOS:
-            raise ErroConflito(LIMITE_DE_ESPACOS)
+        if len(empresas) >= MAXIMO_DE_EMPRESAS:
+            raise ErroConflito(LIMITE_DE_EMPRESAS)
         instante = agora()
         espaco = self.repositorio.inserir_espaco(
             Espaco(
@@ -106,19 +109,30 @@ class ServicoLivroCaixa:
                 fuso=FUSO_PADRAO,
                 membros=[Membro(uid=uid, papel=Papel.DONO)],
                 criado_em=instante,
+                cnpj=dados.cnpj,
+                regime=dados.regime,
             )
         )
         self._criar_categorias_iniciais(espaco, instante)
         return espaco
 
-    def renomear_espaco(self, espaco: Espaco, uid: str, dados: AtualizacaoEspaco) -> Espaco:
+    def atualizar_espaco(self, espaco: Espaco, uid: str, dados: AtualizacaoEspaco) -> Espaco:
+        """Nome, CNPJ e regime da empresa: só os campos enviados mudam."""
         self._conferir_dono(espaco, uid)
-        espaco.nome = dados.nome
+        enviados = dados.model_fields_set
+        if "nome" in enviados:
+            if dados.nome is None:
+                raise ErroValidacao({"nome": regras.OBRIGATORIO})
+            espaco.nome = dados.nome
+        if "cnpj" in enviados:
+            espaco.cnpj = dados.cnpj
+        if "regime" in enviados:
+            espaco.regime = dados.regime
         return self.repositorio.atualizar_espaco(espaco)
 
     def excluir_espaco(self, espaco: Espaco, uid: str) -> None:
-        """Só o espaço vazio sai (sem contas e sem lançamentos): um clique
-        errado não apaga o histórico de uma família ou de uma empresa."""
+        """Só a empresa sem movimento sai (sem contas e sem lançamentos): um
+        clique errado não apaga o histórico de uma empresa."""
         self._conferir_dono(espaco, uid)
         if self.repositorio.listar_contas(espaco.id) or self.repositorio.listar_lancamentos(espaco.id, None, None, 1):
             raise ErroConflito(ESPACO_COM_DADOS)
