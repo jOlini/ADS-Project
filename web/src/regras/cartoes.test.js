@@ -97,6 +97,13 @@ describe('compra no cartão', () => {
     expect(corpoDaCompra({ ...compra, divisao }).divisao).toBeUndefined();
   });
 
+  it('manda o número de pessoas do Free só na compra à vista', () => {
+    expect(corpoDaCompra({ ...compra, parcelas: '1', dividido_entre: '2' }).dividido_entre).toBe(2);
+    expect(corpoDaCompra({ ...compra, dividido_entre: '2' })).not.toHaveProperty('dividido_entre');
+    expect(validarCompra({ ...compra, parcelas: '1', dividido_entre: '30' }).dividido_entre).toMatch(/de 2 a 20/);
+    expect(validarCompra({ ...compra, dividido_entre: '30' })).toEqual({});
+  });
+
   it('manda o responsável também na compra parcelada', () => {
     expect(corpoDaCompra({ ...compra, responsavel: ' Carla ' }).responsavel).toBe('Carla');
     expect(corpoDaCompra({ ...compra, responsavel: '' })).not.toHaveProperty('responsavel');

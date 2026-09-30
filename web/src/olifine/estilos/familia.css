@@ -207,3 +207,38 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Free: a explicação do Plano Família no lugar do cadastro. */
+.of-familia-plano {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.of-familia-plano h2 {
+  margin: 0 0 var(--espaco-2);
+  font-size: 1rem;
+  font-weight: var(--peso-semi);
+}
+
+.of-familia-plano p {
+  margin: 0;
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+  text-wrap: pretty;
+}
+
+.of-familia-plano-icone {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+@media (max-width: 640px) {
+  .of-familia-plano {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -6,6 +6,7 @@
 // abre, como chamar cada um, quem pode mexer, o formulário da empresa (nome,
 // CNPJ, regime) e onde as metas de cada um ficam. Testado em espacos.test.ts.
 
+import type { Plano } from './planos';
 import { limparTexto } from './sanitizacao';
 
 export type TipoDeEspaco = 'PF' | 'PJ';
@@ -32,8 +33,9 @@ export interface Espaco {
   // Só na empresa.
   cnpj?: string | null;
   regime?: Regime | null;
-  // Só no pessoal.
+  // Só no pessoal: o Modo Família e o plano da pessoa (regras/planos.ts).
   familia?: Familia | null;
+  plano?: Plano | null;
 }
 
 interface DescricaoDoTipo {

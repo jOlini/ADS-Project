@@ -81,6 +81,42 @@ export function corpoDaDivisao(partes) {
   return partes.map((parte) => ({ pessoa: parte.pessoa.trim(), valor_centavos: lerValor(parte.valor) }));
 }
 
+// ------------------------------------------------- A divisão do Free
+
+// No Free, dividir é só anotar em quantas pessoas o gasto foi dividido,
+// contando quem lançou: sem nomes, nada separa o gasto de cada um (isso é do
+// Plano Família, e a API recusa a divisão por pessoa no Free). O número vem
+// como a pessoa digitou; vazio = sem divisão. Mesmos limites da API.
+export const MINIMO_NA_DIVISAO = 2;
+
+// O número já conferido, ou null (vazio ou inválido).
+export function lerDivididoEntre(texto) {
+  const limpo = String(texto ?? '').trim();
+  if (!/^\d{1,3}$/.test(limpo)) {
+    return null;
+  }
+  const numero = Number(limpo);
+  return numero >= MINIMO_NA_DIVISAO && numero <= MAXIMO_DE_PESSOAS ? numero : null;
+}
+
+// Mensagem do campo, ou '' quando está bom (vazio também está).
+export function erroDoDivididoEntre(texto) {
+  if (!String(texto ?? '').trim() || lerDivididoEntre(texto) !== null) {
+    return '';
+  }
+  return `Use um número inteiro de ${MINIMO_NA_DIVISAO} a ${MAXIMO_DE_PESSOAS}.`;
+}
+
+// A parte de cada um na divisão igual (o maior pedaço, quando o centavo não
+// divide exato), ou null sem total ou sem número válido.
+export function parteDeCada(total, texto) {
+  const quantidade = lerDivididoEntre(texto);
+  if (!total || quantidade === null) {
+    return null;
+  }
+  return dividirIgualmente(total, quantidade)[0];
+}
+
 // Pessoas já usadas que ainda não estão nesta divisão, para sugerir.
 export function pessoasParaSugerir(conhecidas, partes, limite = 8) {
   const presentes = new Set(partes.map((parte) => normalizarTexto(parte.pessoa)));

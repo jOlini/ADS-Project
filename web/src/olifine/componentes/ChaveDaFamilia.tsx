@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Icone from '../../componentes/Icone';
 import { useToast } from '../../componentes/toast/useToast';
 import type { Espaco, Familia } from '../../regras/espacos';
+import { familiaLiberada, planoDoEspaco } from '../../regras/planos';
 import { ligarFamilia } from '../../servicos/livroCaixa';
 
 interface Props {
@@ -17,11 +18,31 @@ interface Props {
 // menu ganha a página da família. Ligando sem ninguém cadastrado, a página
 // abre para cadastrar quem mora com você. Desligar só esconde: as pessoas
 // continuam guardadas.
+//
+// No Plano Free, a chave aparece com o cadeado e leva à página da família,
+// que explica o Plano Família. Não é a única trava: a API recusa ligar o
+// modo (403) em quem não tem o plano.
 export default function ChaveDaFamilia({ espaco, recarregarEspacos }: Props) {
   const toast = useToast();
   const navigate = useNavigate();
   const [ocupado, setOcupado] = useState(false);
   const ativa = Boolean(espaco.familia?.ativa);
+
+  if (!familiaLiberada(planoDoEspaco(espaco))) {
+    return (
+      <button
+        type="button"
+        className="of-chave-da-familia bloqueada"
+        onClick={() => navigate('/familia')}
+        aria-label="Modo Família: faz parte do Plano Família"
+        title="Faz parte do Plano Família"
+      >
+        <Icone nome="casa" tamanho={16} />
+        <span className="of-chave-rotulo">Família</span>
+        <Icone nome="cadeado" tamanho={15} />
+      </button>
+    );
+  }
 
   async function alternar() {
     setOcupado(true);

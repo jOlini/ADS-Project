@@ -20,12 +20,13 @@ const BRUNO: PessoaDaFamilia = { id: 'b1', nome: 'Bruno', cor: 'azul' };
 const LEO: PessoaDaFamilia = { id: 'l1', nome: 'Léo', cor: 'coral' };
 const PESSOAS = [BRUNO, LEO];
 
-const pessoal = (ativa: boolean): Espaco => ({
+const pessoal = (ativa: boolean, plano: Espaco['plano'] = 'FAMILIA'): Espaco => ({
   id: 'p1',
   tipo: 'PF',
   nome: 'Pessoal',
   papel: 'DONO',
   familia: { ativa, pessoas: PESSOAS, maximo_de_pessoas: 5 },
+  plano,
 });
 
 describe('pessoasDaFamilia e familiaAtiva', () => {
@@ -36,6 +37,13 @@ describe('pessoasDaFamilia e familiaAtiva', () => {
     expect(pessoasDaFamilia(null)).toEqual([]);
     expect(familiaAtiva(pessoal(true))).toBe(true);
     expect(familiaAtiva(pessoal(false))).toBe(false);
+  });
+
+  it('no Free (ou sem plano), nada aparece mesmo com o modo ligado', () => {
+    expect(pessoasDaFamilia(pessoal(true, 'FREE'))).toEqual([]);
+    expect(pessoasDaFamilia(pessoal(true, null))).toEqual([]);
+    expect(familiaAtiva(pessoal(true, 'FREE'))).toBe(false);
+    expect(familiaAtiva(pessoal(true, 'EMPRESARIAL'))).toBe(true);
   });
 });
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AvisoComAtalho from './AvisoComAtalho';
 import Campo from './Campo';
 import CampoDeResponsavel from './CampoDeResponsavel';
+import DivididoEntre from './DivididoEntre';
 import DivisaoEntrePessoas from './DivisaoEntrePessoas';
 import Seletor from './Seletor';
 import SeletorDeData from './SeletorDeData';
@@ -25,6 +26,8 @@ const formularioVazio = (contas) => ({
   // Vazio = quem lançou.
   responsavel: '',
   divisao: [],
+  // A divisão do Free: só o número de pessoas (regras/divisao.js).
+  dividido_entre: '',
   // O meio mais comum já vem marcado; a pessoa troca com um clique.
   meio: 'PIX',
 });
@@ -37,7 +40,19 @@ const opcoesDeConta = (contas) => contas.map((conta) => ({ valor: conta.id, rotu
 // Confere tudo antes de ir à API e põe o foco no primeiro campo com erro.
 // aoLancar recebe o lançamento criado. Compras no crédito não entram aqui: com
 // cartões cadastrados, o formulário aponta a fatura (temCartoes).
-export default function FormularioDeLancamento({ espacoId, contas, temCartoes = false, categorias, pessoasConhecidas, aoLancar, aoCancelar, aoMudarOcupado }) {
+// divisaoPorPessoa (Plano Família ou Empresarial) mostra o racha com o nome e
+// a parte de cada pessoa; no Free, só o número de pessoas, como anotação.
+export default function FormularioDeLancamento({
+  espacoId,
+  contas,
+  temCartoes = false,
+  categorias,
+  pessoasConhecidas,
+  divisaoPorPessoa = false,
+  aoLancar,
+  aoCancelar,
+  aoMudarOcupado,
+}) {
   const toast = useToast();
   const [formulario, setFormulario] = useState(() => formularioVazio(contas));
   const [erros, setErros] = useState({});
@@ -170,15 +185,19 @@ export default function FormularioDeLancamento({ espacoId, contas, temCartoes = 
         </AvisoComAtalho>
       )}
 
-      {!transferencia && (
-        <DivisaoEntrePessoas
-          partes={formulario.divisao}
-          total={total || null}
-          erros={erros}
-          pessoasConhecidas={pessoasConhecidas}
-          aoMudar={(partes, campo) => mudar('divisao', partes, campo)}
-        />
-      )}
+      {!transferencia &&
+        (divisaoPorPessoa ? (
+          <DivisaoEntrePessoas
+            partes={formulario.divisao}
+            total={total || null}
+            erros={erros}
+            pessoasConhecidas={pessoasConhecidas}
+            aoMudar={(partes, campo) => mudar('divisao', partes, campo)}
+          />
+        ) : (
+          <DivididoEntre valor={formulario.dividido_entre} total={total || null} erro={erros.dividido_entre}
+            aoMudar={(numero) => mudar('dividido_entre', numero)} />
+        ))}
 
       <div className="acoes-do-formulario">
         <button type="button" className="secundario" onClick={aoCancelar} disabled={enviando}>
