@@ -98,6 +98,31 @@ export function excluirEspaco(espacoId) {
   return chamar(doEspaco(espacoId), { metodo: 'DELETE' });
 }
 
+// ------------------------------------------------------------ Modo Família
+// Só no espaço pessoal. As pessoas da família são perfis dentro dele: um
+// lançamento é de uma delas quando o responsável tem o nome dela.
+
+// Liga ou desliga o modo; devolve { ativa, pessoas, maximo_de_pessoas }.
+export function ligarFamilia(espacoId, ativa) {
+  return chamar(doEspaco(espacoId, '/familia'), { metodo: 'PUT', corpo: { ativa } });
+}
+
+// { nome, cor }: devolve a pessoa com o id.
+export function incluirPessoa(espacoId, pessoa) {
+  return chamar(doEspaco(espacoId, '/familia/pessoas'), { metodo: 'POST', corpo: pessoa });
+}
+
+// Nome e cor novos; os lançamentos da pessoa passam para o nome novo
+// (lancamentos_renomeados na resposta).
+export function editarPessoa(espacoId, pessoaId, pessoa) {
+  return chamar(doEspaco(espacoId, `/familia/pessoas/${encodeURIComponent(pessoaId)}`), { metodo: 'PUT', corpo: pessoa });
+}
+
+// Os lançamentos dela ficam, com o nome escrito como responsável. 204.
+export function removerPessoa(espacoId, pessoaId) {
+  return chamar(doEspaco(espacoId, `/familia/pessoas/${encodeURIComponent(pessoaId)}`), { metodo: 'DELETE' });
+}
+
 export function listarContas(espacoId) {
   return chamar(doEspaco(espacoId, '/contas'));
 }
@@ -243,14 +268,18 @@ export function importarExtrato(espacoId, importacao) {
 
 // Relatórios da release 0.3 (DOCS_API.md, parte 7). Período em meses
 // ({ de, ate } como 'AAAA-MM', opcionais): sem ele, a API usa os 12 meses que
-// terminam no mês de hoje.
-function consultaDoPeriodo({ de, ate } = {}) {
+// terminam no mês de hoje. membro (Modo Família): o id de uma pessoa da
+// família ou 'titular'; sem ele, todos.
+function consultaDoPeriodo({ de, ate, membro } = {}) {
   const periodo = new URLSearchParams();
   if (de) {
     periodo.set('de', de);
   }
   if (ate) {
     periodo.set('ate', ate);
+  }
+  if (membro) {
+    periodo.set('membro', membro);
   }
   return periodo.size > 0 ? `?${periodo}` : '';
 }

@@ -18,16 +18,20 @@ const {
   apiConfigurada,
   atualizarEmpresa,
   criarEmpresa,
+  editarPessoa,
   estornar,
   excluirEspaco,
   estruturaDoExtrato,
   excluir,
+  incluirPessoa,
   lancar,
+  ligarFamilia,
   listarEspacos,
   listarLancamentos,
   listarPessoas,
   relatorioCategorias,
   relatorioMensal,
+  removerPessoa,
 } = await import('./livroCaixa');
 
 function resposta(status, corpo) {
@@ -192,5 +196,35 @@ describe('API do livro-caixa', () => {
 
     expect(fetch.mock.calls[0][0]).toBe('http://api.teste/espacos/e1/relatorios/categorias?de=2026-04&ate=2026-09');
     expect(fetch.mock.calls[1][0]).toBe('http://api.teste/espacos/e1/relatorios/categorias');
+  });
+
+  it('filtra os relatórios por pessoa da família (Modo Família)', async () => {
+    fetch.mockResolvedValue(resposta(200, { meses: [] }));
+
+    await relatorioMensal('p1', { de: '2026-09', ate: '2026-09', membro: 'titular' });
+    await relatorioCategorias('p1', { membro: 'l1' });
+
+    expect(fetch.mock.calls[0][0]).toBe('http://api.teste/espacos/p1/relatorios/mensal?de=2026-09&ate=2026-09&membro=titular');
+    expect(fetch.mock.calls[1][0]).toBe('http://api.teste/espacos/p1/relatorios/categorias?membro=l1');
+  });
+
+  it('liga a família e cuida das pessoas, com o nome limpo antes de sair', async () => {
+    fetch.mockResolvedValueOnce(resposta(200, { ativa: true, pessoas: [] }));
+    fetch.mockResolvedValueOnce(resposta(201, { id: 'l1', nome: 'Léo', cor: 'coral' }));
+    fetch.mockResolvedValueOnce(resposta(200, { id: 'l1', nome: 'Leo', cor: 'roxo', lancamentos_renomeados: 2 }));
+    fetch.mockResolvedValueOnce(resposta(204, null));
+
+    await ligarFamilia('p1', true);
+    await incluirPessoa('p1', { nome: ' <Léo> ', cor: 'coral' });
+    await editarPessoa('p1', 'l/1', { nome: 'Leo', cor: 'roxo' });
+    await removerPessoa('p1', 'l1');
+
+    const chamadas = fetch.mock.calls.map(([url, opcoes]) => [url, opcoes.method, opcoes.body && JSON.parse(opcoes.body)]);
+    expect(chamadas).toEqual([
+      ['http://api.teste/espacos/p1/familia', 'PUT', { ativa: true }],
+      ['http://api.teste/espacos/p1/familia/pessoas', 'POST', { nome: 'Léo', cor: 'coral' }],
+      ['http://api.teste/espacos/p1/familia/pessoas/l%2F1', 'PUT', { nome: 'Leo', cor: 'roxo' }],
+      ['http://api.teste/espacos/p1/familia/pessoas/l1', 'DELETE', undefined],
+    ]);
   });
 });

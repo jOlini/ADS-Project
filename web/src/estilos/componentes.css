@@ -893,6 +893,77 @@ button.botao-do-menu[aria-expanded='true'] > .icone:last-child {
   --cor-da-amostra: var(--cartao-grafite);
 }
 
+/* Paleta das pessoas da família (Modo Família): amostra do formulário, ponto
+   dos filtros e do extrato. Cada classe só aponta a variável da cor. */
+.pessoa-titular,
+.ponto-de-pessoa.titular {
+  --cor-da-amostra: var(--pessoa-titular);
+}
+
+.pessoa-menta,
+.ponto-de-pessoa.menta {
+  --cor-da-amostra: var(--pessoa-menta);
+}
+
+.pessoa-azul,
+.ponto-de-pessoa.azul {
+  --cor-da-amostra: var(--pessoa-azul);
+}
+
+.pessoa-roxo,
+.ponto-de-pessoa.roxo {
+  --cor-da-amostra: var(--pessoa-roxo);
+}
+
+.pessoa-coral,
+.ponto-de-pessoa.coral {
+  --cor-da-amostra: var(--pessoa-coral);
+}
+
+.pessoa-ambar,
+.ponto-de-pessoa.ambar {
+  --cor-da-amostra: var(--pessoa-ambar);
+}
+
+.pessoa-rosa,
+.ponto-de-pessoa.rosa {
+  --cor-da-amostra: var(--pessoa-rosa);
+}
+
+.pessoa-turquesa,
+.ponto-de-pessoa.turquesa {
+  --cor-da-amostra: var(--pessoa-turquesa);
+}
+
+.pessoa-grafite,
+.ponto-de-pessoa.grafite {
+  --cor-da-amostra: var(--pessoa-grafite);
+}
+
+.ponto-de-pessoa {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--cor-da-amostra, var(--pessoa-grafite));
+}
+
+/* Filtro "de quem": as abas de sempre, com o ponto da cor antes do nome. */
+.abas.filtro-de-pessoa {
+  flex-wrap: wrap;
+}
+
+.filtro-de-pessoa button {
+  gap: var(--espaco-3);
+}
+
+.filtro-de-pessoa-nome {
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 560px) {
   .amostras-de-cor {
     grid-template-columns: repeat(2, minmax(0, 1fr));

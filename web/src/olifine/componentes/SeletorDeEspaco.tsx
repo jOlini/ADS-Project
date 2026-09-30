@@ -17,6 +17,7 @@ import {
   type TipoDeEspaco,
 } from '../../regras/espacos';
 import { excluirEspaco } from '../../servicos/livroCaixa';
+import ChaveDaFamilia from './ChaveDaFamilia';
 import FlutuanteJs from './Flutuante';
 
 const Confirmacao = semTipos(ConfirmacaoJs);
@@ -50,10 +51,11 @@ const rotuloDoRegime = (espaco: Espaco) =>
 
 // Seletor do topo da área logada. São dois espaços, e só dois: Pessoal e
 // Empresarial, lado a lado como abas (a troca é instantânea: o livro-caixa já
-// está na memória e a tela só remonta). No Empresarial, ao lado, o seletor da
-// empresa: cada empresa é um livro-caixa próprio, com cadastro (nome, CNPJ,
-// regime), edição e exclusão (só a sem movimento: a API recusa com o
-// motivo). Sem empresa ainda, "Empresarial" abre o cadastro da primeira.
+// está na memória e a tela só remonta). No Pessoal, ao lado, a chave do Modo
+// Família. No Empresarial, o seletor da empresa: cada empresa é um
+// livro-caixa próprio, com cadastro (nome, CNPJ, regime), edição e exclusão
+// (só a sem movimento: a API recusa com o motivo). Sem empresa ainda,
+// "Empresarial" abre o cadastro da primeira.
 export default function SeletorDeEspaco({ espacos, ativo, trocarEspaco, trocarContexto, recarregarEspacos }: Props) {
   const toast = useToast();
   const navigate = useNavigate();
@@ -132,6 +134,8 @@ export default function SeletorDeEspaco({ espacos, ativo, trocarEspaco, trocarCo
           </button>
         ))}
       </div>
+
+      {ativo?.tipo === 'PF' && <ChaveDaFamilia espaco={ativo} recarregarEspacos={recarregarEspacos} />}
 
       {ativo?.tipo === 'PJ' && (
         <Flutuante

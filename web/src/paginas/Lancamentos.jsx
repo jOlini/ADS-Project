@@ -6,6 +6,7 @@ import BarraDeSelecao from '../componentes/BarraDeSelecao';
 import CampoDeBusca from '../componentes/CampoDeBusca';
 import Esqueleto from '../componentes/Esqueleto';
 import Extrato from '../componentes/Extrato';
+import FiltroDePessoa from '../componentes/FiltroDePessoa';
 import FormularioDeLancamento from '../componentes/FormularioDeLancamento';
 import Icone from '../componentes/Icone';
 import SimboloDoVazio from '../olifine/componentes/SimboloDoVazio';
@@ -21,6 +22,7 @@ import { buscarNoExtrato } from '../regras/busca';
 import { nomeDoMes } from '../regras/calendario';
 import { mesDaReferencia } from '../regras/cartoes';
 import { formatarBRL } from '../regras/dinheiro';
+import { comAFamilia, corDoResponsavel, filtrarPorPessoa, pessoasDaFamilia, TITULAR, TODOS } from '../regras/familia';
 import { destinoDaImportacao } from '../regras/importacao';
 import {
   cartoesDe,
@@ -79,7 +81,8 @@ async function carregarMes(espacoId, mes) {
 // pagamento de fatura (que sai de uma conta). As compras no crédito ficam na
 // fatura do cartão, em Contas & Cartões, e não aparecem aqui como saída.
 // No topo, "+ Novo lançamento" e "Importar CSV" (os dois abrem um modal);
-// logo abaixo, o mês, a busca e o filtro, e a seleção em lote para remover.
+// logo abaixo, o mês, a busca e o filtro (com o Modo Família, também "de
+// quem"), e a seleção em lote para remover.
 // Cada linha tem o menu com Editar, Estornar (lançamento inverso, o
 // histórico fica) e Excluir (apaga de vez).
 export default function Lancamentos() {
@@ -98,6 +101,13 @@ export default function Lancamentos() {
   }
   const [modal, setModal] = useState(null);
   const [modalOcupado, setModalOcupado] = useState(false);
+  const [pessoaEscolhida, setPessoa] = useState(TODOS);
+  const pessoasDaCasa = useMemo(() => pessoasDaFamilia(espaco.dados), [espaco.dados]);
+  // Pessoa tirada da família (ou modo desligado) volta o filtro para todos.
+  const pessoa =
+    pessoasDaCasa.length > 0 && (pessoaEscolhida === TITULAR || pessoasDaCasa.some((alvo) => alvo.id === pessoaEscolhida))
+      ? pessoaEscolhida
+      : TODOS;
 
   const espacoId = espaco.dados?.id;
   const buscarCadastros = useMemo(() => (espacoId ? () => carregarCadastros(espacoId) : null), [espacoId]);
@@ -110,7 +120,7 @@ export default function Lancamentos() {
   const acoes = useAcoesDoExtrato({
     espacoId,
     categorias,
-    pessoasConhecidas: cadastros.dados?.pessoas,
+    pessoasConhecidas: comAFamilia(cadastros.dados?.pessoas ?? [], pessoasDaCasa),
     aoMudar: () => {
       cadastros.recarregar();
       extrato.recarregar();
@@ -135,7 +145,15 @@ export default function Lancamentos() {
     };
   }, [cadastros.dados, extrato.dados, contas, categorias]);
 
-  const diasVisiveis = useMemo(() => buscarNoExtrato(filtrarDias(visao?.dias ?? [], filtro), busca), [visao, filtro, busca]);
+  const diasVisiveis = useMemo(() => {
+    const dias = buscarNoExtrato(filtrarDias(visao?.dias ?? [], filtro), busca);
+    if (pessoa === TODOS) {
+      return dias;
+    }
+    return dias
+      .map((dia) => ({ ...dia, lancamentos: filtrarPorPessoa(dia.lancamentos, pessoa, pessoasDaCasa) }))
+      .filter((dia) => dia.lancamentos.length > 0);
+  }, [visao, filtro, busca, pessoa, pessoasDaCasa]);
   const linhasVisiveis = useMemo(() => diasVisiveis.flatMap((dia) => dia.lancamentos), [diasVisiveis]);
   const idsVisiveis = useMemo(() => linhasVisiveis.map((linha) => linha.id), [linhasVisiveis]);
   const selecao = useSelecao(idsVisiveis);
@@ -211,10 +229,10 @@ export default function Lancamentos() {
     }
   }
 
-  const filtrado = filtro !== 'tudo' || busca.trim() !== '';
+  const filtrado = filtro !== 'tudo' || busca.trim() !== '' || pessoa !== TODOS;
   // Com filtro ou busca, os totais descrevem só o que está na tela.
   const totais = somarMes(linhasVisiveis);
-  const pessoasConhecidas = cadastros.dados?.pessoas ?? [];
+  const pessoasConhecidas = comAFamilia(cadastros.dados?.pessoas ?? [], pessoasDaCasa);
 
   return (
     <div className="pagina-do-extrato">
@@ -244,6 +262,10 @@ export default function Lancamentos() {
               </button>
             ))}
           </div>
+          {pessoasDaCasa.length > 0 && (
+            <FiltroDePessoa pessoas={pessoasDaCasa} valor={pessoa} aoMudar={setPessoa} rotulo="Lançamentos de quem"
+              className="filtro-do-extrato" />
+          )}
         </div>
 
         {visao && visao.dias.length > 0 && (
@@ -282,6 +304,7 @@ export default function Lancamentos() {
             <Extrato
               dias={diasVisiveis}
               mostrarSaldo={!filtrado && visao.saldoConfiavel}
+              corDaPessoa={pessoasDaCasa.length > 0 ? (nome) => corDoResponsavel(nome, pessoasDaCasa) : undefined}
               selecao={selecao}
               acoes={(linha) => <Menu rotulo={`Ações de ${linha.descricao}`} itens={acoes.itens(linha)} />}
             />
@@ -291,7 +314,7 @@ export default function Lancamentos() {
               <h3>{filtrado ? 'Nada encontrado' : `Nenhum lançamento em ${nomeDoMes(mes)}`}</h3>
               <p>
                 {filtrado
-                  ? 'Troque a busca ou o filtro para ver os outros lançamentos do mês.'
+                  ? 'Troque a busca ou os filtros para ver os outros lançamentos do mês.'
                   : contasAtivas.length === 0
                     ? 'Os lançamentos aparecem aqui depois que você cadastrar uma conta.'
                     : 'Use "Novo lançamento" para registrar o que entrou ou saiu, ou traga o extrato do banco com "Importar CSV".'}

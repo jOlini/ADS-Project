@@ -597,6 +597,65 @@ button.of-conta-acao:hover:not(:disabled) {
   box-shadow: inset 0 0 0 1.5px var(--marca);
 }
 
+/* Chave do Modo Família: o nome e um trilho de interruptor, na moldura da
+   busca. Ligada, o trilho fica na cor da ação e o botão corre para a direita. */
+button.of-chave-da-familia {
+  flex: none;
+  gap: var(--espaco-4);
+  height: 42px;
+  min-height: 42px;
+  padding: 0 var(--espaco-5) 0 var(--espaco-6);
+  color: var(--texto);
+  background: var(--superficie);
+  border: var(--borda);
+  border-radius: var(--raio);
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-medio);
+}
+
+button.of-chave-da-familia:hover:not(:disabled) {
+  background: var(--superficie);
+  border-color: var(--linha-forte);
+}
+
+.of-chave-da-familia > .icone {
+  color: var(--suave);
+}
+
+.of-chave-da-familia[aria-checked='true'] > .icone {
+  color: var(--marca);
+}
+
+.of-chave-trilho {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: var(--raio-pilula);
+  background: var(--linha-forte);
+  transition: background-color var(--transicao);
+}
+
+.of-chave-botao {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--superficie);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.25);
+  transition: transform var(--transicao);
+}
+
+.of-chave-da-familia[aria-checked='true'] .of-chave-trilho {
+  background: var(--marca);
+}
+
+.of-chave-da-familia[aria-checked='true'] .of-chave-botao {
+  transform: translateX(14px);
+}
+
 button.of-espaco-botao {
   flex: none;
   gap: var(--espaco-4);
@@ -793,15 +852,16 @@ button.of-espaco-excluir .icone {
   }
 }
 
-/* Tela média (notebook pequeno, tablet): Pessoal e Empresarial só no ícone
-   (o nome continua no botão para o leitor de tela e no balão do mouse), e a
-   busca e o nome da empresa cabem ao lado. */
+/* Tela média (notebook pequeno, tablet): Pessoal, Empresarial e Família só
+   no ícone (o nome continua no botão para o leitor de tela e no balão do
+   mouse), e a busca e o nome da empresa cabem ao lado. */
 @media (max-width: 1180px) {
   .of-alternador-de-espaco button {
     padding: 0 var(--espaco-5);
   }
 
-  .of-alternador-rotulo {
+  .of-alternador-rotulo,
+  .of-chave-rotulo {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -810,14 +870,18 @@ button.of-espaco-excluir .icone {
     white-space: nowrap;
   }
 
+  button.of-chave-da-familia {
+    padding: 0 var(--espaco-4);
+  }
+
   button.of-espaco-botao {
     max-width: min(200px, 34vw);
   }
 }
 
-/* Celular estreito: Pessoal e Empresarial (e o nome da empresa, o que diz em
-   que livro se está) descem para uma segunda linha do topo, na largura toda; a
-   marca e os botões ficam na primeira. */
+/* Celular estreito: Pessoal, Empresarial e a chave da família (ou o nome da
+   empresa, o que diz em que livro se está) descem para uma segunda linha do
+   topo, na largura toda; a marca e os botões ficam na primeira. */
 @media (max-width: 520px) {
   .of-topo:has(.of-espaco) {
     flex-wrap: wrap;
@@ -834,9 +898,14 @@ button.of-espaco-excluir .icone {
     max-width: none;
   }
 
+  .of-topo .of-espaco button.of-chave-da-familia {
+    margin-left: auto;
+  }
+
   /* Na linha própria, os nomes voltam ao lado dos ícones; na empresa, as
      abas ficam só no ícone para o nome da empresa caber. */
-  .of-topo .of-espaco:not(:has(.of-espaco-botao)) .of-alternador-rotulo {
+  .of-topo .of-espaco:not(:has(.of-espaco-botao)) .of-alternador-rotulo,
+  .of-topo .of-chave-rotulo {
     position: static;
     width: auto;
     height: auto;

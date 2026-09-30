@@ -4,6 +4,7 @@ import { useCarga } from '../componentes/useCarga';
 import { formatarBRL } from '../regras/dinheiro';
 import { faturasAVencer } from '../regras/cartoes';
 import { ehEmpresa, nomeDoEspaco } from '../regras/espacos';
+import { familiaAtiva } from '../regras/familia';
 import { guardarLateralRecolhida, lerLateralRecolhida } from '../servicos/lateral';
 import { apiConfigurada, listarCartoes } from '../servicos/livroCaixa';
 import Flutuante from './componentes/Flutuante';
@@ -29,9 +30,12 @@ const DA_EMPRESA = [
   { para: '/empresa/dre', icone: 'documento', rotulo: 'DRE', versao: '0.3' },
 ];
 
+// A família, no fim do menu do espaço pessoal, só com o Modo Família ligado.
+const DA_FAMILIA = [{ grupo: 'Família' }, { para: '/familia', icone: 'casa', rotulo: 'Pessoas da casa' }];
+
 // O menu acompanha o espaço: no empresarial, a gestão da empresa antes do
-// livro-caixa; no pessoal, só o livro-caixa.
-function itensDoMenu(empresa) {
+// livro-caixa; no pessoal, o livro-caixa e, com o Modo Família, a família.
+function itensDoMenu(empresa, familia) {
   const semApi = (item) => (apiConfigurada || !item.para ? item : { ...item, para: null });
   return [
     { para: '/principal', icone: 'resumo', rotulo: 'Visão geral' },
@@ -39,6 +43,7 @@ function itensDoMenu(empresa) {
     ...DA_API.map(semApi),
     { para: '/metas', icone: 'broto', rotulo: 'Metas' },
     semApi({ para: '/relatorios', icone: 'relatorios', rotulo: 'Relatórios', versao: '0.3' }),
+    ...(familia ? DA_FAMILIA : []),
   ];
 }
 
@@ -130,7 +135,7 @@ export default function CascaOliFine({ contexto }) {
   const buscarCartoes = useMemo(() => (apiConfigurada && espacoId ? () => listarCartoes(espacoId) : null), [espacoId]);
   const cartoes = useCarga(buscarCartoes);
   const avisos = cartoes.dados ? faturasAVencer(cartoes.dados) : [];
-  const itens = itensDoMenu(ehEmpresa(espaco.dados));
+  const itens = itensDoMenu(ehEmpresa(espaco.dados), familiaAtiva(espaco.dados));
   const nomeDoAtivo = nomeDoEspaco(espaco.dados);
 
   function buscar(evento) {

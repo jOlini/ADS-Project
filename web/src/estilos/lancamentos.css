@@ -57,6 +57,17 @@
   margin-left: auto;
 }
 
+/* O filtro "de quem" (Modo Família) vai para a linha de baixo, inteira. */
+.ferramentas-do-extrato .abas.filtro-do-extrato {
+  flex-basis: 100%;
+  margin-left: 0;
+}
+
+.etiqueta.responsavel > .ponto-de-pessoa {
+  width: 8px;
+  height: 8px;
+}
+
 .extrato-cheio .totais-do-mes {
   padding: var(--espaco-5) var(--espaco-10);
   border-bottom: var(--borda);
