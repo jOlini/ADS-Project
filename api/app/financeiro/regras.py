@@ -20,8 +20,10 @@ from app.financeiro.modelos import (
     AtualizacaoConta,
     AtualizacaoLancamento,
     Categoria,
+    ClasseDeCusto,
     Conta,
     CorCategoria,
+    FuncaoDaCategoria,
     Lancamento,
     NovaCompra,
     NovaConta,
@@ -49,20 +51,70 @@ CATEGORIAS_INICIAIS: list[tuple[str, TipoCategoria, CorCategoria]] = [
 ]
 
 # Empresa: o vocabulário do caixa de um negócio pequeno (vendas, serviços,
-# impostos, fornecedores, folha), no lugar de salário e mercado.
+# impostos, fornecedores, folha, sócios), no lugar de salário e mercado.
 CATEGORIAS_DA_EMPRESA: list[tuple[str, TipoCategoria, CorCategoria]] = [
     ("Impostos", TipoCategoria.DESPESA, CorCategoria.SAUDE),
     ("Fornecedores", TipoCategoria.DESPESA, CorCategoria.MERCADO),
     ("Folha de pagamento", TipoCategoria.DESPESA, CorCategoria.CASA),
+    ("Encargos da folha", TipoCategoria.DESPESA, CorCategoria.CASA),
+    ("Benefícios", TipoCategoria.DESPESA, CorCategoria.CASA),
     ("Pró-labore", TipoCategoria.DESPESA, CorCategoria.MORADIA),
+    ("Prestadores de serviço", TipoCategoria.DESPESA, CorCategoria.TRANSPORTE),
     ("Aluguel e estrutura", TipoCategoria.DESPESA, CorCategoria.TRANSPORTE),
     ("Marketing", TipoCategoria.DESPESA, CorCategoria.LAZER),
     ("Tarifas bancárias", TipoCategoria.DESPESA, CorCategoria.NEUTRO),
     ("Outras despesas", TipoCategoria.DESPESA, CorCategoria.NEUTRO),
+    ("Distribuição de lucros", TipoCategoria.DESPESA, CorCategoria.NEUTRO),
     ("Vendas", TipoCategoria.RECEITA, CorCategoria.ENTRADA),
     ("Serviços prestados", TipoCategoria.RECEITA, CorCategoria.ENTRADA),
+    ("Aportes dos sócios", TipoCategoria.RECEITA, CorCategoria.NEUTRO),
     ("Outras receitas", TipoCategoria.RECEITA, CorCategoria.NEUTRO),
 ]
+
+# Classe na aba Custos das despesas iniciais da empresa. As outras despesas
+# (e as que a pessoa criar) ganham a sugestão da tela pelo nome.
+CLASSES_INICIAIS: dict[str, ClasseDeCusto] = {
+    "Impostos": ClasseDeCusto.VARIAVEL,
+    "Fornecedores": ClasseDeCusto.VARIAVEL,
+    "Folha de pagamento": ClasseDeCusto.FIXO,
+    "Encargos da folha": ClasseDeCusto.FIXO,
+    "Benefícios": ClasseDeCusto.FIXO,
+    "Pró-labore": ClasseDeCusto.FIXO,
+    "Prestadores de serviço": ClasseDeCusto.FIXO,
+    "Aluguel e estrutura": ClasseDeCusto.FIXO,
+    "Marketing": ClasseDeCusto.OPERACIONAL,
+    "Tarifas bancárias": ClasseDeCusto.OPERACIONAL,
+    "Outras despesas": ClasseDeCusto.OPERACIONAL,
+    "Distribuição de lucros": ClasseDeCusto.FORA,
+}
+
+# A categoria que a gestão da empresa usa para cada função: nome, tipo e cor
+# com que ela nasce se ainda não existir (empresa criada antes dela, ou a
+# pessoa excluiu). Todas estão entre as iniciais.
+CATEGORIAS_DA_GESTAO: dict[FuncaoDaCategoria, str] = {
+    FuncaoDaCategoria.APORTE: "Aportes dos sócios",
+    FuncaoDaCategoria.DISTRIBUICAO: "Distribuição de lucros",
+    FuncaoDaCategoria.PRO_LABORE: "Pró-labore",
+    FuncaoDaCategoria.SALARIOS: "Folha de pagamento",
+    FuncaoDaCategoria.BENEFICIOS: "Benefícios",
+    FuncaoDaCategoria.PRESTADORES: "Prestadores de serviço",
+    FuncaoDaCategoria.ENCARGOS: "Encargos da folha",
+    FuncaoDaCategoria.IMPOSTOS: "Impostos",
+}
+
+
+def gestao_da_categoria(tipo: TipoEspaco, nome: str) -> tuple[ClasseDeCusto | None, FuncaoDaCategoria | None]:
+    """Classe de custo e função de uma categoria inicial (só na empresa)."""
+    if tipo != TipoEspaco.PJ:
+        return None, None
+    funcao = next((funcao for funcao, padrao in CATEGORIAS_DA_GESTAO.items() if padrao == nome), None)
+    return CLASSES_INICIAIS.get(nome), funcao
+
+
+def categoria_padrao(funcao: FuncaoDaCategoria) -> tuple[str, TipoCategoria, CorCategoria]:
+    """Nome, tipo e cor com que nasce a categoria de uma função da gestão."""
+    nome = CATEGORIAS_DA_GESTAO[funcao]
+    return next(item for item in CATEGORIAS_DA_EMPRESA if item[0] == nome)
 
 
 def categorias_iniciais(tipo: TipoEspaco) -> list[tuple[str, TipoCategoria, CorCategoria]]:

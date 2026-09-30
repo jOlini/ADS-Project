@@ -9,6 +9,7 @@ outro espaço simplesmente não é encontrado.
 """
 
 from datetime import date
+from enum import StrEnum
 from typing import Protocol
 
 from bson import ObjectId
@@ -20,6 +21,7 @@ from pymongo.errors import DuplicateKeyError
 from app.erros import ErroConflito
 from app.financeiro.modelos import (
     Categoria,
+    ClasseDeCusto,
     Conta,
     CorCategoria,
     CorDoCartao,
@@ -27,9 +29,11 @@ from app.financeiro.modelos import (
     Espaco,
     Familia,
     FiltroDePessoa,
+    FuncaoDaCategoria,
     Lancamento,
     MeioDePagamento,
     Membro,
+    Origem,
     Papel,
     Parte,
     Partida,
@@ -37,8 +41,19 @@ from app.financeiro.modelos import (
     RegimeTributario,
     TipoCategoria,
     TipoConta,
+    TipoDeOrigem,
     TipoEspaco,
     TipoLancamento,
+)
+from app.financeiro.modelos_empresa import (
+    BaseDoTributo,
+    Beneficio,
+    Colaborador,
+    Periodicidade,
+    Socio,
+    TipoDeTributo,
+    Tributo,
+    Vinculo,
 )
 
 MENSAGEM_JA_ESTORNADO = "Este lançamento já foi estornado."
@@ -55,6 +70,19 @@ class EspacoPessoalJaExiste(Exception):
 class LancamentoJaImportado(Exception):
     """A linha do extrato já virou lançamento neste espaço (mesma chave de
     importação), por exemplo em duas importações simultâneas do mesmo arquivo."""
+
+
+class LancamentoJaGerado(Exception):
+    """O tributo ou a folha daquela competência já tem lançamento no espaço
+    (mesma origem): a gestão da empresa não lança a mesma coisa duas vezes."""
+
+
+class Cadastro(StrEnum):
+    """Cadastros da gestão de cada empresa, uma coleção cada um."""
+
+    SOCIOS = "socios"
+    TRIBUTOS = "tributos"
+    COLABORADORES = "colaboradores"
 
 
 class RepositorioLivroCaixa(Protocol):
@@ -122,6 +150,18 @@ class RepositorioLivroCaixa(Protocol):
 
     def chaves_importadas(self, espaco_id: str, chaves: list[str]) -> set[str]: ...
 
+    def listar_lancamentos_de_origem(self, espaco_id: str, tipos: list[TipoDeOrigem]) -> list[Lancamento]: ...
+
+    def listar_cadastros(self, cadastro: Cadastro, espaco_id: str) -> list: ...
+
+    def buscar_cadastro(self, cadastro: Cadastro, espaco_id: str, id: str): ...
+
+    def inserir_cadastro(self, cadastro: Cadastro, entidade): ...
+
+    def atualizar_cadastro(self, cadastro: Cadastro, entidade): ...
+
+    def excluir_cadastro(self, cadastro: Cadastro, espaco_id: str, id: str) -> bool: ...
+
     def somar_partidas_por_conta(self, espaco_id: str) -> dict[str, int]: ...
 
     def somar_categorias_por_mes(
@@ -148,6 +188,7 @@ class LivroCaixaMongo:
         self._contas = banco["contas"]
         self._categorias = banco["categorias"]
         self._lancamentos = banco["lancamentos"]
+        self._cadastros = {cadastro: banco[cadastro.value] for cadastro in Cadastro}
 
         # Um espaço pessoal por pessoa, mesmo com dois primeiros acessos juntos.
         self._espacos.create_index(
@@ -174,6 +215,15 @@ class LivroCaixaMongo:
             unique=True,
             partialFilterExpression={"chave_importacao": {"$type": "string"}},
         )
+        # Um tributo pago ou uma folha lançada por competência: o serviço pula
+        # o que já existe, e o índice segura dois cliques ao mesmo tempo.
+        self._lancamentos.create_index(
+            [("espaco_id", ASCENDING), ("origem.tipo", ASCENDING), ("origem.id", ASCENDING), ("origem.competencia", ASCENDING)],
+            unique=True,
+            partialFilterExpression={"origem.tipo": {"$type": "string"}},
+        )
+        for colecao in self._cadastros.values():
+            colecao.create_index([("espaco_id", ASCENDING), ("criado_em", ASCENDING)])
 
     # --- Espaços ---
 
@@ -225,12 +275,15 @@ class LivroCaixaMongo:
         return espaco
 
     def excluir_espaco(self, id: str) -> bool:
-        """Apaga o espaço e as categorias dele. Quem chama já conferiu que não
-        há contas nem lançamentos (servicos.excluir_espaco)."""
+        """Apaga o espaço, as categorias e os cadastros da empresa (sócios,
+        tributos, folha). Quem chama já conferiu que não há contas nem
+        lançamentos (servicos.excluir_espaco)."""
         oid = _object_id(id)
         if not oid:
             return False
         self._categorias.delete_many({"espaco_id": id})
+        for colecao in self._cadastros.values():
+            colecao.delete_many({"espaco_id": id})
         return self._espacos.delete_one({"_id": oid}).deleted_count == 1
 
     # --- Contas ---
@@ -344,12 +397,21 @@ class LivroCaixaMongo:
             documento["chave_parcelamento"] = lancamento.chave_parcelamento
         if lancamento.meio:
             documento["meio"] = lancamento.meio.value
+        if lancamento.origem:
+            documento["origem"] = {
+                "tipo": lancamento.origem.tipo.value,
+                "id": lancamento.origem.id,
+                "competencia": lancamento.origem.competencia,
+            }
         try:
             lancamento.id = str(self._lancamentos.insert_one(documento).inserted_id)
         except DuplicateKeyError as erro:
-            # Dois índices únicos na coleção: o keyPattern diz qual barrou.
-            if "chave_importacao" in (erro.details or {}).get("keyPattern", {}):
+            # Três índices únicos na coleção: o keyPattern diz qual barrou.
+            indice = (erro.details or {}).get("keyPattern", {})
+            if "chave_importacao" in indice:
                 raise LancamentoJaImportado() from erro
+            if "origem.tipo" in indice:
+                raise LancamentoJaGerado() from erro
             raise ErroConflito(MENSAGEM_JA_ESTORNADO) from erro
         return lancamento
 
@@ -409,6 +471,39 @@ class LivroCaixaMongo:
             {"espaco_id": espaco_id, "chave_importacao": {"$in": chaves}}, {"_id": 0, "chave_importacao": 1}
         )
         return {documento["chave_importacao"] for documento in documentos}
+
+    def listar_lancamentos_de_origem(self, espaco_id: str, tipos: list[TipoDeOrigem]) -> list[Lancamento]:
+        """Os lançamentos que a gestão da empresa gerou (tributos pagos,
+        folhas), da competência mais nova para a mais antiga."""
+        documentos = self._lancamentos.find(
+            {"espaco_id": espaco_id, "origem.tipo": {"$in": [tipo.value for tipo in tipos]}}
+        ).sort([("origem.competencia", DESCENDING), ("data", DESCENDING)])
+        return [_para_lancamento(documento) for documento in documentos]
+
+    # --- Cadastros da empresa (sócios, tributos, folha) ---
+
+    def listar_cadastros(self, cadastro: Cadastro, espaco_id: str) -> list:
+        documentos = self._cadastros[cadastro].find({"espaco_id": espaco_id}).sort("criado_em", ASCENDING)
+        return [_DE_DOCUMENTO[cadastro](documento) for documento in documentos]
+
+    def buscar_cadastro(self, cadastro: Cadastro, espaco_id: str, id: str):
+        oid = _object_id(id)
+        documento = self._cadastros[cadastro].find_one({"_id": oid, "espaco_id": espaco_id}) if oid else None
+        return _DE_DOCUMENTO[cadastro](documento) if documento else None
+
+    def inserir_cadastro(self, cadastro: Cadastro, entidade):
+        entidade.id = str(self._cadastros[cadastro].insert_one(_PARA_DOCUMENTO[cadastro](entidade)).inserted_id)
+        return entidade
+
+    def atualizar_cadastro(self, cadastro: Cadastro, entidade):
+        self._cadastros[cadastro].replace_one(
+            {"_id": ObjectId(entidade.id), "espaco_id": entidade.espaco_id}, _PARA_DOCUMENTO[cadastro](entidade)
+        )
+        return entidade
+
+    def excluir_cadastro(self, cadastro: Cadastro, espaco_id: str, id: str) -> bool:
+        oid = _object_id(id)
+        return bool(oid) and self._cadastros[cadastro].delete_one({"_id": oid, "espaco_id": espaco_id}).deleted_count == 1
 
     def listar_pessoas(self, espaco_id: str) -> list[str]:
         """Nomes já usados em divisões e como responsável no espaço, sem
@@ -575,7 +670,7 @@ def _para_conta(documento: dict) -> Conta:
 
 
 def _documento_da_categoria(categoria: Categoria) -> dict:
-    return {
+    documento = {
         "espaco_id": categoria.espaco_id,
         "nome": categoria.nome,
         "tipo": categoria.tipo.value,
@@ -583,6 +678,11 @@ def _documento_da_categoria(categoria: Categoria) -> dict:
         "ativa": categoria.ativa,
         "criada_em": categoria.criada_em,
     }
+    if categoria.classe_de_custo:
+        documento["classe_de_custo"] = categoria.classe_de_custo.value
+    if categoria.funcao:
+        documento["funcao"] = categoria.funcao.value
+    return documento
 
 
 def _para_categoria(documento: dict) -> Categoria:
@@ -594,6 +694,8 @@ def _para_categoria(documento: dict) -> Categoria:
         cor=CorCategoria(documento["cor"]),
         ativa=documento["ativa"],
         criada_em=documento["criada_em"],
+        classe_de_custo=ClasseDeCusto(documento["classe_de_custo"]) if documento.get("classe_de_custo") else None,
+        funcao=FuncaoDaCategoria(documento["funcao"]) if documento.get("funcao") else None,
     )
 
 
@@ -623,7 +725,111 @@ def _para_lancamento(documento: dict) -> Lancamento:
         parcelas=documento.get("parcelas"),
         chave_parcelamento=documento.get("chave_parcelamento"),
         meio=MeioDePagamento(documento["meio"]) if documento.get("meio") else None,
+        origem=_para_origem(documento.get("origem")),
     )
+
+
+def _para_origem(documento: dict | None) -> Origem | None:
+    if not documento:
+        return None
+    return Origem(TipoDeOrigem(documento["tipo"]), documento["id"], documento["competencia"])
+
+
+# --- Cadastros da empresa --------------------------------------------------------
+
+
+def _documento_do_socio(socio: Socio) -> dict:
+    return {
+        "espaco_id": socio.espaco_id,
+        "nome": socio.nome,
+        "participacao_centesimos": socio.participacao_centesimos,
+        "criado_em": socio.criado_em,
+    }
+
+
+def _para_socio(documento: dict) -> Socio:
+    return Socio(
+        id=str(documento["_id"]),
+        espaco_id=documento["espaco_id"],
+        nome=documento["nome"],
+        participacao_centesimos=documento["participacao_centesimos"],
+        criado_em=documento["criado_em"],
+    )
+
+
+def _documento_do_tributo(tributo: Tributo) -> dict:
+    return {
+        "espaco_id": tributo.espaco_id,
+        "nome": tributo.nome,
+        "tipo": tributo.tipo.value,
+        "base": tributo.base.value,
+        "aliquota_centesimos": tributo.aliquota_centesimos,
+        "valor_fixo_centavos": tributo.valor_fixo_centavos,
+        "dia_vencimento": tributo.dia_vencimento,
+        "periodicidade": tributo.periodicidade.value,
+        "ativo": tributo.ativo,
+        "criado_em": tributo.criado_em,
+    }
+
+
+def _para_tributo(documento: dict) -> Tributo:
+    return Tributo(
+        id=str(documento["_id"]),
+        espaco_id=documento["espaco_id"],
+        nome=documento["nome"],
+        tipo=TipoDeTributo(documento["tipo"]),
+        base=BaseDoTributo(documento["base"]),
+        aliquota_centesimos=documento.get("aliquota_centesimos"),
+        valor_fixo_centavos=documento.get("valor_fixo_centavos"),
+        dia_vencimento=documento["dia_vencimento"],
+        periodicidade=Periodicidade(documento["periodicidade"]),
+        ativo=documento["ativo"],
+        criado_em=documento["criado_em"],
+    )
+
+
+def _documento_do_colaborador(colaborador: Colaborador) -> dict:
+    return {
+        "espaco_id": colaborador.espaco_id,
+        "nome": colaborador.nome,
+        "vinculo": colaborador.vinculo.value,
+        "cargo": colaborador.cargo,
+        "salario_centavos": colaborador.salario_centavos,
+        "beneficios": [{"nome": b.nome, "valor_centavos": b.valor_centavos} for b in colaborador.beneficios],
+        "dia_pagamento": colaborador.dia_pagamento,
+        # Data de negócio como texto AAAA-MM-DD, como a do lançamento.
+        "admissao": colaborador.admissao.isoformat() if colaborador.admissao else None,
+        "ativo": colaborador.ativo,
+        "criado_em": colaborador.criado_em,
+    }
+
+
+def _para_colaborador(documento: dict) -> Colaborador:
+    return Colaborador(
+        id=str(documento["_id"]),
+        espaco_id=documento["espaco_id"],
+        nome=documento["nome"],
+        vinculo=Vinculo(documento["vinculo"]),
+        cargo=documento.get("cargo"),
+        salario_centavos=documento["salario_centavos"],
+        beneficios=[Beneficio(b["nome"], b["valor_centavos"]) for b in documento.get("beneficios", [])],
+        dia_pagamento=documento["dia_pagamento"],
+        admissao=date.fromisoformat(documento["admissao"]) if documento.get("admissao") else None,
+        ativo=documento["ativo"],
+        criado_em=documento["criado_em"],
+    )
+
+
+_PARA_DOCUMENTO = {
+    Cadastro.SOCIOS: _documento_do_socio,
+    Cadastro.TRIBUTOS: _documento_do_tributo,
+    Cadastro.COLABORADORES: _documento_do_colaborador,
+}
+_DE_DOCUMENTO = {
+    Cadastro.SOCIOS: _para_socio,
+    Cadastro.TRIBUTOS: _para_tributo,
+    Cadastro.COLABORADORES: _para_colaborador,
+}
 
 
 def _campos_editaveis(lancamento: Lancamento) -> dict:

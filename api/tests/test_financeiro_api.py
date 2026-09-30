@@ -351,7 +351,15 @@ def test_categoria_nova_pode_ser_renomeada_e_desativada_mas_nao_muda_de_tipo(ana
 
     assert criada.status_code == 201
     assert criada.headers["Location"].endswith(f"{ana.base}/categorias/{id}")
-    assert renomeada.json() == {"id": id, "nome": "Animais", "tipo": "DESPESA", "cor": "saude", "ativa": False}
+    assert renomeada.json() == {
+        "id": id,
+        "nome": "Animais",
+        "tipo": "DESPESA",
+        "cor": "saude",
+        "ativa": False,
+        "classe_de_custo": None,
+        "funcao": None,
+    }
     assert mudando_tipo.status_code == 400
     assert mudando_tipo.json()["campos"] == {"tipo": "Campo não permitido."}
 

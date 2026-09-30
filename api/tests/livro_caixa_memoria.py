@@ -1,8 +1,8 @@
 """Mesmo contrato do LivroCaixaMongo, guardando tudo em dicionários.
 
 Reproduz as garantias que no MongoDB vêm dos índices únicos: um espaço
-pessoal por pessoa, um estorno por lançamento e uma chave de importação por
-espaço.
+pessoal por pessoa, um estorno por lançamento, uma chave de importação por
+espaço e uma origem (tributo ou folha da competência) por espaço.
 """
 
 from copy import deepcopy
@@ -13,7 +13,13 @@ from bson import ObjectId
 from app.erros import ErroConflito
 from app.financeiro.modelos import Parte
 from app.financeiro.regras import chave_da_pessoa
-from app.financeiro.repositorio import MENSAGEM_JA_ESTORNADO, EspacoPessoalJaExiste, LancamentoJaImportado
+from app.financeiro.repositorio import (
+    MENSAGEM_JA_ESTORNADO,
+    Cadastro,
+    EspacoPessoalJaExiste,
+    LancamentoJaGerado,
+    LancamentoJaImportado,
+)
 
 
 def _da_pessoa(lancamento, pessoa):
@@ -29,6 +35,7 @@ class LivroCaixaMemoria:
         self.contas = {}
         self.categorias = {}
         self.lancamentos = {}
+        self.cadastros = {cadastro: {} for cadastro in Cadastro}
 
     # --- Espaços ---
 
@@ -65,6 +72,8 @@ class LivroCaixaMemoria:
         if id not in self.espacos:
             return False
         self.categorias = {chave: c for chave, c in self.categorias.items() if c.espaco_id != id}
+        for cadastro, itens in self.cadastros.items():
+            self.cadastros[cadastro] = {chave: item for chave, item in itens.items() if item.espaco_id != id}
         del self.espacos[id]
         return True
 
@@ -150,6 +159,10 @@ class LivroCaixaMemoria:
             lancamento.espaco_id, [lancamento.chave_importacao]
         ):
             raise LancamentoJaImportado()
+        if lancamento.origem and any(
+            l.espaco_id == lancamento.espaco_id and l.origem == lancamento.origem for l in self.lancamentos.values()
+        ):
+            raise LancamentoJaGerado()
         lancamento.id = str(ObjectId())
         self.lancamentos[lancamento.id] = replace(lancamento, estornado_por=None)
         return lancamento
@@ -201,6 +214,39 @@ class LivroCaixaMemoria:
         do_espaco = [l for l in self.lancamentos.values() if l.espaco_id == espaco_id]
         nas_divisoes = {parte.pessoa for l in do_espaco for parte in l.divisao}
         return list(nas_divisoes | {l.responsavel for l in do_espaco if l.responsavel})
+
+    def listar_lancamentos_de_origem(self, espaco_id, tipos):
+        gerados = [
+            l for l in self.lancamentos.values() if l.espaco_id == espaco_id and l.origem and l.origem.tipo in tipos
+        ]
+        gerados.sort(key=lambda l: (l.origem.competencia, l.data), reverse=True)
+        return [replace(l) for l in gerados]
+
+    # --- Cadastros da empresa ---
+
+    def listar_cadastros(self, cadastro, espaco_id):
+        itens = [item for item in self.cadastros[cadastro].values() if item.espaco_id == espaco_id]
+        return [deepcopy(item) for item in sorted(itens, key=lambda item: item.criado_em)]
+
+    def buscar_cadastro(self, cadastro, espaco_id, id):
+        item = self.cadastros[cadastro].get(id)
+        return deepcopy(item) if item and item.espaco_id == espaco_id else None
+
+    def inserir_cadastro(self, cadastro, entidade):
+        entidade.id = str(ObjectId())
+        self.cadastros[cadastro][entidade.id] = deepcopy(entidade)
+        return entidade
+
+    def atualizar_cadastro(self, cadastro, entidade):
+        self.cadastros[cadastro][entidade.id] = deepcopy(entidade)
+        return entidade
+
+    def excluir_cadastro(self, cadastro, espaco_id, id):
+        item = self.cadastros[cadastro].get(id)
+        if not item or item.espaco_id != espaco_id:
+            return False
+        del self.cadastros[cadastro][id]
+        return True
 
     def renomear_pessoa(self, espaco_id, antigo, novo):
         chave = chave_da_pessoa(antigo)

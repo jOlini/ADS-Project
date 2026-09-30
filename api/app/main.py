@@ -23,6 +23,7 @@ from app.emails.rotas import rotas_da_conta
 from app.erros import registrar_tratadores
 from app.financeiro.repositorio import LivroCaixaMongo, RepositorioLivroCaixa
 from app.financeiro.rotas import rotas_livro_caixa
+from app.financeiro.rotas_empresa import rotas_empresa
 from app.financeiro.rotas_familia import rotas_familia
 from app.financeiro.rotas_relatorios import rotas_relatorios
 from app.firebase import VerificadorFirebase
@@ -151,6 +152,7 @@ def criar_app(
     app.include_router(rotas_livro_caixa)
     app.include_router(rotas_relatorios)
     app.include_router(rotas_familia)
+    app.include_router(rotas_empresa)
     app.include_router(rotas_da_conta)
     if not producao:
         app.include_router(rotas_documentacao)

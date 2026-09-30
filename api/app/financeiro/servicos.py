@@ -147,12 +147,15 @@ class ServicoLivroCaixa:
             raise ErroPermissao(SO_O_DONO)
 
     def _criar_categorias_iniciais(self, espaco: Espaco, instante: datetime) -> None:
-        self.repositorio.inserir_categorias(
-            [
-                Categoria(espaco.id, nome, tipo, cor, ativa=True, criada_em=instante)
-                for nome, tipo, cor in regras.categorias_iniciais(espaco.tipo)
-            ]
-        )
+        categorias = []
+        for nome, tipo, cor in regras.categorias_iniciais(espaco.tipo):
+            # Na empresa, as iniciais já nascem com a classe de custo e a
+            # função na gestão (aporte, folha, tributo).
+            classe, funcao = regras.gestao_da_categoria(espaco.tipo, nome)
+            categorias.append(
+                Categoria(espaco.id, nome, tipo, cor, True, instante, classe_de_custo=classe, funcao=funcao)
+            )
+        self.repositorio.inserir_categorias(categorias)
 
     def _criar_espaco_pessoal(self, uid: str) -> None:
         instante = agora()

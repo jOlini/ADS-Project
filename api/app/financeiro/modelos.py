@@ -140,6 +140,42 @@ class SituacaoDaLinha(StrEnum):
     INVALIDA = "INVALIDA"  # a linha não virou lançamento (motivo em "erro")
 
 
+class ClasseDeCusto(StrEnum):
+    """Como uma despesa da empresa entra na aba Custos (e na margem de lucro)."""
+
+    # Cresce com as vendas: fornecedores, insumos, impostos sobre a venda.
+    VARIAVEL = "VARIAVEL"
+    # Não muda com as vendas: aluguel, folha, pró-labore, contador.
+    FIXO = "FIXO"
+    # O dia a dia da operação: marketing, tarifas, manutenção.
+    OPERACIONAL = "OPERACIONAL"
+    # Não é custo: distribuição de lucros aos sócios.
+    FORA = "FORA"
+
+
+class FuncaoDaCategoria(StrEnum):
+    """Categoria que a gestão da empresa usa sozinha (aporte do sócio, folha,
+    tributo): é pela função, e não pelo nome, que ela é achada, então renomear
+    a categoria não quebra nada."""
+
+    APORTE = "APORTE"
+    DISTRIBUICAO = "DISTRIBUICAO"
+    PRO_LABORE = "PRO_LABORE"
+    SALARIOS = "SALARIOS"
+    BENEFICIOS = "BENEFICIOS"
+    PRESTADORES = "PRESTADORES"
+    ENCARGOS = "ENCARGOS"
+    IMPOSTOS = "IMPOSTOS"
+
+
+class TipoDeOrigem(StrEnum):
+    """O que gerou um lançamento da gestão da empresa."""
+
+    TRIBUTO = "TRIBUTO"  # pagamento de um tributo na competência
+    SALARIO = "SALARIO"  # salário, pró-labore ou serviço PJ da folha
+    BENEFICIOS = "BENEFICIOS"  # benefícios da folha (VR, VT, plano de saúde)
+
+
 class CorCategoria(StrEnum):
     """Mesmos nomes das variáveis --cat-* do CSS da área do cliente."""
 
@@ -245,6 +281,10 @@ class Categoria:
     cor: CorCategoria
     ativa: bool
     criada_em: datetime
+    # Só nas despesas da empresa: a classe na aba Custos (None = a tela
+    # sugere pelo nome) e a função na gestão (aporte, folha, tributo).
+    classe_de_custo: ClasseDeCusto | None = None
+    funcao: FuncaoDaCategoria | None = None
     id: str | None = None
 
 
@@ -256,6 +296,18 @@ class Partida:
     valor_centavos: int
     conta_id: str | None = None
     categoria_id: str | None = None
+
+
+@dataclass(frozen=True)
+class Origem:
+    """Lançamento gerado pela gestão da empresa: o pagamento de um tributo ou a
+    folha de uma pessoa, numa competência (AAAA-MM). Único no espaço: a mesma
+    folha ou o mesmo imposto não entram duas vezes. Excluir o lançamento
+    libera a competência para lançar de novo."""
+
+    tipo: TipoDeOrigem
+    id: str
+    competencia: str
 
 
 @dataclass(frozen=True)
@@ -304,6 +356,7 @@ class Lancamento:
     # chega, mesmo depois de a pessoa renomear a compra.
     chave_parcelamento: str | None = None
     meio: MeioDePagamento | None = None
+    origem: Origem | None = None
     id: str | None = None
     # Calculado na leitura (id do estorno deste lançamento); não é gravado.
     estornado_por: str | None = field(default=None, compare=False)
@@ -693,6 +746,10 @@ class CategoriaResposta(BaseModel):
     tipo: TipoCategoria
     cor: CorCategoria
     ativa: bool
+    # Só na empresa (null no pessoal): a classe na aba Custos, se a pessoa
+    # escolheu, e a função da categoria na gestão.
+    classe_de_custo: ClasseDeCusto | None = None
+    funcao: FuncaoDaCategoria | None = None
 
     @classmethod
     def de(cls, categoria: Categoria) -> "CategoriaResposta":
@@ -702,6 +759,8 @@ class CategoriaResposta(BaseModel):
             tipo=categoria.tipo,
             cor=categoria.cor,
             ativa=categoria.ativa,
+            classe_de_custo=categoria.classe_de_custo,
+            funcao=categoria.funcao,
         )
 
 
@@ -714,6 +773,12 @@ class PartidaResposta(BaseModel):
 class ParteResposta(BaseModel):
     pessoa: str
     valor_centavos: int
+
+
+class OrigemResposta(BaseModel):
+    tipo: TipoDeOrigem
+    id: str
+    competencia: str
 
 
 class LancamentoResposta(BaseModel):
@@ -734,6 +799,8 @@ class LancamentoResposta(BaseModel):
     parcela: int | None
     parcelas: int | None
     meio: MeioDePagamento | None
+    # Tributo pago ou folha lançada pela gestão da empresa; null nos outros.
+    origem: OrigemResposta | None = None
     criado_em: datetime
 
     @classmethod
@@ -763,6 +830,7 @@ class LancamentoResposta(BaseModel):
             parcela=lancamento.parcela,
             parcelas=lancamento.parcelas,
             meio=lancamento.meio,
+            origem=OrigemResposta(**vars(lancamento.origem)) if lancamento.origem else None,
             criado_em=lancamento.criado_em,
         )
 
