@@ -266,6 +266,40 @@ export function importarExtrato(espacoId, importacao) {
   return chamar(doEspaco(espacoId, '/importacoes'), { metodo: 'POST', corpo: importacao });
 }
 
+// ------------------------------------------------------- Gestão da empresa
+// Só nas empresas do espaço empresarial (no pessoal, a API responde 404).
+// Tudo o que mexe em dinheiro vira lançamento comum do livro-caixa.
+
+// { [categoria_id]: 'VARIAVEL' | 'FIXO' | 'OPERACIONAL' | 'FORA' | null }:
+// grava a classe de cada despesa na aba Custos. Devolve as categorias.
+export function classificarCustos(espacoId, classes) {
+  return chamar(doEspaco(espacoId, '/custos/classes'), { metodo: 'PUT', corpo: { classes } });
+}
+
+// Quadro societário: [{ id, nome, participacao_centesimos }] (5000 = 50%).
+export function listarSocios(espacoId) {
+  return chamar(doEspaco(espacoId, '/socios'));
+}
+
+export function incluirSocio(espacoId, socio) {
+  return chamar(doEspaco(espacoId, '/socios'), { metodo: 'POST', corpo: socio });
+}
+
+// Com o nome novo, os lançamentos do sócio passam para ele.
+export function editarSocio(espacoId, socioId, socio) {
+  return chamar(doEspaco(espacoId, `/socios/${encodeURIComponent(socioId)}`), { metodo: 'PUT', corpo: socio });
+}
+
+export function removerSocio(espacoId, socioId) {
+  return chamar(doEspaco(espacoId, `/socios/${encodeURIComponent(socioId)}`), { metodo: 'DELETE' });
+}
+
+// { tipo: 'APORTE' | 'DISTRIBUICAO' | 'PRO_LABORE', conta_id, valor_centavos,
+// data, descricao? }: vira um lançamento com o sócio como responsável.
+export function lancarMovimentoDoSocio(espacoId, socioId, movimento) {
+  return chamar(doEspaco(espacoId, `/socios/${encodeURIComponent(socioId)}/movimentos`), { metodo: 'POST', corpo: movimento });
+}
+
 // Relatórios da release 0.3 (DOCS_API.md, parte 7). Período em meses
 // ({ de, ate } como 'AAAA-MM', opcionais): sem ele, a API usa os 12 meses que
 // terminam no mês de hoje. membro (Modo Família): o id de uma pessoa da

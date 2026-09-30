@@ -17,21 +17,27 @@ const {
   MENSAGEM_SESSAO_ENCERRADA,
   apiConfigurada,
   atualizarEmpresa,
+  classificarCustos,
   criarEmpresa,
   editarPessoa,
+  editarSocio,
   estornar,
   excluirEspaco,
   estruturaDoExtrato,
   excluir,
   incluirPessoa,
+  incluirSocio,
   lancar,
+  lancarMovimentoDoSocio,
   ligarFamilia,
   listarEspacos,
   listarLancamentos,
   listarPessoas,
+  listarSocios,
   relatorioCategorias,
   relatorioMensal,
   removerPessoa,
+  removerSocio,
 } = await import('./livroCaixa');
 
 function resposta(status, corpo) {
@@ -206,6 +212,31 @@ describe('API do livro-caixa', () => {
 
     expect(fetch.mock.calls[0][0]).toBe('http://api.teste/espacos/p1/relatorios/mensal?de=2026-09&ate=2026-09&membro=titular');
     expect(fetch.mock.calls[1][0]).toBe('http://api.teste/espacos/p1/relatorios/categorias?membro=l1');
+  });
+
+  it('grava as classes de custo e cuida dos sócios da empresa', async () => {
+    fetch.mockResolvedValue(resposta(200, {}));
+
+    await classificarCustos('e1', { c1: 'FIXO', c2: null });
+    await incluirSocio('e1', { nome: ' <Ana> ', participacao_centesimos: 6000 });
+    await editarSocio('e1', 's/1', { nome: 'Ana', participacao_centesimos: 5000 });
+    await lancarMovimentoDoSocio('e1', 's1', { tipo: 'APORTE', conta_id: 'c', valor_centavos: 100, data: '2026-09-01' });
+    await removerSocio('e1', 's1');
+    await listarSocios('e1');
+
+    const chamadas = fetch.mock.calls.map(([url, opcoes]) => [url, opcoes.method, opcoes.body && JSON.parse(opcoes.body)]);
+    expect(chamadas).toEqual([
+      ['http://api.teste/espacos/e1/custos/classes', 'PUT', { classes: { c1: 'FIXO', c2: null } }],
+      ['http://api.teste/espacos/e1/socios', 'POST', { nome: 'Ana', participacao_centesimos: 6000 }],
+      ['http://api.teste/espacos/e1/socios/s%2F1', 'PUT', { nome: 'Ana', participacao_centesimos: 5000 }],
+      [
+        'http://api.teste/espacos/e1/socios/s1/movimentos',
+        'POST',
+        { tipo: 'APORTE', conta_id: 'c', valor_centavos: 100, data: '2026-09-01' },
+      ],
+      ['http://api.teste/espacos/e1/socios/s1', 'DELETE', undefined],
+      ['http://api.teste/espacos/e1/socios', 'GET', undefined],
+    ]);
   });
 
   it('liga a família e cuida das pessoas, com o nome limpo antes de sair', async () => {

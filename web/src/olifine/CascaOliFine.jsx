@@ -28,6 +28,8 @@ const DA_EMPRESA = [
   { grupo: 'Gestão' },
   { para: '/empresa/fluxo', icone: 'transferencia', rotulo: 'Fluxo de caixa', versao: '0.3' },
   { para: '/empresa/dre', icone: 'documento', rotulo: 'DRE', versao: '0.3' },
+  { para: '/empresa/custos', icone: 'rosca', rotulo: 'Custos', versao: '0.3' },
+  { para: '/empresa/sociedade', icone: 'pessoas', rotulo: 'Sociedade & aportes', versao: '0.3' },
 ];
 
 // A família, no fim do menu do espaço pessoal, só com o Modo Família ligado.
