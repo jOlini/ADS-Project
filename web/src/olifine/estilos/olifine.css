@@ -399,6 +399,55 @@ button.of-avatar-botao:hover:not(:disabled) {
   margin-inline: auto;
 }
 
+/* "← Voltar" no alto de toda tela fora da Visão geral (regras/voltar.ts):
+   à vista, com borda, e alvo de 44 px de altura, bem maior que o texto. A
+   seta anda um passo para trás ao passar o mouse. */
+.of-voltar {
+  display: inline-flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  justify-self: start;
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 var(--espaco-9) 0 var(--espaco-7);
+  border: var(--borda);
+  border-radius: var(--raio-pilula);
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+  color: var(--texto);
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+  text-decoration: none;
+  transition:
+    background-color var(--transicao),
+    border-color var(--transicao);
+}
+
+.of-voltar > span {
+  font-size: 1.125rem;
+  line-height: 1;
+  transition: transform var(--tempo) var(--curva);
+}
+
+.of-voltar:hover {
+  border-color: var(--linha-forte);
+  background: var(--fundo-ao-passar);
+}
+
+.of-voltar:hover > span {
+  transform: translateX(-3px);
+}
+
+.of-voltar:focus-visible {
+  outline: var(--espessura-do-foco) solid var(--of-verde);
+  outline-offset: var(--afastamento-do-foco);
+}
+
+/* Na tela do extrato a área é uma coluna flex, sem o gap da grade. */
+.of-app:has(.pagina-do-extrato) .of-voltar {
+  margin-bottom: var(--espaco-6);
+}
+
 /* Lançamentos em tela cheia: a coluna vira a altura da janela e só a lista
    rola. */
 .of-app:has(.pagina-do-extrato) {
@@ -1184,6 +1233,99 @@ button.of-espaco-excluir .icone {
   z-index: 1;
 }
 
+/* Metas: a contagem e a barra geral à esquerda; no card largo, as metas
+   mais adiantadas à direita, separadas por um fio. Sem vão embaixo: a barra
+   geral e a lista ocupam a altura que sobrava. */
+.of-kpi-metas {
+  container: metas / inline-size;
+  align-content: stretch;
+}
+
+.of-kpi-metas-corpo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--espaco-10);
+  min-height: 0;
+}
+
+.of-kpi-metas-resumo {
+  display: grid;
+  gap: var(--espaco-3);
+  align-content: start;
+  min-width: 0;
+}
+
+.of-kpi-metas .of-kpi-valor {
+  margin-top: var(--espaco-2);
+}
+
+.of-kpi-metas-geral {
+  display: grid;
+  gap: var(--espaco-2);
+  min-width: 0;
+}
+
+.of-kpi-metas-geral small {
+  overflow: hidden;
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.of-kpi-metas-lista {
+  display: none;
+  align-content: center;
+  gap: var(--espaco-5);
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 0 var(--espaco-10);
+  border-left: var(--borda);
+  list-style: none;
+}
+
+.of-kpi-metas-lista li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--espaco-2) var(--espaco-4);
+  align-items: baseline;
+  font-size: var(--fonte-apoio);
+}
+
+.of-kpi-metas-nome {
+  overflow: hidden;
+  font-weight: var(--peso-semi);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.of-kpi-metas-lista b {
+  color: var(--suave);
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-kpi-metas-lista .of-progresso {
+  grid-column: 1 / -1;
+}
+
+.of-kpi-metas-lista li.of-kpi-metas-dica {
+  display: block;
+  color: var(--suave);
+  line-height: 1.45;
+}
+
+@container metas (min-width: 440px) {
+  .of-kpi-metas-corpo {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  }
+
+  .of-kpi-metas-lista {
+    display: grid;
+  }
+}
+
 /* ------------------------------------------------ Visão geral: altura fixa */
 
 /* Cada card da Visão geral tem altura fixa e sempre as mesmas partes (com ou
@@ -1404,8 +1546,9 @@ button.of-dica-botao:focus-visible {
    valor em destaque, a leitura numa frase e os três números de apoio
    (patrimônio total, investido, fechamento). O estado troca só o acento:
    verde no positivo, neutro quando sobra pouco ou nada e vermelho quando vai
-   faltar dinheiro. Linhas: topo, valor, leitura (o espaço que sobra) e
-   números de apoio presos embaixo. */
+   faltar dinheiro. Linhas: topo, valor, leitura (com a barra do que já tem
+   destino) e os números de apoio, que esticam até o pé do card: o espaço que
+   sobra vai para eles, e não vira um vão entre a leitura e os números. */
 .of-consolidado {
   --acento: var(--marca);
   --acento-suave: var(--of-menta);
@@ -1414,7 +1557,7 @@ button.of-dica-botao:focus-visible {
   container: consolidado / inline-size;
   grid-column: span 2;
   grid-row: span 2;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: var(--espaco-4);
   align-content: stretch;
 }
@@ -1447,9 +1590,8 @@ button.of-dica-botao:focus-visible {
   display: grid;
   gap: var(--espaco-2);
   min-width: 0;
-  max-height: 100%;
   overflow: hidden;
-  padding: var(--espaco-5) var(--espaco-6);
+  padding: var(--espaco-4) var(--espaco-6);
   border-left: 3px solid var(--acento);
   border-radius: var(--raio-pequeno);
   background: var(--acento-suave);
@@ -1477,19 +1619,48 @@ button.of-dica-botao:focus-visible {
   line-clamp: 3;
 }
 
-/* Os três números de apoio, lado a lado, presos ao pé do card. */
+/* A barra do que já tem destino, numa linha com o número ao lado. */
+.of-saldo-livre-destino {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  min-width: 0;
+  margin-top: var(--espaco-1);
+}
+
+.of-saldo-livre-destino .of-conta-do-mes-barra {
+  flex: 1;
+  max-width: 220px;
+  height: 6px;
+  background: color-mix(in srgb, var(--superficie) 70%, transparent);
+}
+
+.of-saldo-livre-destino small {
+  overflow: hidden;
+  color: var(--sobre-acento);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Os três números de apoio, lado a lado, esticados até o pé do card (cada
+   caixa com o conteúdo centrado na altura que sobrou). */
 .of-consolidado-metricas {
-  align-self: end;
+  align-self: stretch;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--espaco-5);
+  grid-auto-rows: minmax(0, 1fr);
+  gap: var(--espaco-4);
+  min-height: 0;
   margin: 0;
 }
 
 .of-metrica {
   display: grid;
   gap: var(--espaco-1);
-  align-content: start;
+  align-content: center;
   min-width: 0;
   padding: var(--espaco-5) var(--espaco-6);
   border-radius: var(--raio);
@@ -1672,240 +1843,251 @@ button.of-dica-botao:focus-visible {
 
 /* ------------------------------------------------------ Saldo por conta */
 
-/* Disponível (o dinheiro para usar) e investido (o patrimônio aplicado), lado a
-   lado; a barra divide o patrimônio nas duas cores e cada conta mostra a parte
-   dela no grupo. Verde para o que está à mão, esmeralda para o aplicado. */
+/* Cards no padrão dos KPIs do topo: os dois totais (disponível e investido)
+   abrem a fileira, depois uma conta por card. Verde para o que está à mão,
+   esmeralda para o aplicado; a cor fica no ícone e no fio de cima dos
+   totais. Sem gráfico: a parte de cada conta vem escrita. */
 .of-painel-saldos {
   /* Esmeralda puxada para a cor do texto: escura no tema claro, clara o
-     bastante no escuro para a barra do investido não sumir no fundo. */
+     bastante no escuro para o ícone do investido não sumir no fundo. */
   --cor-disponivel: var(--of-verde);
   --cor-investido: color-mix(in srgb, var(--of-esmeralda) 70%, var(--texto));
   grid-column: 1 / -1;
+  gap: var(--espaco-7);
 }
 
-/* Resumo e divisão à esquerda, a lista das contas à direita; um embaixo do
-   outro quando o painel fica estreito. */
-.of-saldos-corpo {
+.of-saldos-cards {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  gap: var(--espaco-12);
-  align-items: start;
-}
-
-.of-saldos-lado {
-  display: grid;
-  gap: var(--espaco-8);
-}
-
-.of-saldos-resumo {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-/* Os dois totais lado a lado, separados por um fio, sem caixa dentro do
-   painel (o painel já é o cartão). */
-.of-saldo-grupo {
-  display: grid;
-  gap: var(--espaco-2);
-  align-content: start;
-  min-width: 0;
-}
-
-.of-saldo-grupo + .of-saldo-grupo {
-  padding-left: var(--espaco-10);
-  border-left: var(--borda);
-}
-
-.of-saldo-grupo-titulo {
-  display: flex;
-  gap: var(--espaco-3);
-  align-items: center;
-  color: var(--suave);
-  font-size: var(--fonte-apoio);
-  font-weight: var(--peso-semi);
-}
-
-.of-saldo-grupo.disponivel .of-saldo-grupo-titulo .icone {
-  color: var(--cor-disponivel);
-}
-
-.of-saldo-grupo.investido .of-saldo-grupo-titulo .icone {
-  color: var(--cor-investido);
-}
-
-.of-saldo-grupo b {
-  overflow-wrap: anywhere;
-  font-size: 1.375rem;
-  font-weight: var(--peso-forte);
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-  font-variant-numeric: tabular-nums;
-}
-
-.of-saldo-grupo small {
-  color: var(--suave);
-  font-size: var(--fonte-apoio);
-}
-
-.of-saldos-divisao {
-  display: block;
-  height: 8px;
-  border-radius: var(--raio-pilula);
-  background: linear-gradient(
-    90deg,
-    var(--cor-disponivel) 0 calc(100% - var(--investido)),
-    var(--cor-investido) calc(100% - var(--investido)) 100%
-  );
-}
-
-.of-saldos-lista {
-  display: grid;
-  gap: var(--espaco-4);
-}
-
-.of-saldos-lista-titulo {
-  font-size: var(--fonte-rotulo);
-  font-weight: var(--peso-semi);
-}
-
-.of-saldos-lista ul {
-  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
   gap: var(--espaco-6);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.of-saldos-lista li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--espaco-2) var(--espaco-6);
-  align-items: baseline;
+.of-saldo-card {
+  --cor-do-grupo: var(--cor-disponivel);
+  gap: var(--espaco-2);
+  min-width: 0;
+  padding: var(--espaco-7) var(--espaco-8);
+  background: color-mix(in srgb, var(--lateral) 40%, var(--superficie));
+  box-shadow: none;
 }
 
-.of-saldos-nome {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--espaco-4);
-  align-items: baseline;
+.of-saldo-card.investido {
+  --cor-do-grupo: var(--cor-investido);
+}
+
+/* Os totais: fio da cor do grupo no alto e o valor um pouco maior. */
+.of-saldo-card.total {
+  background: var(--superficie);
+  box-shadow: inset 0 3px 0 var(--cor-do-grupo);
+}
+
+.of-saldo-card .of-kpi-rotulo {
+  gap: var(--espaco-4);
   min-width: 0;
 }
 
-.of-saldos-nome b {
+.of-saldo-card .of-kpi-icone {
+  width: 30px;
+  height: 30px;
+  background: color-mix(in srgb, var(--cor-do-grupo) 16%, var(--superficie));
+  color: var(--cor-do-grupo);
+}
+
+.of-saldo-card-nome {
+  min-width: 0;
   overflow: hidden;
+  color: var(--texto);
   font-weight: var(--peso-semi);
+  white-space: nowrap;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.of-saldos-nome small {
+.of-saldo-card-tipo {
+  flex: none;
+  padding: 1px var(--espaco-4);
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
   color: var(--suave);
-  font-size: var(--fonte-apoio);
-}
-
-.of-saldos-valor {
+  font-size: var(--fonte-micro);
   font-weight: var(--peso-semi);
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.of-saldos-valor.negativo {
+.of-saldo-card .of-kpi-valor {
+  margin-top: var(--espaco-2);
+  overflow: hidden;
+  font-size: 1.25rem;
+  text-overflow: ellipsis;
+}
+
+.of-saldo-card.total .of-kpi-valor {
+  font-size: 1.4375rem;
+}
+
+.of-saldo-card .of-kpi-valor.negativo {
   color: var(--of-saida);
 }
 
-.of-saldos-lista .of-progresso {
-  grid-column: 1 / -1;
+.of-saldo-card .of-kpi-origem {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.of-progresso.investido i {
-  background: var(--cor-investido);
-}
-
-@container (max-width: 720px) {
-  .of-saldos-corpo {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@container (max-width: 380px) {
-  .of-saldos-resumo {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--espaco-8);
-  }
-
-  .of-saldo-grupo + .of-saldo-grupo {
-    padding-left: 0;
-    border-left: 0;
-  }
+.of-saldo-card .of-kpi-rodape {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 /* ------------------------------------------------------ Cartões de crédito */
 
-/* Linha inteira da grade: o compromisso à esquerda e os cartões ao lado. */
+/* Linha inteira da grade: a faixa do total das faturas em cima (o número que
+   manda), as miniaturas dos cartões embaixo, cada uma com a legenda. */
 .of-painel-cartoes {
   grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  column-gap: var(--espaco-12);
+  gap: var(--espaco-8);
 }
 
-.of-painel-cartoes .of-painel-cabecalho {
-  grid-column: 1 / -1;
+.of-faturas-destaque {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--espaco-6) var(--espaco-12);
+  align-items: center;
+  padding: var(--espaco-8) var(--espaco-10);
+  border-radius: var(--raio-grande);
+  background: color-mix(in srgb, var(--of-menta) 45%, var(--superficie));
 }
 
-.of-compromisso {
+.of-faturas-total {
   display: grid;
   gap: var(--espaco-2);
-  align-content: start;
+  min-width: 0;
 }
 
-.of-compromisso span,
-.of-compromisso small {
+.of-faturas-rotulo {
+  display: flex;
+  gap: var(--espaco-3);
+  align-items: center;
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+}
+
+.of-faturas-rotulo button.of-dica-botao {
+  width: 24px;
+  height: 24px;
+}
+
+.of-faturas-total b {
+  font-size: clamp(1.75rem, 1.35rem + 1vw, 2.25rem);
+  font-weight: var(--peso-forte);
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.of-faturas-total small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-faturas-proximo {
+  display: inline-flex;
+  gap: var(--espaco-2);
+  align-items: center;
+  justify-self: start;
+  max-width: 100%;
+  margin-top: var(--espaco-2);
+  padding: 2px var(--espaco-5) 2px var(--espaco-4);
+  overflow: hidden;
+  border-radius: var(--raio-pilula);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.of-faturas-proximo.vencida {
+  background: var(--of-rosa-suave);
+  color: var(--of-sobre-rosa);
+}
+
+.of-faturas-numeros {
+  display: grid;
+  gap: var(--espaco-3);
+  margin: 0;
+}
+
+.of-faturas-numeros div {
+  display: flex;
+  gap: var(--espaco-6);
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: var(--espaco-3);
+  border-bottom: 1px dashed var(--linha);
+}
+
+.of-faturas-numeros div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.of-faturas-numeros dt {
   color: var(--suave);
   font-size: var(--fonte-apoio);
 }
 
-.of-compromisso b {
-  font-size: 1.375rem;
-  font-weight: var(--peso-forte);
-  letter-spacing: var(--letra-titulo);
+.of-faturas-numeros dd {
+  margin: 0;
+  font-weight: var(--peso-semi);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
+/* As miniaturas lado a lado; a legenda embaixo de cada uma leva à tela do
+   cartão (o link cobre a miniatura e a legenda). */
 .of-cartoes {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  align-content: start;
-  gap: var(--espaco-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: var(--espaco-8) var(--espaco-7);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* O nome leva à tela do cartão; o link cobre a linha inteira. */
 .of-cartoes li {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  column-gap: var(--espaco-5);
-  align-items: center;
-  padding: var(--espaco-5) var(--espaco-6);
-  border: var(--borda);
-  border-radius: var(--raio);
+  gap: var(--espaco-4);
+  align-content: start;
+  min-width: 0;
+}
+
+.of-cartoes li .miniatura-do-cartao {
   transition:
-    background-color var(--tempo) var(--curva),
-    border-color var(--tempo) var(--curva);
+    transform var(--tempo-medio) var(--curva-chegada),
+    box-shadow var(--tempo-medio) var(--curva);
 }
 
-.of-cartoes li:hover {
-  background: var(--fundo-ao-passar);
-  border-color: var(--linha-forte);
+.of-cartoes li:hover .miniatura-do-cartao {
+  transform: translateY(var(--elevacao)) rotate(-1deg);
 }
 
-.of-cartoes-pastilha {
-  width: var(--espaco-12);
-  height: var(--espaco-8);
-  border-radius: var(--raio-mini);
-  background: linear-gradient(135deg, var(--cor-da-amostra), color-mix(in srgb, var(--cor-da-amostra) 62%, #000));
+.of-cartoes-legenda {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 var(--espaco-4);
+  align-items: baseline;
+  min-width: 0;
 }
 
 .of-cartoes a {
@@ -1920,8 +2102,8 @@ button.of-dica-botao:focus-visible {
 .of-cartoes a::after {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
+  inset: calc(var(--espaco-3) * -1);
+  border-radius: var(--raio);
 }
 
 .of-cartoes a:focus-visible {
@@ -1934,27 +2116,50 @@ button.of-dica-botao:focus-visible {
 }
 
 .of-cartoes-valor {
-  font-weight: var(--peso-semi);
+  font-weight: var(--peso-forte);
   font-variant-numeric: tabular-nums;
 }
 
-.of-cartoes small {
-  grid-column: 2 / -1;
+/* O uso do limite: a barra fina e o número, na linha de baixo. */
+.of-cartoes-limite {
+  grid-column: 1 / -1;
+  order: 3;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--espaco-4);
+  align-items: center;
+  margin-top: var(--espaco-2);
   color: var(--suave);
-  font-size: var(--fonte-apoio);
+  font-size: var(--fonte-micro);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-@media (max-width: 900px) {
-  .of-painel-cartoes {
+.of-cartoes small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@container (max-width: 620px) {
+  .of-faturas-destaque {
     grid-template-columns: minmax(0, 1fr);
+    padding: var(--espaco-7) var(--espaco-8);
   }
 }
 
 /* ------------------------------------------------------ Evolução do saldo */
 
+/* Minhas metas: com a altura do conteúdo, sem esticar até a das últimas
+   transações ao lado (o convite para regar vem logo depois da lista, e o
+   card não fica com um vão no meio). */
 .of-painel-metas {
   display: flex;
   flex-direction: column;
+  align-self: start;
 }
 
 .of-painel-grafico {
@@ -2394,7 +2599,6 @@ button.of-dica-botao:focus-visible {
   grid-template-columns: 36px minmax(0, 1fr) auto;
   gap: var(--espaco-6);
   align-items: center;
-  margin-top: auto;
   padding: var(--espaco-6) var(--espaco-7);
   border-radius: var(--raio);
   background: color-mix(in srgb, var(--of-menta) 60%, var(--superficie));
@@ -3473,8 +3677,11 @@ button.of-chip:hover:not(:disabled) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* Duas colunas: o saldo livre à esquerda, nas duas linhas, e Receitas e
+     Despesas uma embaixo da outra à direita. Largura inteira, o card ficava
+     com um vão entre a leitura e os números. */
   .of-consolidado {
-    grid-column: 1 / -1;
+    grid-column: span 1;
   }
 
   .of-grade,
@@ -3556,8 +3763,17 @@ button.of-chip:hover:not(:disabled) {
   }
 
   .of-kpi-saldo .of-saldo-livre-selo,
-  .of-kpi-saldo .of-saldo-livre-leitura p {
+  .of-kpi-saldo .of-saldo-livre-leitura p,
+  .of-kpi-saldo .of-saldo-livre-destino small {
     color: #ffffff;
+  }
+
+  .of-kpi-saldo .of-saldo-livre-destino .of-conta-do-mes-barra {
+    background: rgb(255 255 255 / 0.18);
+  }
+
+  .of-kpi-saldo .of-saldo-livre-destino .of-conta-do-mes-barra i {
+    background: #ffffff;
   }
 
   /* No negativo, o alerta vermelho claro se destaca do campo esmeralda. */
@@ -3566,8 +3782,17 @@ button.of-chip:hover:not(:disabled) {
     background: #feeae9;
   }
 
-  .of-kpi-saldo.negativo .of-saldo-livre-selo {
+  .of-kpi-saldo.negativo .of-saldo-livre-selo,
+  .of-kpi-saldo.negativo .of-saldo-livre-destino small {
     color: #963a35;
+  }
+
+  .of-kpi-saldo.negativo .of-saldo-livre-destino .of-conta-do-mes-barra {
+    background: rgb(150 58 53 / 0.16);
+  }
+
+  .of-kpi-saldo.negativo .of-saldo-livre-destino .of-conta-do-mes-barra i {
+    background: #c2413a;
   }
 
   .of-kpi-saldo.negativo .of-saldo-livre-leitura p {
@@ -3613,7 +3838,7 @@ button.of-chip:hover:not(:disabled) {
      atalhos e os números de apoio um embaixo do outro. */
   .of-kpis-da-visao {
     --altura-do-kpi: 10.75rem;
-    --altura-do-saldo: 31.5rem;
+    --altura-do-saldo: 33rem;
     grid-auto-rows: auto;
   }
 
@@ -3669,7 +3894,7 @@ button.of-chip:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr) auto;
     column-gap: var(--espaco-6);
     align-items: center;
-    padding: var(--espaco-3) var(--espaco-6);
+    padding: var(--espaco-2) var(--espaco-6);
   }
 
   .of-saldo-livre-leitura p {

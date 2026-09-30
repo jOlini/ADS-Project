@@ -5,7 +5,9 @@
  * sobe um passo curto ao passar o mouse e volta ao apertar; o que é escolhido
  * troca de cor em 160 a 220ms; o que abre (diálogo, lista, menu, calendário)
  * chega do ponto de onde nasceu e sai mais depressa do que chegou. Nada se
- * move sozinho, a não ser o brilho do esqueleto enquanto os dados chegam.
+ * move sozinho, a não ser o brilho do esqueleto enquanto os dados chegam e a
+ * borda viva das faixas de destaque (lenta, fina e parada com "reduzir
+ * movimento").
  *
  * Carregado por último (main.jsx): as transições daqui somam cor, sombra e
  * deslocamento às dos componentes. Tempos e curvas em estilos/tokens.css.
@@ -477,6 +479,57 @@ button.item-do-menu,
     stroke var(--tempo-longo) var(--curva) !important;
 }
 
+/* ------------------------------------------------ Borda viva */
+
+/* Faixas e cards de destaque (o saldo livre, o total das faturas, o convite
+   para regar, o plano Empresarial da landing): um degradê verde corre
+   devagar pela borda, fino, por cima da borda normal. O anel é o ::before
+   com a máscara que deixa só a moldura (padding) à mostra. O ângulo é uma
+   propriedade registrada (@property), a única forma de animar o
+   conic-gradient sem trocar a imagem a cada quadro. */
+@property --angulo-da-borda {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.borda-viva {
+  position: relative;
+}
+
+.borda-viva::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--angulo-da-borda),
+    transparent 0% 18%,
+    color-mix(in srgb, var(--of-verde-vivo) 90%, transparent) 30%,
+    var(--of-verde) 38%,
+    transparent 50% 68%,
+    color-mix(in srgb, var(--of-verde-vivo) 55%, transparent) 82%,
+    transparent 92%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  animation: borda-viva 7s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes borda-viva {
+  to {
+    --angulo-da-borda: 360deg;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --elevacao: 0px;
@@ -505,6 +558,11 @@ button.item-do-menu,
   .esqueleto {
     animation: none;
     background-image: none;
+  }
+
+  /* A borda viva para onde está: o degradê fica, sem girar. */
+  .borda-viva::before {
+    animation: none;
   }
 
   :is(button, a, .of-metas-lista button):active:not(:disabled),

@@ -146,9 +146,32 @@ export function planoMensal(meta: Meta, hoje: string): { meses: number; porMes: 
 }
 
 // Números do card "Metas" da Visão geral.
-export function resumoDasMetas(metas: Meta[]): { total: number; concluidas: number; emAndamento: number } {
+export interface ResumoDasMetas {
+  total: number;
+  concluidas: number;
+  emAndamento: number;
+  // Somas de todas as metas, em centavos. O que passou do alvo de uma meta
+  // não conta: a barra geral não enche com o excesso de uma só.
+  guardado: number;
+  alvo: number;
+  // guardado / alvo, de 0 a 100 (arredondado para baixo, como porcentagem()).
+  porcentagem: number;
+}
+
+// Os números do card de Metas da Visão geral: quantas em andamento, quantas
+// concluídas e o progresso de todas juntas.
+export function resumoDasMetas(metas: Meta[]): ResumoDasMetas {
   const concluidas = metas.filter(concluida).length;
-  return { total: metas.length, concluidas, emAndamento: metas.length - concluidas };
+  const alvo = metas.reduce((soma, meta) => soma + Math.max(0, meta.alvo), 0);
+  const juntado = metas.reduce((soma, meta) => soma + Math.min(Math.max(0, meta.alvo), Math.max(0, guardado(meta))), 0);
+  return {
+    total: metas.length,
+    concluidas,
+    emAndamento: metas.length - concluidas,
+    guardado: juntado,
+    alvo,
+    porcentagem: alvo > 0 ? Math.floor((juntado / alvo) * 100) : 0,
+  };
 }
 
 // Erros de preenchimento de uma meta nova, por campo. alvo já em centavos

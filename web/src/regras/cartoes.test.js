@@ -6,6 +6,7 @@ import {
   faturasAVencer,
   mesDaReferencia,
   referenciaDoMes,
+  resumoDasFaturas,
   situacaoDoLimite,
   textoDasParcelas,
   textoDoVencimento,
@@ -143,5 +144,50 @@ describe('faturasAVencer', () => {
       { id: 'v2', descricao: 'Fatura Visa', data: '2026-09-05', valor: 60000, vencida: true },
       { id: 'v1', descricao: 'Fatura Cartão Roxo', data: '2026-09-10', valor: 60000, vencida: false },
     ]);
+  });
+});
+
+describe('resumoDasFaturas', () => {
+  const ROXO = { ...CARTAO, fatura_atual: { vencimento: '2026-10-10' }, ativa: true };
+  const VERDE = {
+    ...CARTAO,
+    id: 'v2',
+    nome: 'Cartão Verde',
+    a_pagar_centavos: 0,
+    fatura_atual_centavos: 80000,
+    fatura_atual: { vencimento: '2026-10-05' },
+    usado_centavos: 80000,
+    disponivel_centavos: 120000,
+    parcelamentos_futuros_centavos: 0,
+    ativa: true,
+  };
+
+  it('soma as fechadas a pagar e as abertas no total, com o resto à parte', () => {
+    const resumo = resumoDasFaturas([ROXO, VERDE], '2026-09-30');
+    expect(resumo.total).toBe(60000 + 25000 + 80000);
+    expect(resumo.fechadas).toBe(60000);
+    expect(resumo.abertas).toBe(105000);
+    expect(resumo.futuras).toBe(40000);
+    expect(resumo.usado).toBe(205000);
+    expect(resumo.disponivel).toBe(495000);
+  });
+
+  it('o próximo vencimento é o mais cedo com valor, marcado se já passou', () => {
+    expect(resumoDasFaturas([ROXO, VERDE], '2026-09-30').proximo).toEqual({
+      nome: 'Cartão Roxo',
+      vencimento: '2026-09-10',
+      valor: 60000,
+      vencida: true,
+    });
+    const semFechada = { ...ROXO, a_pagar_centavos: 0 };
+    expect(resumoDasFaturas([semFechada, VERDE], '2026-09-30').proximo).toMatchObject({ nome: 'Cartão Verde', vencida: false });
+  });
+
+  it('crédito na fatura não abate, cartão desativado não soma limite, e sem valor não há vencimento', () => {
+    const credito = { ...VERDE, fatura_atual_centavos: -5000, disponivel_centavos: 90000, ativa: false };
+    const resumo = resumoDasFaturas([credito], '2026-09-30');
+    expect(resumo.total).toBe(0);
+    expect(resumo.disponivel).toBe(0);
+    expect(resumo.proximo).toBeNull();
   });
 });

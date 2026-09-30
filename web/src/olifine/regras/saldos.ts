@@ -62,3 +62,26 @@ export function parteInvestida({ disponivel, investido }: Saldos): number | null
   const base = Math.max(0, disponivel.total) + Math.max(0, investido.total);
   return base > 0 ? Math.round((Math.max(0, investido.total) / base) * 100) : null;
 }
+
+// O que cada tipo de conta é, em poucas palavras, para os cards do saldo por
+// conta: o ícone e a frase de apoio embaixo do valor.
+const SOBRE_O_TIPO: Record<TipoDeConta, { icone: string; texto: string }> = {
+  CORRENTE: { icone: 'contas', texto: 'Dinheiro do dia a dia' },
+  POUPANCA: { icone: 'gota', texto: 'Reserva que sai na hora' },
+  CARTEIRA: { icone: 'carrinho', texto: 'Dinheiro vivo, em mãos' },
+  INVESTIMENTO: { icone: 'crescimento', texto: 'Aplicado, fora do saldo livre' },
+  CARTAO_CREDITO: { icone: 'cartao', texto: 'Dívida no cartão' },
+};
+
+export function sobreOTipo(tipo: TipoDeConta): { icone: string; texto: string } {
+  return SOBRE_O_TIPO[tipo] ?? SOBRE_O_TIPO.CORRENTE;
+}
+
+// A parte da conta no grupo, em texto: "38% do disponível".
+export function textoDaFatia(conta: Pick<SaldoDaConta, 'fatia' | 'saldo'>, grupo: 'disponivel' | 'investido'): string {
+  const nome = grupo === 'disponivel' ? 'do disponível' : 'do investido';
+  if (conta.saldo < 0) {
+    return 'No negativo (cheque especial)';
+  }
+  return `${Math.round(conta.fatia * 100)}% ${nome}`;
+}
