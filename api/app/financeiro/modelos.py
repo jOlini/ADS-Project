@@ -26,6 +26,9 @@ MAXIMO_DE_PESSOAS = 20
 # Empresas que uma pessoa cadastra no espaço empresarial. Barra quem criaria
 # livros-caixa vazios sem fim com a mesma conta.
 MAXIMO_DE_EMPRESAS = 5
+# Pessoas da família além do titular no Modo Família. É o que uma assinatura
+# da família cobre: o titular assina e a casa inteira (até 6 pessoas) entra.
+MAXIMO_DE_MEMBROS_DA_FAMILIA = 5
 # Parcelas de uma compra no cartão de crédito (4 anos).
 MAXIMO_DE_PARCELAS = 48
 # Lançamentos numa exclusão em lote (o teto de uma consulta do extrato).
@@ -61,6 +64,20 @@ class Papel(StrEnum):
     """Papel de uma pessoa dentro de um espaço."""
 
     DONO = "DONO"
+
+
+class CorDoMembro(StrEnum):
+    """Cor com que cada pessoa da família aparece nos filtros, no extrato e nos
+    relatórios. Só ajuda a achar: o nome está sempre escrito ao lado."""
+
+    MENTA = "menta"
+    AZUL = "azul"
+    ROXO = "roxo"
+    CORAL = "coral"
+    AMBAR = "ambar"
+    ROSA = "rosa"
+    TURQUESA = "turquesa"
+    GRAFITE = "grafite"
 
 
 class TipoConta(StrEnum):
@@ -146,6 +163,36 @@ class Membro:
 
 
 @dataclass
+class PessoaDaFamilia:
+    """Alguém da casa no Modo Família (cônjuge, filho, quem divide as
+    contas). É um perfil dentro do espaço pessoal do titular, sem login
+    próprio: o titular lança por ela. O lançamento é dela quando o
+    "responsável" tem o nome dela."""
+
+    id: str
+    nome: str
+    cor: CorDoMembro
+
+
+@dataclass
+class Familia:
+    """Modo Família do espaço pessoal. Desligar só esconde a família da tela:
+    as pessoas cadastradas continuam guardadas para quando religar."""
+
+    ativa: bool = False
+    pessoas: list[PessoaDaFamilia] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class FiltroDePessoa:
+    """De quem são os lançamentos de um relatório: do titular (nome None,
+    lançamento sem responsável) ou de uma pessoa da família (o nome, sem
+    diferença de caixa nem de acento)."""
+
+    nome: str | None
+
+
+@dataclass
 class Espaco:
     """Um livro-caixa. Toda conta, categoria e lançamento pertence a um espaço,
     e toda consulta filtra por ele."""
@@ -161,6 +208,8 @@ class Espaco:
     # Só na empresa: CNPJ (só os caracteres, sem pontuação) e regime.
     cnpj: str | None = None
     regime: RegimeTributario | None = None
+    # Só no pessoal.
+    familia: Familia = field(default_factory=Familia)
     id: str | None = None
 
     def papel_de(self, uid: str) -> Papel | None:
@@ -358,6 +407,19 @@ class AtualizacaoEspaco(Entrada):
     regime: RegimeTributario | None = None
 
 
+class AtualizacaoFamilia(Entrada):
+    """Liga ou desliga o Modo Família do espaço pessoal."""
+
+    ativa: Booleano
+
+
+class NovaPessoaDaFamilia(Entrada):
+    """Pessoa da família (nova ou editada: o PUT substitui nome e cor)."""
+
+    nome: Nome
+    cor: CorDoMembro
+
+
 class NovaConta(Entrada):
     """Cartão de crédito (tipo CARTAO_CREDITO) pede limite e os dias de
     fechamento e vencimento da fatura, e aceita a cor; as outras contas não
@@ -544,6 +606,27 @@ class PedidoDeEstrutura(Entrada):
 # --- Saída ---------------------------------------------------------------------
 
 
+class PessoaDaFamiliaResposta(BaseModel):
+    id: str
+    nome: str
+    cor: CorDoMembro
+
+
+class FamiliaResposta(BaseModel):
+    ativa: bool
+    pessoas: list[PessoaDaFamiliaResposta]
+    # Quantas pessoas cabem além do titular (a assinatura da família é uma só).
+    maximo_de_pessoas: int
+
+    @classmethod
+    def de(cls, familia: Familia) -> "FamiliaResposta":
+        return cls(
+            ativa=familia.ativa,
+            pessoas=[PessoaDaFamiliaResposta(id=p.id, nome=p.nome, cor=p.cor) for p in familia.pessoas],
+            maximo_de_pessoas=MAXIMO_DE_MEMBROS_DA_FAMILIA,
+        )
+
+
 class EspacoResposta(BaseModel):
     id: str
     tipo: TipoEspaco
@@ -554,6 +637,8 @@ class EspacoResposta(BaseModel):
     # Só na empresa; null no pessoal.
     cnpj: str | None
     regime: RegimeTributario | None
+    # Só no pessoal; null na empresa.
+    familia: FamiliaResposta | None
 
     @classmethod
     def de(cls, espaco: Espaco, uid: str) -> "EspacoResposta":
@@ -566,6 +651,7 @@ class EspacoResposta(BaseModel):
             papel=espaco.papel_de(uid),
             cnpj=espaco.cnpj,
             regime=espaco.regime,
+            familia=FamiliaResposta.de(espaco.familia) if espaco.tipo == TipoEspaco.PF else None,
         )
 
 
@@ -885,6 +971,8 @@ class RelatorioMensalResposta(BaseModel):
     de: str
     ate: str
     conta_id: str | None
+    # Pessoa da família (id) ou "titular" do filtro; null = todos.
+    membro: str | None = None
     meses: list[MesDoRelatorioResposta]
 
 
@@ -901,6 +989,7 @@ class GastoPorCategoriaResposta(BaseModel):
     de: str
     ate: str
     conta_id: str | None
+    membro: str | None = None
     total_centavos: int
     # Da categoria com mais gasto para a com menos; só as que têm gasto.
     categorias: list[GastoDaCategoriaResposta]

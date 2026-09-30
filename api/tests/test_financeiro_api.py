@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import pytest
 from fastapi.testclient import TestClient
 
+from app.financeiro.modelos import MAXIMO_DE_MEMBROS_DA_FAMILIA
 from app.financeiro.regras import CATEGORIAS_INICIAIS
 from app.main import criar_app
 
@@ -118,6 +119,7 @@ def test_primeiro_acesso_cria_o_espaco_pessoal_com_as_categorias_iniciais(api, c
         "papel": "DONO",
         "cnpj": None,
         "regime": None,
+        "familia": {"ativa": False, "pessoas": [], "maximo_de_pessoas": MAXIMO_DE_MEMBROS_DA_FAMILIA},
     }
     categorias = api.get(f"/espacos/{primeiro[0]['id']}/categorias", headers=cabecalho).json()
     assert len(categorias) == len(CATEGORIAS_INICIAIS)

@@ -12,6 +12,7 @@ gravado e atualizado: é o saldo inicial mais a soma das partidas dela. Assim
 nenhum saldo fica "descolado" do histórico que o explica.
 """
 
+import unicodedata
 from dataclasses import replace
 
 from app.financeiro.importacao import normalizar
@@ -233,6 +234,14 @@ def conferir_pagamento(conta: Conta | None) -> dict[str, str]:
     if conta.cartao:
         return {"conta_id": "O pagamento sai de uma conta, não de um cartão de crédito."}
     return {}
+
+
+def chave_da_pessoa(nome: str) -> str:
+    """O nome de uma pessoa como ele é comparado: sem acento, sem caixa e com
+    os espaços apertados ("Léo " e "leo" são a mesma pessoa), como a tela faz
+    (web/src/regras/responsavel.ts) e o MongoDB (repositorio.MESMO_NOME)."""
+    sem_acento = "".join(letra for letra in unicodedata.normalize("NFD", nome) if not unicodedata.combining(letra))
+    return " ".join(sem_acento.casefold().split())
 
 
 def categoria_pelo_nome(categorias: list[Categoria], nome: str | None, tipo: TipoCategoria) -> Categoria | None:

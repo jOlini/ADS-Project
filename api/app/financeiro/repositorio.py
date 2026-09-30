@@ -13,6 +13,7 @@ from typing import Protocol
 
 from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING
+from pymongo.collation import Collation
 from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
 
@@ -22,13 +23,17 @@ from app.financeiro.modelos import (
     Conta,
     CorCategoria,
     CorDoCartao,
+    CorDoMembro,
     Espaco,
+    Familia,
+    FiltroDePessoa,
     Lancamento,
     MeioDePagamento,
     Membro,
     Papel,
     Parte,
     Partida,
+    PessoaDaFamilia,
     RegimeTributario,
     TipoCategoria,
     TipoConta,
@@ -37,6 +42,10 @@ from app.financeiro.modelos import (
 )
 
 MENSAGEM_JA_ESTORNADO = "Este lançamento já foi estornado."
+
+# Compara nomes de pessoa como a tela: sem diferença de caixa nem de acento
+# ("Léo" = "leo"). Força 1 da ordenação do português no MongoDB.
+MESMO_NOME = Collation(locale="pt", strength=1)
 
 
 class EspacoPessoalJaExiste(Exception):
@@ -58,6 +67,8 @@ class RepositorioLivroCaixa(Protocol):
     def inserir_espaco(self, espaco: Espaco) -> Espaco: ...
 
     def atualizar_espaco(self, espaco: Espaco) -> Espaco: ...
+
+    def atualizar_familia(self, espaco: Espaco) -> Espaco: ...
 
     def excluir_espaco(self, id: str) -> bool: ...
 
@@ -107,12 +118,14 @@ class RepositorioLivroCaixa(Protocol):
 
     def listar_pessoas(self, espaco_id: str) -> list[str]: ...
 
+    def renomear_pessoa(self, espaco_id: str, antigo: str, novo: str) -> int: ...
+
     def chaves_importadas(self, espaco_id: str, chaves: list[str]) -> set[str]: ...
 
     def somar_partidas_por_conta(self, espaco_id: str) -> dict[str, int]: ...
 
     def somar_categorias_por_mes(
-        self, espaco_id: str, de: date, ate: date, conta_id: str | None = None
+        self, espaco_id: str, de: date, ate: date, conta_id: str | None = None, pessoa: FiltroDePessoa | None = None
     ) -> dict[tuple[str, TipoLancamento, str], int]: ...
 
     def somar_contas_por_mes(self, espaco_id: str, conta_ids: list[str], ate: date) -> dict[str, int]: ...
@@ -200,6 +213,15 @@ class LivroCaixaMongo:
         self._espacos.update_one(
             {"_id": _object_id(espaco.id)}, {"$set": {"nome": espaco.nome, **_dados_da_empresa(espaco)}}
         )
+        return espaco
+
+    def atualizar_familia(self, espaco: Espaco) -> Espaco:
+        """Grava o Modo Família inteiro (ligado ou não e as pessoas)."""
+        familia = {
+            "ativa": espaco.familia.ativa,
+            "pessoas": [{"id": p.id, "nome": p.nome, "cor": p.cor.value} for p in espaco.familia.pessoas],
+        }
+        self._espacos.update_one({"_id": _object_id(espaco.id)}, {"$set": {"familia": familia}})
         return espaco
 
     def excluir_espaco(self, id: str) -> bool:
@@ -395,6 +417,21 @@ class LivroCaixaMongo:
         nomes = self._lancamentos.distinct("divisao.pessoa", filtro) + self._lancamentos.distinct("responsavel", filtro)
         return list(dict.fromkeys(nomes))
 
+    def renomear_pessoa(self, espaco_id: str, antigo: str, novo: str) -> int:
+        """Troca o nome de uma pessoa nos lançamentos do espaço, como
+        responsável e nas partes das divisões (sem diferença de caixa nem de
+        acento). Devolve quantos lançamentos mudaram."""
+        responsavel = self._lancamentos.update_many(
+            {"espaco_id": espaco_id, "responsavel": antigo}, {"$set": {"responsavel": novo}}, collation=MESMO_NOME
+        )
+        divisao = self._lancamentos.update_many(
+            {"espaco_id": espaco_id, "divisao.pessoa": antigo},
+            {"$set": {"divisao.$[parte].pessoa": novo}},
+            array_filters=[{"parte.pessoa": antigo}],
+            collation=MESMO_NOME,
+        )
+        return responsavel.modified_count + divisao.modified_count
+
     def somar_partidas_por_conta(self, espaco_id: str) -> dict[str, int]:
         """{id da conta: soma das partidas}. O banco soma inteiros de 64 bits,
         sem passar por float."""
@@ -414,15 +451,20 @@ class LivroCaixaMongo:
     # O mês é o prefixo AAAA-MM do texto da data, sem conta de fuso.
 
     def somar_categorias_por_mes(
-        self, espaco_id: str, de: date, ate: date, conta_id: str | None = None
+        self, espaco_id: str, de: date, ate: date, conta_id: str | None = None, pessoa: FiltroDePessoa | None = None
     ) -> dict[tuple[str, TipoLancamento, str], int]:
         """{(mês, tipo do lançamento, categoria): soma das partidas de
         categoria} no período. Transferência não tem partida de categoria e
         fica de fora. Com conta_id, só os lançamentos daquela conta (a de
-        origem: numa receita ou despesa, a única)."""
+        origem: numa receita ou despesa, a única). Com pessoa, só os
+        lançamentos dela (do titular: os sem responsável)."""
         filtro: dict = {"espaco_id": espaco_id, "data": {"$gte": de.isoformat(), "$lte": ate.isoformat()}}
         if conta_id:
             filtro["conta_id"] = conta_id
+        if pessoa is not None:
+            # None no filtro do MongoDB acha o campo ausente: o lançamento sem
+            # responsável é do titular.
+            filtro["responsavel"] = pessoa.nome
         grupos = self._lancamentos.aggregate(
             [
                 {"$match": filtro},
@@ -438,7 +480,10 @@ class LivroCaixaMongo:
                         "total": {"$sum": "$partidas.valor_centavos"},
                     }
                 },
-            ]
+            ],
+            # A comparação sem acento só com o nome de uma pessoa: com ela, o
+            # banco não usa o índice de espaco_id e data para o texto.
+            collation=MESMO_NOME if pessoa is not None and pessoa.nome else None,
         )
         return {
             (grupo["_id"]["mes"], TipoLancamento(grupo["_id"]["tipo"]), grupo["_id"]["categoria_id"]): grupo["total"]
@@ -475,6 +520,16 @@ def _para_espaco(documento: dict) -> Espaco:
         pessoal_de=documento.get("pessoal_de"),
         cnpj=documento.get("cnpj"),
         regime=RegimeTributario(documento["regime"]) if documento.get("regime") else None,
+        familia=_para_familia(documento.get("familia")),
+    )
+
+
+def _para_familia(documento: dict | None) -> Familia:
+    if not documento:
+        return Familia()
+    return Familia(
+        ativa=documento["ativa"],
+        pessoas=[PessoaDaFamilia(id=p["id"], nome=p["nome"], cor=CorDoMembro(p["cor"])) for p in documento["pessoas"]],
     )
 
 

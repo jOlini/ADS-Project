@@ -23,6 +23,7 @@ from app.financeiro.modelos import (
     Conta,
     CorDoCartao,
     Espaco,
+    FiltroDePessoa,
     Lancamento,
     Membro,
     NovaCategoria,
@@ -846,12 +847,19 @@ class ServicoLivroCaixa:
         return inicio, fim
 
     def relatorio_mensal(
-        self, espaco: Espaco, de: relatorios.Mes, ate: relatorios.Mes, conta_id: str | None = None
+        self,
+        espaco: Espaco,
+        de: relatorios.Mes,
+        ate: relatorios.Mes,
+        conta_id: str | None = None,
+        pessoa: FiltroDePessoa | None = None,
     ) -> list[relatorios.ResultadoDoMes]:
         """Receitas, despesas e saldo no fim de cada mês do período. O saldo é
-        o das contas (sem os cartões) ou, com conta_id, o daquela conta."""
+        o das contas (sem os cartões) ou, com conta_id, o daquela conta. Com
+        pessoa, receitas e despesas são só as dela; o saldo continua o das
+        contas, que são da casa inteira."""
         fim = relatorios.ultimo_dia(ate)
-        somas = self.repositorio.somar_categorias_por_mes(espaco.id, relatorios.primeiro_dia(de), fim, conta_id)
+        somas = self.repositorio.somar_categorias_por_mes(espaco.id, relatorios.primeiro_dia(de), fim, conta_id, pessoa)
         todas = self.repositorio.listar_contas(espaco.id)
         # Sem filtro, o saldo em contas: todas menos os cartões, inclusive as
         # desativadas (o dinheiro delas continua existindo).
@@ -861,12 +869,17 @@ class ServicoLivroCaixa:
         return relatorios.resultado_por_mes(relatorios.meses_do_periodo(de, ate), somas, saldo_inicial, somas_das_contas)
 
     def gasto_por_categoria(
-        self, espaco: Espaco, de: relatorios.Mes, ate: relatorios.Mes, conta_id: str | None = None
+        self,
+        espaco: Espaco,
+        de: relatorios.Mes,
+        ate: relatorios.Mes,
+        conta_id: str | None = None,
+        pessoa: FiltroDePessoa | None = None,
     ) -> list[tuple[relatorios.GastoDaCategoria, Categoria | None]]:
         """Gasto de cada categoria no período, com o cadastro dela (None se a
-        categoria não existir mais)."""
+        categoria não existir mais). Com pessoa, só os gastos dela."""
         somas = self.repositorio.somar_categorias_por_mes(
-            espaco.id, relatorios.primeiro_dia(de), relatorios.ultimo_dia(ate), conta_id
+            espaco.id, relatorios.primeiro_dia(de), relatorios.ultimo_dia(ate), conta_id, pessoa
         )
         categorias = {categoria.id: categoria for categoria in self.repositorio.listar_categorias(espaco.id)}
         return [(gasto, categorias.get(gasto.categoria_id)) for gasto in relatorios.gasto_por_categoria(somas)]
