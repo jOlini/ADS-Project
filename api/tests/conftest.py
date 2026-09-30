@@ -151,6 +151,18 @@ def api(config, repositorio, livro_caixa, verificador):
 
 
 @pytest.fixture
+def assinar(api, cabecalho_de):
+    """assinar("uid-ana", "FAMILIA"): o back-office troca o plano do cliente
+    (sem checkout, é o caminho). O cliente já precisa ter entrado no app."""
+
+    def trocar(uid, plano="FAMILIA"):
+        resposta = api.put(f"/clientes/{uid}/plano", json={"plano": plano}, headers=cabecalho_de("id-admin"))
+        assert resposta.status_code == 200, resposta.json()
+
+    return trocar
+
+
+@pytest.fixture
 def cabecalho_de(config, repositorio):
     """cabecalho_de("id-admin") -> {"Authorization": "Bearer <jwt válido>"}"""
 

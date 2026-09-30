@@ -182,14 +182,25 @@ def conferir_lancamento(
     return erros
 
 
+SO_UMA_DIVISAO = "Use a divisão por pessoa ou o número de pessoas, não os dois."
+TRANSFERENCIA_SEM_DIVISAO = "Transferência entre contas não se divide entre pessoas."
+SO_A_VISTA = "A divisão entre pessoas vale só para compra à vista."
+
+
 def conferir_divisao(dados: NovoLancamento) -> dict[str, str]:
     """Racha: cada pessoa uma vez só e a soma das partes até o valor do
     lançamento. O que sobra é a parte de quem lançou; transferência entre
-    contas próprias não tem o que dividir."""
+    contas próprias não tem o que dividir. A anotação do Free (dividido_entre)
+    segue a mesma regra do tipo e não vem junto com as partes."""
+    if dados.dividido_entre is not None:
+        if dados.tipo == TipoLancamento.TRANSFERENCIA:
+            return {"dividido_entre": TRANSFERENCIA_SEM_DIVISAO}
+        if dados.divisao:
+            return {"dividido_entre": SO_UMA_DIVISAO}
     if not dados.divisao:
         return {}
     if dados.tipo == TipoLancamento.TRANSFERENCIA:
-        return {"divisao": "Transferência entre contas não se divide entre pessoas."}
+        return {"divisao": TRANSFERENCIA_SEM_DIVISAO}
     return _conferir_partes(dados.divisao, dados.valor_centavos)
 
 
@@ -272,9 +283,14 @@ def conferir_compra(dados: NovaCompra, cartao: Conta | None, categoria: Categori
     if dados.parcelas > dados.valor_centavos:
         erros["parcelas"] = "Cada parcela precisa de pelo menos um centavo."
     if dados.divisao and dados.parcelas > 1:
-        erros["divisao"] = "A divisão entre pessoas vale só para compra à vista."
+        erros["divisao"] = SO_A_VISTA
     elif dados.divisao:
         erros.update(_conferir_partes(dados.divisao, dados.valor_centavos))
+    if dados.dividido_entre is not None:
+        if dados.parcelas > 1:
+            erros["dividido_entre"] = SO_A_VISTA
+        elif dados.divisao:
+            erros["dividido_entre"] = SO_UMA_DIVISAO
     return erros
 
 

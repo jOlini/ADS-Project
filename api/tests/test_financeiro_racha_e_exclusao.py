@@ -7,8 +7,11 @@ from tests.test_financeiro_api import entrar
 
 
 @pytest.fixture
-def ana(api, cabecalho_do_cliente):
-    return entrar(api, cabecalho_do_cliente("uid-ana"))
+def ana(api, cabecalho_do_cliente, assinar):
+    # A divisão por pessoa e o Modo Família pedem o Plano Família.
+    cliente = entrar(api, cabecalho_do_cliente("uid-ana"))
+    assinar("uid-ana")
+    return cliente
 
 
 @pytest.fixture
@@ -110,7 +113,8 @@ def test_estorno_leva_a_divisao_junto(ana):
     assert estorno["divisao"] == partes(("Bruno", 15000))
 
 
-def test_pessoas_ja_usadas_voltam_sem_repeticao_e_em_ordem(ana, bruno):
+def test_pessoas_ja_usadas_voltam_sem_repeticao_e_em_ordem(ana, bruno, assinar):
+    assinar("uid-bruno")
     conta = ana.criar_conta("Corrente")
     churrasco(ana, conta, partes(("carla", 100), ("Bruno", 100)))
     churrasco(ana, conta, partes(("Carla", 100), ("Ana", 100)))

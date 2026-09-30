@@ -12,8 +12,11 @@ from tests.test_financeiro_api import entrar
 
 
 @pytest.fixture
-def ana(api, cabecalho_do_cliente):
-    return entrar(api, cabecalho_do_cliente("uid-ana"))
+def ana(api, cabecalho_do_cliente, assinar):
+    # A divisão por pessoa e o Modo Família pedem o Plano Família.
+    cliente = entrar(api, cabecalho_do_cliente("uid-ana"))
+    assinar("uid-ana")
+    return cliente
 
 
 def incluir(cliente, nome, cor="azul"):

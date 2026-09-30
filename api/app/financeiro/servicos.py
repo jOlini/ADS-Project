@@ -36,6 +36,7 @@ from app.financeiro.modelos import (
     Papel,
     Parte,
     PedidoDeEstrutura,
+    Plano,
     ResultadoDaLinha,
     SituacaoDaFatura,
     SituacaoDaLinha,
@@ -43,6 +44,7 @@ from app.financeiro.modelos import (
     TipoConta,
     TipoEspaco,
     TipoLancamento,
+    libera_familia,
 )
 from app.financeiro.repositorio import EspacoPessoalJaExiste, LancamentoJaImportado, RepositorioLivroCaixa
 
@@ -61,6 +63,11 @@ PESSOAL_JA_EXISTE = (
 PESSOAL_FIXO = "O espaço pessoal não muda de nome nem pode ser excluído."
 SO_O_DONO = "Só quem cadastrou a empresa pode editá-la ou excluí-la."
 ESPACO_COM_DADOS = "Só dá para excluir uma empresa sem movimento. Exclua antes as contas e os lançamentos dela."
+DIVISAO_SO_NO_FAMILIA = (
+    "Dividir o gasto com o nome e a parte de cada pessoa faz parte do Plano Família. "
+    "No Free, anote só em quantas pessoas o gasto foi dividido."
+)
+CLIENTE_SEM_ESPACO = "Cliente sem espaço pessoal: ele precisa entrar no app uma vez antes de mudar de plano."
 LIMITE_DE_EMPRESAS = (
     f"Você já cadastrou {MAXIMO_DE_EMPRESAS} empresas. Exclua uma empresa sem movimento para cadastrar outra."
 )
@@ -86,6 +93,31 @@ class ServicoLivroCaixa:
         if self.repositorio.buscar_espaco_pessoal(uid) is None:
             self._criar_espaco_pessoal(uid)
         return self.repositorio.listar_espacos_do_membro(uid)
+
+    def plano_do_cliente(self, espaco: Espaco, uid: str) -> Plano:
+        """O plano de quem pede, guardado no espaço pessoal dela. Numa empresa,
+        vale o plano do pessoal de quem está lançando."""
+        if espaco.tipo == TipoEspaco.PF:
+            return espaco.plano
+        pessoal = self.repositorio.buscar_espaco_pessoal(uid)
+        return pessoal.plano if pessoal else Plano.FREE
+
+    def mudar_plano(self, uid: str, plano: Plano) -> Espaco:
+        """Back-office: troca o plano de um cliente (no espaço pessoal dele).
+        O cliente que nunca entrou no app não tem espaço: 404, sem criar um
+        espaço para um uid qualquer."""
+        pessoal = self.repositorio.buscar_espaco_pessoal(uid)
+        if pessoal is None:
+            raise ErroNaoEncontrado(CLIENTE_SEM_ESPACO)
+        pessoal.plano = plano
+        return self.repositorio.atualizar_plano(pessoal)
+
+    def _conferir_divisao_do_plano(self, espaco: Espaco, uid: str, divisao: list) -> None:
+        # A divisão com nome e valor separa o gasto de cada pessoa, que é o
+        # Modo Família por outro caminho: no Free, 403 antes de qualquer
+        # outra conferência, mesmo que a tela seja burlada.
+        if divisao and not libera_familia(self.plano_do_cliente(espaco, uid)):
+            raise ErroPermissao(DIVISAO_SO_NO_FAMILIA)
 
     def criar_espaco(self, uid: str, dados: NovoEspaco) -> Espaco:
         """Empresa do espaço empresarial, com quem cadastrou como dono e as
@@ -299,6 +331,7 @@ class ServicoLivroCaixa:
         As parcelas são gravadas uma a uma. Se a gravação parar no meio,
         excluir qualquer parcela leva as que entraram (mesmo compra_id)."""
         cartao = self._cartao(espaco, cartao_id)
+        self._conferir_divisao_do_plano(espaco, uid, dados.divisao)
         categoria = self.repositorio.buscar_categoria(espaco.id, dados.categoria_id)
         if erros := regras.conferir_compra(dados, cartao, categoria):
             raise ErroValidacao(erros)
@@ -330,6 +363,7 @@ class ServicoLivroCaixa:
                 criado_em=instante,
                 criado_por=uid,
                 divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
+                dividido_entre=dados.dividido_entre,
                 responsavel=dados.responsavel,
                 compra_id=compra_id,
                 parcela=numero if parcelada else None,
@@ -438,6 +472,7 @@ class ServicoLivroCaixa:
         return self._marcar_estornados(espaco, [lancamento])[0]
 
     def lancar(self, espaco: Espaco, dados: NovoLancamento, uid: str) -> Lancamento:
+        self._conferir_divisao_do_plano(espaco, uid, dados.divisao)
         conta = self.repositorio.buscar_conta(espaco.id, dados.conta_id)
         categoria = self.repositorio.buscar_categoria(espaco.id, dados.categoria_id) if dados.categoria_id else None
         destino = self.repositorio.buscar_conta(espaco.id, dados.conta_destino_id) if dados.conta_destino_id else None
@@ -459,6 +494,7 @@ class ServicoLivroCaixa:
             criado_em=agora(),
             criado_por=uid,
             divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
+            dividido_entre=dados.dividido_entre,
             responsavel=dados.responsavel,
             meio=dados.meio,
         )
@@ -548,6 +584,7 @@ class ServicoLivroCaixa:
             criado_por=uid,
             estorno_de=original.id,
             divisao=list(original.divisao),
+            dividido_entre=original.dividido_entre,
             responsavel=original.responsavel,
         )
         return self._gravar(estorno)

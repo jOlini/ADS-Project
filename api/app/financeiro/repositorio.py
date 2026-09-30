@@ -38,6 +38,7 @@ from app.financeiro.modelos import (
     Parte,
     Partida,
     PessoaDaFamilia,
+    Plano,
     RegimeTributario,
     TipoCategoria,
     TipoConta,
@@ -97,6 +98,8 @@ class RepositorioLivroCaixa(Protocol):
     def atualizar_espaco(self, espaco: Espaco) -> Espaco: ...
 
     def atualizar_familia(self, espaco: Espaco) -> Espaco: ...
+
+    def atualizar_plano(self, espaco: Espaco) -> Espaco: ...
 
     def excluir_espaco(self, id: str) -> bool: ...
 
@@ -252,6 +255,8 @@ class LivroCaixaMongo:
         }
         if espaco.pessoal_de:
             documento["pessoal_de"] = espaco.pessoal_de
+        if espaco.tipo == TipoEspaco.PF:
+            documento["plano"] = espaco.plano.value
         try:
             resultado = self._espacos.insert_one(documento)
         except DuplicateKeyError as erro:
@@ -272,6 +277,11 @@ class LivroCaixaMongo:
             "pessoas": [{"id": p.id, "nome": p.nome, "cor": p.cor.value} for p in espaco.familia.pessoas],
         }
         self._espacos.update_one({"_id": _object_id(espaco.id)}, {"$set": {"familia": familia}})
+        return espaco
+
+    def atualizar_plano(self, espaco: Espaco) -> Espaco:
+        """Grava o plano do espaço pessoal (só o back-office chama)."""
+        self._espacos.update_one({"_id": _object_id(espaco.id)}, {"$set": {"plano": espaco.plano.value}})
         return espaco
 
     def excluir_espaco(self, id: str) -> bool:
@@ -387,6 +397,8 @@ class LivroCaixaMongo:
             documento["divisao"] = [
                 {"pessoa": parte.pessoa, "valor_centavos": parte.valor_centavos} for parte in lancamento.divisao
             ]
+        if lancamento.dividido_entre:
+            documento["dividido_entre"] = lancamento.dividido_entre
         if lancamento.responsavel:
             documento["responsavel"] = lancamento.responsavel
         if lancamento.compra_id:
@@ -616,7 +628,17 @@ def _para_espaco(documento: dict) -> Espaco:
         cnpj=documento.get("cnpj"),
         regime=RegimeTributario(documento["regime"]) if documento.get("regime") else None,
         familia=_para_familia(documento.get("familia")),
+        plano=_para_plano(documento.get("plano")),
     )
+
+
+def _para_plano(valor: str | None) -> Plano:
+    # Espaço gravado antes dos planos (ou com um valor que não existe mais)
+    # fica no Free: na dúvida, nada é liberado.
+    try:
+        return Plano(valor)
+    except ValueError:
+        return Plano.FREE
 
 
 def _para_familia(documento: dict | None) -> Familia:
@@ -719,6 +741,7 @@ def _para_lancamento(documento: dict) -> Lancamento:
         estorno_de=documento.get("estorno_de"),
         chave_importacao=documento.get("chave_importacao"),
         divisao=[Parte(p["pessoa"], p["valor_centavos"]) for p in documento.get("divisao", [])],
+        dividido_entre=documento.get("dividido_entre"),
         responsavel=documento.get("responsavel"),
         compra_id=documento.get("compra_id"),
         parcela=documento.get("parcela"),
