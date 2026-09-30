@@ -102,9 +102,15 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
 - **Livro-caixa:** partidas dobradas (a soma das partidas de um lançamento é zero), dinheiro em **centavos
   inteiros**, correção por estorno (histórico fica) ou exclusão (erro de digitação). Cartão de crédito é uma conta
   de dívida com fatura por mês de vencimento. Tudo pertence a um **espaço** (`/espacos/{id}`), e o espaço
-  pertence a membros identificados pelo `uid` do Firebase. Cada pessoa tem o espaço **pessoal** (`PF`, criado no
-  primeiro acesso) e pode criar espaços de **família** (`FAMILIA`) e de **empresa** (`PJ`), cada um um livro-caixa
-  separado, com as categorias do tipo; só o espaço vazio pode ser excluído.
+  pertence a membros identificados pelo `uid` do Firebase. São dois tipos de espaço, e só dois: o **pessoal**
+  (`PF`, criado no primeiro acesso), com o **Modo Família** embutido (as pessoas da casa são perfis sem login, e
+  um lançamento é de uma delas pelo `responsavel`), e o **empresarial**, em que cada empresa (`PJ`, com CNPJ e
+  regime) é um livro-caixa separado, com as categorias de empresa; só a empresa sem movimento pode ser excluída.
+- **Gestão da empresa:** sócios, tributos e pessoas da folha em coleções próprias (`socios`, `tributos`,
+  `colaboradores`, sempre com `espaco_id`). O que mexe em dinheiro (aporte, pró-labore, distribuição, guia paga,
+  folha) vira lançamento comum, na categoria achada pela `funcao` (não pelo nome); guia e folha levam a `origem`
+  (tipo, id, competência), com índice único: a mesma competência não entra duas vezes. Margens, dividendos,
+  provisão dos impostos e agenda são conta da tela.
 - **Importação de extrato (CSV):** leitura em funções puras; o arquivo que não é CSV é recusado antes de qualquer
   leitura; as colunas são reconhecidas pelo cabeçalho (moldes de vários bancos) ou pelo conteúdo, com as dúvidas
   apontadas; a categoria de cada linha vem da coluna do arquivo, do histórico do estabelecimento ou de regras pela
@@ -119,10 +125,11 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
 |---|---|---|
 | `usuarios` | Back-office: nome, e-mail, hash BCrypt, perfil | `email` único |
 | `tokens_revogados` | `jti` dos tokens do back-office encerrados no logout, com a hora em que venceriam | TTL em `expira_em` (a entrada some sozinha depois do vencimento) |
-| `espacos` | Espaços (pessoal, família, empresa), com o tipo, o nome e os membros | um espaço pessoal por `uid` (único), `membros.uid` |
+| `espacos` | Espaços (o pessoal, com o Modo Família e as pessoas da casa; cada empresa, com CNPJ e regime), com o tipo, o nome e os membros | um espaço pessoal por `uid` (único), `membros.uid` |
+| `socios`, `tributos`, `colaboradores` | Cadastros da gestão de cada empresa: quadro societário, tributos recorrentes, pessoas da folha | `espaco_id` + data de criação |
 | `contas` | Contas e cartões (limite, fechamento, vencimento) | `espaco_id` + data de criação |
-| `categorias` | Categorias de receita e despesa, com cor | `espaco_id` + tipo + nome |
-| `lancamentos` | Lançamento com as partidas embutidas (gravação atômica), responsável, divisão entre pessoas, compra parcelada | `espaco_id` + data; `espaco_id` + `chave_importacao` (único); um estorno por lançamento (único) |
+| `categorias` | Categorias de receita e despesa, com cor; na empresa, a classe de custo e a função na gestão | `espaco_id` + tipo + nome |
+| `lancamentos` | Lançamento com as partidas embutidas (gravação atômica), responsável, divisão entre pessoas, compra parcelada, origem (guia paga, folha) | `espaco_id` + data; `espaco_id` + `chave_importacao` (único); um estorno por lançamento (único); `espaco_id` + origem (único) |
 
 Toda consulta do livro-caixa filtra por `espaco_id`, inclusive a busca por id: um id de outro espaço devolve
 `404`, igual a um id inexistente (sem revelar que ele existe).
@@ -204,15 +211,23 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
   Firebase continua freando do lado dele. Cadastro com e-mail que já tem conta segue o mesmo caminho do novo
   (sem revelar quem tem cadastro). O logout apaga as chaves `olifine:*` do navegador, menos as preferências de
   tela (tema e barra lateral recolhida).
-- **Visões do espaço de empresa:** com o espaço de empresa ativo, o menu ganha Fluxo de caixa
-  (`/empresa/fluxo`) e DRE (`/empresa/dre`), calculados no navegador a partir do livro-caixa do espaço
-  (`olifine/regras/empresa.ts`): o grupo do DRE sai do nome da categoria (as iniciais da empresa) e o fluxo
-  separa o caixa da operação das contas de investimento. Em outro espaço, as duas rotas voltam à Visão geral.
+- **Gestão da empresa:** com uma empresa ativa, o menu ganha o grupo Gestão: Fluxo de caixa (`/empresa/fluxo`),
+  DRE (`/empresa/dre`), Custos (`/empresa/custos`), Sociedade & aportes (`/empresa/sociedade`), Impostos
+  (`/empresa/impostos`) e Pessoal (`/empresa/pessoal`). As contas ficam em funções puras em `olifine/regras/`
+  (`empresa.ts`, `custos.ts`, `sociedade.ts`, `impostos.ts`, `folha.ts`), sobre o livro-caixa e os cadastros da
+  API: o DRE e os custos pelo mês de cada lançamento, o dinheiro dos sócios fora deles e, no fluxo, como
+  financiamento. O sino do topo junta as faturas de cartão e as guias atrasadas ou que vencem em 7 dias. No espaço
+  pessoal, essas rotas voltam à Visão geral.
 - **Espaço ativo:** o `Layout` busca a lista de espaços e entrega às páginas o ativo no mesmo formato de antes
-  (`espaco.dados.id`); o seletor no topo (`olifine/componentes/SeletorDeEspaco.tsx`) troca, cria, renomeia e
-  exclui. Trocar de espaço remonta a página (nada do livro anterior fica no estado) e volta ao começo da seção. O
-  último espaço escolhido fica no navegador por conta (`servicos/espacoAtivo.ts`, sai no logout), e as metas,
-  ainda locais, têm uma lista por espaço (`regras/espacos.ts`).
+  (`espaco.dados.id`). No topo (`olifine/componentes/SeletorDeEspaco.tsx`), Pessoal e Empresarial são abas: a
+  troca é instantânea (a lista já está na memória) e volta à última empresa usada; no pessoal, ao lado, a chave
+  do Modo Família (`ChaveDaFamilia.tsx`); no empresarial, o seletor da empresa, que cadastra, edita e exclui.
+  Trocar remonta a página (nada do livro anterior fica no estado), com a chegada por opacidade, e volta ao começo
+  da seção. O último espaço e a última empresa ficam no navegador por conta (`servicos/espacoAtivo.ts`, saem no
+  logout), e as metas, ainda locais, têm uma lista por espaço (`regras/espacos.ts`).
+- **Modo Família:** a página Pessoas da casa (`/familia`) e o filtro "de quem" (`componentes/FiltroDePessoa.tsx`)
+  em Visão geral, Lançamentos e Relatórios, com o gasto por pessoa (`regras/familia.ts`). Os relatórios pedem à
+  API o parâmetro `membro`; o extrato e a Visão geral filtram no navegador pelo `responsavel`.
 - **Tema e zoom:** tokens de cor trocados por `data-tema` no `<html>`; a transição de cor dura 400 ms e some com
   "reduzir movimento". A coluna de conteúdo da área logada para em 1680 px (zoom de 50% a 80% não estica o extrato);
   de 125% a 200% o layout passa pelas mesmas quebras do celular, sem rolagem lateral.

@@ -34,6 +34,10 @@ abre um menu. Detalhes em [Como executar](#como-executar).
   duplicar; na fatura do cartão, a compra "03/12" já gera as parcelas das próximas faturas).
 - **Metas que dão vontade de cumprir.** Cada meta é uma árvore: cada aporte rega, ela brota, cresce e, completa,
   dá maçãs. O plano mensal diz quanto guardar para chegar lá no prazo.
+- **A casa e a empresa no mesmo app.** No espaço pessoal, o Modo Família separa o gasto de cada pessoa da casa
+  (uma assinatura só, a do titular, cobre a família). No espaço empresarial, cada empresa tem custos fixos e
+  variáveis com a margem de lucro, o quadro societário com aportes e dividendos, a agenda dos impostos com a
+  provisão sobre o faturamento e a folha lançada no fluxo de caixa com um clique.
 - **Privacidade e segurança desde o início.** Conta com e-mail confirmado, sessão que termina ao fechar o
   navegador, dados do app apagados do navegador na saída, mensagens que nunca revelam quem tem cadastro e uma API
   com revogação de token, limites contra abuso e cabeçalhos de segurança.
@@ -59,9 +63,11 @@ relatórios (0.3) estão em construção:
 - uma **área do cliente** em React, com a identidade visual **OliFine**: página de apresentação com simulador de
   orçamento, cadastro com confirmação do e-mail, login e Visão geral com Firebase Authentication e Cloud
   Firestore, publicada no GitHub Pages; com a API local, ganha lançamentos, contas e cartões de crédito,
-  categorias, importação do extrato em CSV, relatórios e **espaços separados** (pessoal, família e empresa, cada
-  um com o próprio livro-caixa, trocados no topo da tela; o de empresa ganha o **fluxo de caixa operacional** e o
-  **DRE simplificado**); as metas funcionam nos dois casos;
+  categorias, importação do extrato em CSV, relatórios e **dois espaços**, trocados no topo da tela: o
+  **pessoal**, com o **Modo Família** (as pessoas da casa, cada uma com a sua cor, e os números da casa toda ou de
+  uma pessoa), e o **empresarial**, com uma ou mais empresas, cada uma com o próprio livro-caixa, **fluxo de
+  caixa**, **DRE**, **custos**, **sociedade e aportes**, **impostos** e **pessoal (RH)**; as metas funcionam nos
+  dois casos;
 - **testes automatizados** que rodam a cada commit de pull request, com **CI/CD** e alertas no Discord.
 
 **Objetivo acadêmico.** Projeto do curso de Análise e Desenvolvimento de Sistemas, compartilhado entre três
@@ -411,8 +417,12 @@ movimento ao sistema, tudo fica parado e o notebook já aparece aberto. A área 
 total com saldo livre, investido e fechamento do mês, números do mês, evolução do saldo, despesas por categoria,
 últimas transações, metas e os dados do cadastro), a aba Metas (as metas ficam no navegador até a API de metas e
 saem dele no logout; a meta completa abre a colheita) e, com a API, Lançamentos, Contas & Cartões, Categorias e
-Relatórios; no espaço de empresa, também Fluxo de caixa e DRE. A barra lateral recolhe para uma coluna de ícones
-(o nome aparece ao passar o mouse). O botão de lua ou sol no topo troca o tema.
+Relatórios. No topo, **Pessoal** e **Empresarial** trocam o espaço na hora. No pessoal, a chave **Família** liga o
+Modo Família: a página Pessoas da casa cadastra quem mora com você (nome e cor), e Visão geral, Lançamentos e
+Relatórios ganham o filtro "de quem" e o gasto por pessoa. No empresarial, o seletor ao lado escolhe (ou
+cadastra, com CNPJ e regime) a empresa, e o menu ganha a Gestão: Fluxo de caixa, DRE, Custos, Sociedade &
+aportes, Impostos (com os alertas de vencimento no sino) e Pessoal (RH). A barra lateral recolhe para uma coluna
+de ícones (o nome aparece ao passar o mouse). O botão de lua ou sol no topo troca o tema.
 
 ### Front-end em container (nginx)
 
@@ -500,7 +510,7 @@ poucos.
 | API | `api/tests/test_emails.py` e `test_emails_rotas.py` | E-mails da conta: modelos (link e key escapados), Resend, SMTP só com criptografia, pasta, conta de serviço e código do Firebase sem rede, rotas `/conta` com `202` igual com e sem conta, `429`, `503` sem provedor e log sem o endereço |
 | API | `api/tests/test_producao.py` | `AMBIENTE=producao`: recusa exemplo, CORS inseguro, MongoDB sem senha e `APP_URL` sem HTTPS; segredos em arquivo; Swagger fora do ar; `/saude` |
 | API | `api/tests/test_monitoramento.py` | Alertas no Discord: canal certo, repetição a cada 15 minutos, sem menção, falha do Discord que não afeta a API, força bruta e rajada de `401` sem o e-mail nem o token, `500` sem a mensagem da exceção, e-mail que não saiu, cota de e-mails, resumo por rota e webhook fora do Discord recusado sem aparecer no erro |
-| API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, edição, rotas e isolamento entre clientes, importação de CSV de vários bancos (colunas pelo cabeçalho e pelo conteúdo, arquivo que não é CSV, teto de importações), categoria automática (arquivo, histórico, regras) e edição na conferência, racha, exclusão (uma e em lote), cartão de crédito (fatura, parcelas, pagamento, parcelas geradas da fatura importada), relatórios e espaços de família e empresa (categorias do tipo, livro-caixa separado, renomear, excluir só o vazio, limite por pessoa) |
+| API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, edição, rotas e isolamento entre clientes, importação de CSV de vários bancos (colunas pelo cabeçalho e pelo conteúdo, arquivo que não é CSV, teto de importações), categoria automática (arquivo, histórico, regras) e edição na conferência, racha, exclusão (uma e em lote), cartão de crédito (fatura, parcelas, pagamento, parcelas geradas da fatura importada), relatórios, os dois espaços (empresa com CNPJ e regime, livro-caixa separado, excluir só a sem movimento, limite por pessoa, família que não é mais um tipo), o Modo Família (pessoas, limite da assinatura, nome novo em cascata, relatórios por pessoa) e a gestão da empresa (classes de custo, sócios e movimentos, tributos pagos uma vez por competência, folha sem duplicar) |
 | API | `api/tests/test_sanitizacao.py` | Texto livre limpo na entrada (XSS, fórmula de planilha, caracteres invisíveis) e operador do MongoDB (`$ne`, `$where`) recusado pelo tipo do campo |
 | Front-end | `web/src/regras/tentativas.test.js` | Tentativas de login: contagem por e-mail, bloqueio na quinta, janela de 15 minutos, o que conta como senha errada e a chave sem o e-mail em texto |
 | Front-end | `web/src/regras/dadosLocais.test.js` e `servicos/dadosLocais.test.js` | O que o logout apaga do navegador (metas, tentativas, sessão) e o que fica (tema e dados de outros sites) |
@@ -510,9 +520,9 @@ poucos.
 | Front-end | `web/src/regras/mascaras.test.ts` e `sanitizacao.test.ts` | Máscara de valor (milhar, vírgula, dois decimais, sinal, cursor, colar) e de inteiro, teclas barradas por tipo de campo, e a limpeza do texto antes de ir à API |
 | Front-end | `web/src/regras/arquivoDoExtrato.test.ts` e `conferenciaDaImportacao.test.ts` | Arquivo do extrato (extensão, tipo, planilha ou PDF renomeado, binário, UTF-8, Windows-1252 e UTF-16) e a edição de descrição e categoria na conferência |
 | Front-end | `web/src/regras/*.test.js` e `responsavel.test.ts` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, responsável e racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |
-| Front-end | `web/src/regras/espacos.test.ts`, `servicos/espacoAtivo.test.ts` e `servicos/lateral.test.ts` | Espaços: qual abre, o nome na tela, quem renomeia e exclui, o formulário, a seção depois da troca, as visões do espaço de empresa, as metas de cada espaço e o último espaço guardado no navegador (sai no logout); a barra lateral recolhida (fica depois do logout, como o tema) |
+| Front-end | `web/src/regras/espacos.test.ts`, `familia.test.ts`, `servicos/espacoAtivo.test.ts` e `servicos/lateral.test.ts` | Espaços: só pessoal e empresarial, qual livro abre em cada um, a última empresa usada, o CNPJ (numérico e alfanumérico), o formulário da empresa, a seção depois da troca e as metas de cada espaço; o Modo Família (de quem é cada lançamento, o filtro, o gasto por pessoa, o cadastro); a barra lateral recolhida (fica depois do logout, como o tema) |
 | Front-end | `web/src/servicos/livroCaixa.test.js` e `enderecoDaApi.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar, token que não renova e endereço pela rede local |
-| Front-end | `web/src/olifine/regras/*.test.js` e `*.test.ts` | OliFine: tendência, séries do gráfico de saldo, Visão geral, saldo livre do mês (datas futuras, faturas, falsa folga), metas, a árvore que cresce, o simulador de orçamento, o pomar 3D da landing (câmera, ponto do chão sob o ponteiro, movimento suave, quantas folhas e onde nascem), as folhas ao vento (quantas por tela, margens e paralaxe), o notebook preso na rolagem (progresso, abertura só completa antes de soltar), as folhas e moedas em 3D do app (cabeçalho, estado vazio e colheita) e as visões da empresa (grupo de cada categoria no DRE, DRE do mês com estorno, fluxo de caixa operacional separado dos investimentos) |
+| Front-end | `web/src/olifine/regras/*.test.js` e `*.test.ts` | OliFine: tendência, séries do gráfico de saldo, Visão geral, saldo livre do mês (datas futuras, faturas, falsa folga), metas, a árvore que cresce, o simulador de orçamento, o pomar 3D da landing (câmera, ponto do chão sob o ponteiro, movimento suave, quantas folhas e onde nascem), as folhas ao vento (quantas por tela, margens e paralaxe), o notebook preso na rolagem (progresso, abertura só completa antes de soltar), as folhas e moedas em 3D do app (cabeçalho, estado vazio e colheita) e a gestão da empresa (grupo de cada categoria no DRE, com o dinheiro dos sócios fora; fluxo de caixa com investimentos e sócios; classes de custo, margens e ponto de equilíbrio; apuração de dividendos; agenda, provisão e alertas dos impostos; folha e o que falta lançar) |
 | Front-end | `web/src/componentes/*.test.js` | Error Boundary, avisos (toasts) e todo nome de ícone usado nas telas com desenho na família própria |
 
 Os mesmos testes rodam no GitHub Actions a cada commit de pull request e a cada push na `main`
@@ -697,8 +707,10 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de seguran�
 | `POST` | `/conta/nova-senha` | Mandar o link para criar uma senha nova (resposta igual com e sem conta) | Público | `202 Accepted` |
 | `GET` | `/saude` | Verificação de funcionamento (healthcheck) | Público | `200 OK` |
 | `GET` | `/espacos` | Listar os espaços do cliente (cria o pessoal no primeiro acesso) | Cliente com e-mail confirmado (ID token do Firebase) | `200 OK` |
-| `POST` | `/espacos` | Criar um espaço de família ou de empresa, com as categorias do tipo | Cliente com e-mail confirmado | `201 Created` |
-| `PATCH`, `DELETE` | `/espacos/{id}` | Renomear; excluir o espaço vazio (o pessoal é fixo) | Quem criou o espaço | `200 OK` / `204 No Content` |
+| `POST` | `/espacos` | Cadastrar uma empresa no espaço empresarial (com CNPJ e regime opcionais) | Cliente com e-mail confirmado | `201 Created` |
+| `PATCH`, `DELETE` | `/espacos/{id}` | Editar a empresa; excluir a empresa sem movimento (o pessoal é fixo) | Quem cadastrou a empresa | `200 OK` / `204 No Content` |
+| `GET`, `PUT` | `/espacos/{id}/familia` | Modo Família: consultar, ligar e desligar | Dono do espaço pessoal | `200 OK` |
+| `POST`, `PUT`, `DELETE` | `/espacos/{id}/familia/pessoas` e `/pessoas/{id}` | Pessoas da família (nome e cor) | Dono do espaço pessoal | `201 Created` / `200 OK` / `204 No Content` |
 | `GET`, `POST`, `PUT`, `DELETE` | `/espacos/{id}/contas` e `/espacos/{id}/categorias` | Contas (com saldo), cartões de crédito e categorias | Membro do espaço | `200 OK` / `201 Created` / `204 No Content` |
 | `GET`, `DELETE` | `/espacos/{id}/cartoes`, `/cartoes/{id}`, `/cartoes/{id}/faturas` e `/faturas/{AAAA-MM}` | Painel do cartão, lista de faturas, extrato e exclusão de uma fatura | Membro do espaço | `200 OK` |
 | `POST` | `/espacos/{id}/cartoes/{id}/compras` e `/pagamentos` | Compra no cartão (à vista ou parcelada) e pagamento da fatura | Membro do espaço | `201 Created` |
@@ -708,7 +720,10 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de seguran�
 | `POST` | `/espacos/{id}/lancamentos/exclusao-em-lote` | Excluir vários lançamentos de uma vez | Membro do espaço | `200 OK` |
 | `GET` | `/espacos/{id}/pessoas` | Nomes já usados em divisões | Membro do espaço | `200 OK` |
 | `POST` | `/espacos/{id}/importacoes` e `/importacoes/estrutura` | Importar extrato em CSV; mostrar o começo do arquivo e as colunas | Membro do espaço | `200 OK` |
-| `GET` | `/espacos/{id}/relatorios/mensal`, `/relatorios/categorias` e `/relatorios/cartoes` | Relatórios: receita × despesa e saldo por mês, gasto por categoria e compromisso nos cartões | Membro do espaço | `200 OK` |
+| `GET` | `/espacos/{id}/relatorios/mensal`, `/relatorios/categorias` e `/relatorios/cartoes` | Relatórios: receita × despesa e saldo por mês, gasto por categoria (os dois com o filtro por pessoa da família) e compromisso nos cartões | Membro do espaço | `200 OK` |
+| `PUT` | `/espacos/{id}/custos/classes` | Classe de custo de cada despesa da empresa | Membro da empresa | `200 OK` |
+| `GET`, `POST`, `PUT`, `DELETE` | `/espacos/{id}/socios`, `/tributos` e `/colaboradores` | Quadro societário, tributos recorrentes e pessoas da folha | Membro da empresa | `200 OK` / `201 Created` / `204 No Content` |
+| `POST` | `/espacos/{id}/socios/{id}/movimentos`, `/tributos/{id}/pagamentos` e `/folha` | Aporte, pró-labore e distribuição; guia paga; folha do mês no fluxo de caixa | Membro da empresa | `201 Created` / `200 OK` |
 
 ---
 
