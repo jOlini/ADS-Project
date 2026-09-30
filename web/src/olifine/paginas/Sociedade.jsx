@@ -219,7 +219,7 @@ export default function Sociedade() {
               <h2 id="titulo-quadro">Quadro societário</h2>
               <small>Apuração {rotuloDoPeriodo}</small>
             </div>
-            <div className="rel-tabela-rolagem of-tabela-da-gestao">
+            <div className="of-tabela-da-gestao">
               <table>
                 <caption className="apenas-leitor">Participação, aportes, pró-labore e lucros de cada sócio</caption>
                 <thead>

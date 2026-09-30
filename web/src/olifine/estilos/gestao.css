@@ -1,4 +1,5 @@
-/* Gestão da empresa (espaço empresarial): Custos e Sociedade & aportes.
+/* Gestão da empresa (espaço empresarial): Custos, Sociedade & aportes,
+   Impostos, Pessoal (RH) e a folha prevista no Fluxo de caixa.
    Mesma grade e mesmos cartões das visões da empresa (olifine.css, "Espaço
    de empresa"); aqui só o que é próprio de cada aba. */
 
@@ -233,6 +234,13 @@
 
 /* ------------------------------------------------- Tabelas da gestão */
 
+/* A tabela larga rola dentro do cartão, sem esticar a página; o position
+   prende aqui os textos só para leitor de tela (absolutos). */
+.of-tabela-da-gestao {
+  position: relative;
+  overflow-x: auto;
+}
+
 .of-tabela-da-gestao table {
   width: 100%;
   border-collapse: collapse;
@@ -318,6 +326,325 @@
   width: var(--largura);
   height: 100%;
   background: var(--of-verde);
+}
+
+/* ------------------------------------------------------------ Impostos */
+
+/* Pílula da situação de cada guia: menta (paga), rosa (atrasada), âmbar
+   (vence logo) e neutra (a vencer, em curso). */
+.of-situacao {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--espaco-4);
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+  white-space: nowrap;
+}
+
+.of-situacao.bom {
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.of-situacao.ruim {
+  background: var(--of-rosa-suave);
+  color: var(--of-sobre-rosa);
+}
+
+.of-situacao.atencao {
+  background: color-mix(in srgb, var(--aviso) 16%, var(--superficie));
+  color: var(--aviso);
+}
+
+/* Agenda: uma guia por linha, com a marca, o nome e a competência, o prazo,
+   o valor, a situação e o "Pagar". */
+.of-agenda,
+.of-tributos,
+.of-sugestoes-de-tributo {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.of-agenda li {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto 9.5rem 5.5rem;
+  gap: var(--espaco-6);
+  align-items: center;
+  padding: var(--espaco-4) 0;
+  border-top: 1px dashed var(--linha);
+}
+
+.of-agenda li:first-child,
+.of-tributos li:first-child,
+.of-sugestoes-de-tributo li:first-child {
+  border-top: 0;
+}
+
+.of-agenda-marca {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--lateral);
+  color: var(--suave);
+}
+
+.of-agenda li.atrasada .of-agenda-marca {
+  background: var(--of-rosa-suave);
+  color: var(--of-sobre-rosa);
+}
+
+.of-agenda li.paga .of-agenda-marca {
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.of-agenda-textos {
+  display: grid;
+  min-width: 0;
+}
+
+.of-agenda-textos b {
+  overflow: hidden;
+  font-weight: var(--peso-semi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-agenda-textos small,
+.of-agenda-valor small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-agenda-valor {
+  display: grid;
+  justify-items: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.of-agenda-valor b {
+  font-weight: var(--peso-semi);
+}
+
+.of-agenda li .of-situacao {
+  justify-self: start;
+}
+
+.of-agenda-acao {
+  justify-self: end;
+}
+
+.of-tributos li,
+.of-sugestoes-de-tributo li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: var(--espaco-6);
+  align-items: center;
+  padding: var(--espaco-4) 0;
+  border-top: 1px dashed var(--linha);
+}
+
+.of-sugestoes-de-tributo li {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.of-sugestoes-de-tributo span {
+  display: grid;
+}
+
+.of-sugestoes-de-tributo small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-tributos li.inativo .of-agenda-textos {
+  opacity: 0.62;
+}
+
+.of-tributo-guia {
+  display: grid;
+  place-items: center;
+  min-width: 3.6rem;
+  height: 28px;
+  padding: 0 var(--espaco-4);
+  border-radius: var(--raio-mini);
+  background: var(--lateral);
+  box-shadow: inset 0 0 0 var(--espessura) var(--linha);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-forte);
+  letter-spacing: 0.02em;
+}
+
+/* -------------------------------------------------------- Pessoal (RH) */
+
+.of-folha-em-dia {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  color: var(--of-sobre-menta);
+  font-weight: var(--peso-semi);
+}
+
+.of-folha-pendente {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-6);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.of-folha-pendente p {
+  display: grid;
+}
+
+.of-folha-pendente small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-pessoa-da-folha {
+  display: grid;
+}
+
+.of-pessoa-da-folha small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-regular);
+}
+
+.of-tabela-da-gestao tr.inativo th,
+.of-tabela-da-gestao tr.inativo td:not(.acao) {
+  opacity: 0.62;
+}
+
+.of-vinculo {
+  display: inline-flex;
+  padding: 1px var(--espaco-4);
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+}
+
+.of-vinculo.clt {
+  background: color-mix(in srgb, var(--cat-moradia) 14%, var(--superficie));
+}
+
+.of-vinculo.pj {
+  background: color-mix(in srgb, var(--cat-lazer) 14%, var(--superficie));
+}
+
+.of-vinculo.pro_labore {
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+/* Benefícios no formulário da pessoa: nome, valor e o botão de tirar. */
+.of-beneficios {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+  margin: 0 0 var(--espaco-6);
+  padding: 0;
+  border: 0;
+}
+
+.of-beneficios > button {
+  justify-self: start;
+}
+
+.of-beneficio {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: var(--espaco-4);
+  align-items: start;
+}
+
+.of-beneficio > .botao-icone {
+  margin-top: 26px;
+}
+
+/* Quem entra na folha, no modal de lançar. */
+.of-folha-pendentes {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0 0 var(--espaco-8);
+  padding: 0;
+  list-style: none;
+}
+
+.of-folha-pendentes li {
+  display: flex;
+  gap: var(--espaco-6);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--espaco-3) 0;
+  border-bottom: 1px dashed var(--linha);
+  font-size: var(--fonte-rotulo);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-folha-pendentes li span {
+  display: grid;
+}
+
+.of-folha-pendentes small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-folha-pendentes li.total {
+  border-bottom: 0;
+  font-weight: var(--peso-semi);
+}
+
+/* Fluxo de caixa: a folha que ainda não saiu. */
+.of-folha-prevista:not(:empty) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4) var(--espaco-6);
+  align-items: center;
+}
+
+.of-folha-prevista .icone {
+  flex: none;
+  color: var(--suave);
+}
+
+.of-folha-prevista a {
+  margin-left: auto;
+  color: var(--marca);
+  font-weight: var(--peso-semi);
+}
+
+@media (max-width: 760px) {
+  .of-agenda li {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+
+  .of-agenda li .of-situacao {
+    grid-column: 2;
+  }
+
+  .of-agenda-acao {
+    grid-column: 3;
+  }
+
+  .of-tributos li {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .of-tributos li .of-situacao {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {

@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCarga } from '../componentes/useCarga';
 import { formatarBRL } from '../regras/dinheiro';
 import { faturasAVencer } from '../regras/cartoes';
+import { hojeIso } from '../regras/datas';
 import { ehEmpresa, nomeDoEspaco } from '../regras/espacos';
 import { familiaAtiva } from '../regras/familia';
 import { guardarLateralRecolhida, lerLateralRecolhida } from '../servicos/lateral';
-import { apiConfigurada, listarCartoes } from '../servicos/livroCaixa';
+import { apiConfigurada, EVENTO_DOS_TRIBUTOS, listarCartoes, listarTributos } from '../servicos/livroCaixa';
+import { alertasDosTributos, textoDaCompetencia } from './regras/impostos';
 import Flutuante from './componentes/Flutuante';
 import AlternadorDeTema from '../componentes/AlternadorDeTema';
 import Icone from '../componentes/Icone';
@@ -30,6 +32,8 @@ const DA_EMPRESA = [
   { para: '/empresa/dre', icone: 'documento', rotulo: 'DRE', versao: '0.3' },
   { para: '/empresa/custos', icone: 'rosca', rotulo: 'Custos', versao: '0.3' },
   { para: '/empresa/sociedade', icone: 'pessoas', rotulo: 'Sociedade & aportes', versao: '0.3' },
+  { para: '/empresa/impostos', icone: 'guia', rotulo: 'Impostos', versao: '0.3' },
+  { para: '/empresa/pessoal', icone: 'cracha', rotulo: 'Pessoal (RH)', versao: '0.3' },
 ];
 
 // A família, no fim do menu do espaço pessoal, só com o Modo Família ligado.
@@ -132,12 +136,34 @@ export default function CascaOliFine({ contexto }) {
     ? `${dados.nome[0] ?? ''}${dados.sobrenome[0] ?? ''}`.toUpperCase()
     : (usuario.email ?? '').slice(0, 2).toUpperCase();
 
-  // Avisos: faturas de cartão fechadas e não pagas, com o vencimento.
+  // Avisos: faturas de cartão fechadas e não pagas, com o vencimento, e, na
+  // empresa, as guias de imposto atrasadas ou que vencem em até 7 dias (lidas
+  // de novo a cada tela e quando uma guia muda, para a paga sair do sino).
   const espacoId = espaco.dados?.id;
+  const empresa = ehEmpresa(espaco.dados);
   const buscarCartoes = useMemo(() => (apiConfigurada && espacoId ? () => listarCartoes(espacoId) : null), [espacoId]);
   const cartoes = useCarga(buscarCartoes);
+  const buscarTributos = useMemo(
+    () => (apiConfigurada && espacoId && empresa ? () => listarTributos(espacoId).catch(() => []) : null),
+    [espacoId, empresa],
+  );
+  const tributos = useCarga(buscarTributos);
+  const { recarregar: lerTributosDeNovo } = tributos;
+  const rotaAnterior = useRef(pathname);
+  useEffect(() => {
+    if (rotaAnterior.current !== pathname) {
+      rotaAnterior.current = pathname;
+      lerTributosDeNovo();
+    }
+  }, [pathname, lerTributosDeNovo]);
+  useEffect(() => {
+    globalThis.addEventListener(EVENTO_DOS_TRIBUTOS, lerTributosDeNovo);
+    return () => globalThis.removeEventListener(EVENTO_DOS_TRIBUTOS, lerTributosDeNovo);
+  }, [lerTributosDeNovo]);
   const avisos = cartoes.dados ? faturasAVencer(cartoes.dados) : [];
-  const itens = itensDoMenu(ehEmpresa(espaco.dados), familiaAtiva(espaco.dados));
+  const guias = empresa && tributos.dados ? alertasDosTributos(tributos.dados, hojeIso()) : [];
+  const quantosAvisos = avisos.length + guias.length;
+  const itens = itensDoMenu(empresa, familiaAtiva(espaco.dados));
   const nomeDoAtivo = nomeDoEspaco(espaco.dados);
 
   function buscar(evento) {
@@ -257,21 +283,38 @@ export default function CascaOliFine({ contexto }) {
           <div className="of-topo-acoes">
             <AlternadorDeTema />
             <Flutuante
-              rotulo={avisos.length > 0 ? `Avisos: ${avisos.length} fatura(s) a pagar` : 'Avisos'}
+              rotulo={quantosAvisos > 0 ? `Avisos: ${quantosAvisos} conta(s) a pagar` : 'Avisos'}
               className="botao-icone of-sino"
               classeDoPainel="of-avisos"
               botao={
                 <>
                   <Icone nome="sino" />
-                  {avisos.length > 0 && <span className="of-sino-contador">{avisos.length}</span>}
+                  {quantosAvisos > 0 && <span className="of-sino-contador">{quantosAvisos}</span>}
                 </>
               }
             >
               {(fechar) => (
                 <>
                   <p className="of-flutuante-titulo">Avisos</p>
-                  {avisos.length > 0 ? (
+                  {quantosAvisos > 0 ? (
                     <ul>
+                      {guias.map((guia) => (
+                        <li key={`${guia.tributo.id}-${guia.competencia}`}>
+                          <Link to="/empresa/impostos" onClick={fechar}>
+                            <span className={`of-aviso-marca${guia.situacao === 'ATRASADA' ? ' vencida' : ''}`} aria-hidden="true">
+                              <Icone nome="guia" tamanho={16} />
+                            </span>
+                            <span>
+                              <b>
+                                {guia.tributo.nome} de {textoDaCompetencia(guia.competencia, guia.tributo.periodicidade)}
+                              </b>
+                              <small>
+                                {guia.situacao === 'ATRASADA' ? 'Venceu em' : 'Vence em'} {dataCurta(guia.vencimento)}
+                              </small>
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
                       {avisos.map((aviso) => (
                         <li key={aviso.id}>
                           <Link to={`/contas/cartoes/${aviso.id}`} onClick={fechar}>
@@ -290,7 +333,9 @@ export default function CascaOliFine({ contexto }) {
                     </ul>
                   ) : (
                     <p className="of-flutuante-vazio">
-                      Nenhuma fatura a pagar. Faturas de cartão fechadas aparecem aqui com o vencimento.
+                      {empresa
+                        ? 'Nada a pagar agora. Faturas de cartão fechadas e guias de imposto perto do vencimento aparecem aqui.'
+                        : 'Nenhuma fatura a pagar. Faturas de cartão fechadas aparecem aqui com o vencimento.'}
                     </p>
                   )}
                 </>

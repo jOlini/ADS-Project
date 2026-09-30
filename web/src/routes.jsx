@@ -28,6 +28,8 @@ const Dre = lazy(() => import('./olifine/paginas/Dre'));
 const Familia = lazy(() => import('./olifine/paginas/Familia'));
 const Custos = lazy(() => import('./olifine/paginas/Custos'));
 const Sociedade = lazy(() => import('./olifine/paginas/Sociedade'));
+const Impostos = lazy(() => import('./olifine/paginas/Impostos'));
+const Pessoal = lazy(() => import('./olifine/paginas/Pessoal'));
 
 // Enquanto o pedaço da página chega, o esqueleto dela ocupa o lugar.
 const sobDemanda = (pagina, forma = 'pagina') => <Suspense fallback={<Esqueleto forma={forma} />}>{pagina}</Suspense>;
@@ -70,6 +72,8 @@ export default function AppRoutes() {
             <Route path="empresa/dre" element={sobDemanda(<Dre />)} />
             <Route path="empresa/custos" element={sobDemanda(<Custos />)} />
             <Route path="empresa/sociedade" element={sobDemanda(<Sociedade />)} />
+            <Route path="empresa/impostos" element={sobDemanda(<Impostos />)} />
+            <Route path="empresa/pessoal" element={sobDemanda(<Pessoal />)} />
           </Route>
           {/* Qualquer outro endereço volta para o login. */}
           <Route path="*" element={<Navigate to="/login" replace />} />

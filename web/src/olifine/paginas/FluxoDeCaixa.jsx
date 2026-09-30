@@ -12,13 +12,16 @@ import {
   apiConfigurada,
   LIMITE_DE_LANCAMENTOS,
   listarCategorias,
+  listarColaboradores,
   listarContas,
   listarLancamentos,
 } from '../../servicos/livroCaixa';
 import SimboloDoVazio from '../componentes/SimboloDoVazio';
 import { fluxoDeCaixa, saldosDaEmpresa, ultimosMeses } from '../regras/empresa';
+import { proximaFolha } from '../regras/folha';
 import { leituraDaVariacao, textoDaVariacao, variacaoPercentual } from '../regras/tendencia';
 import '../../estilos/relatorios.css';
+import '../estilos/gestao.css';
 
 // Meses do gráfico e da tabela.
 const MESES = 6;
@@ -73,7 +76,8 @@ export default function FluxoDeCaixa() {
               listarContas(espacoId),
               listarCategorias(espacoId),
               listarLancamentos(espacoId, { de: `${meses[0]}-01`, ate: hoje }),
-            ]).then(([contas, categorias, lancamentos]) => ({ contas, categorias, lancamentos }))
+              listarColaboradores(espacoId).catch(() => []),
+            ]).then(([contas, categorias, lancamentos, colaboradores]) => ({ contas, categorias, lancamentos, colaboradores }))
         : null,
     [espacoId, daEmpresa, meses, hoje],
   );
@@ -92,6 +96,8 @@ export default function FluxoDeCaixa() {
   const atual = fluxo.at(-1);
   const anterior = fluxo.at(-2);
   const saldos = dados ? saldosDaEmpresa(dados.contas) : null;
+  // A folha que ainda não saiu (aba Pessoal): o que vem pela frente no caixa.
+  const folha = dados ? proximaFolha(dados.colaboradores, hoje) : null;
   const semMovimento = fluxo.every((mes) => mes.entradas === 0 && mes.saidas === 0 && mes.investido === 0 && mes.socios === 0);
   const noLimite = dados && dados.lancamentos.length >= LIMITE_DE_LANCAMENTOS;
   const trecho = meses.length > 0 ? `${rotuloDoMes(meses[0], { comAno: true })} a ${rotuloDoMes(meses.at(-1), { comAno: true })}` : '';
@@ -144,6 +150,17 @@ export default function FluxoDeCaixa() {
             }
           />
         </section>
+      )}
+
+      {folha && (
+        <p className="mensagem info of-folha-prevista" role="status">
+          <Icone nome="cracha" tamanho={16} />
+          <span>
+            Folha de {rotuloDoMes(folha.competencia, { comAno: true })} prevista: <b>{formatarBRL(folha.total)}</b> a partir
+            de {folha.data.split('-').reverse().join('/')}, ainda fora do caixa.
+          </span>
+          <Link to="/empresa/pessoal">Lançar a folha</Link>
+        </p>
       )}
 
       {semMovimento ? (

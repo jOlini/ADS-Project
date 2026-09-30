@@ -19,25 +19,35 @@ const {
   atualizarEmpresa,
   classificarCustos,
   criarEmpresa,
+  editarColaborador,
   editarPessoa,
   editarSocio,
+  editarTributo,
   estornar,
   excluirEspaco,
   estruturaDoExtrato,
   excluir,
+  incluirColaborador,
   incluirPessoa,
   incluirSocio,
+  incluirTributo,
   lancar,
+  lancarFolha,
   lancarMovimentoDoSocio,
   ligarFamilia,
   listarEspacos,
   listarLancamentos,
+  listarColaboradores,
   listarPessoas,
   listarSocios,
+  listarTributos,
+  pagarTributo,
   relatorioCategorias,
   relatorioMensal,
+  removerColaborador,
   removerPessoa,
   removerSocio,
+  removerTributo,
 } = await import('./livroCaixa');
 
 function resposta(status, corpo) {
@@ -237,6 +247,36 @@ describe('API do livro-caixa', () => {
       ['http://api.teste/espacos/e1/socios/s1', 'DELETE', undefined],
       ['http://api.teste/espacos/e1/socios', 'GET', undefined],
     ]);
+  });
+
+  it('cuida dos tributos e da folha da empresa', async () => {
+    fetch.mockResolvedValue(resposta(200, {}));
+
+    await incluirTributo('e1', { nome: 'DAS', tipo: 'DAS', base: 'FATURAMENTO', aliquota_centesimos: 600 });
+    await editarTributo('e1', 't/1', { nome: 'DAS', ativo: false });
+    await pagarTributo('e1', 't1', { competencia: '2026-08', conta_id: 'c', valor_centavos: 100, data: '2026-09-20' });
+    await removerTributo('e1', 't1');
+    await incluirColaborador('e1', { nome: 'Carla', vinculo: 'CLT', salario_centavos: 300000 });
+    await editarColaborador('e1', 'p/1', { nome: 'Carla', ativo: false });
+    await lancarFolha('e1', { competencia: '2026-09', conta_id: 'c' });
+    await removerColaborador('e1', 'p1');
+    await listarTributos('e1');
+    await listarColaboradores('e1');
+
+    const chamadas = fetch.mock.calls.map(([url, opcoes]) => [url.replace('http://api.teste/espacos/e1', ''), opcoes.method]);
+    expect(chamadas).toEqual([
+      ['/tributos', 'POST'],
+      ['/tributos/t%2F1', 'PUT'],
+      ['/tributos/t1/pagamentos', 'POST'],
+      ['/tributos/t1', 'DELETE'],
+      ['/colaboradores', 'POST'],
+      ['/colaboradores/p%2F1', 'PUT'],
+      ['/folha', 'POST'],
+      ['/colaboradores/p1', 'DELETE'],
+      ['/tributos', 'GET'],
+      ['/colaboradores', 'GET'],
+    ]);
+    expect(JSON.parse(fetch.mock.calls[6][1].body)).toEqual({ competencia: '2026-09', conta_id: 'c' });
   });
 
   it('liga a família e cuida das pessoas, com o nome limpo antes de sair', async () => {
