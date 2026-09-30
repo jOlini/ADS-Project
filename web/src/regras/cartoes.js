@@ -213,3 +213,33 @@ export function faturasAVencer(cartoes, hoje = hojeIso()) {
     }))
     .sort((a, b) => a.data.localeCompare(b.data));
 }
+
+// ------------------------------------------------------ Resumo das faturas
+
+// O painel dos cartões na Visão geral: o total das faturas em primeiro lugar
+// (o que já fechou e falta pagar, mais a fatura aberta de cada cartão), o
+// que ainda vem em parcelas, o limite livre e o próximo vencimento com
+// valor. Valores negativos (crédito na fatura) não abatem o total.
+export function resumoDasFaturas(cartoes, hoje = hojeIso()) {
+  const somar = (campo, lista = cartoes) => lista.reduce((soma, cartao) => soma + Math.max(0, cartao[campo] ?? 0), 0);
+  const fechadas = somar('a_pagar_centavos');
+  const abertas = somar('fatura_atual_centavos');
+  const vencimentos = cartoes.flatMap((cartao) => [
+    ...(cartao.a_pagar_centavos > 0 && cartao.ultima_fechada
+      ? [{ nome: cartao.nome, vencimento: cartao.ultima_fechada.vencimento, valor: cartao.a_pagar_centavos }]
+      : []),
+    ...(cartao.fatura_atual_centavos > 0 && cartao.fatura_atual
+      ? [{ nome: cartao.nome, vencimento: cartao.fatura_atual.vencimento, valor: cartao.fatura_atual_centavos }]
+      : []),
+  ]);
+  const proximo = vencimentos.sort((a, b) => a.vencimento.localeCompare(b.vencimento))[0] ?? null;
+  return {
+    total: fechadas + abertas,
+    fechadas,
+    abertas,
+    futuras: somar('parcelamentos_futuros_centavos'),
+    usado: somar('usado_centavos'),
+    disponivel: somar('disponivel_centavos', cartoes.filter((cartao) => cartao.ativa !== false)),
+    proximo: proximo && { ...proximo, vencida: proximo.vencimento < hoje },
+  };
+}

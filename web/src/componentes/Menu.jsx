@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Icone from './Icone';
 import { mostrarNoPainel, useCliqueFora, usePosicaoFlutuante, usePresenca } from './flutuante';
 import { opcaoPorDigitacao, primeiraHabilitada, proximaHabilitada, ultimaHabilitada } from '../regras/seletor';
@@ -11,12 +12,21 @@ import { opcaoPorDigitacao, primeiraHabilitada, proximaHabilitada, ultimaHabilit
 // rotulo é o nome do botão para leitores de tela (o botão mostra só o ícone).
 // Com texto, o botão vira um botão principal com o texto e a seta ("+ Novo"
 // do topo da Visão geral), e o menu abre alinhado pelo começo.
+//
+// A lista vai para o fim do <body> (portal), como o balão da Dica: dentro da
+// página, um ancestral com isolation, transform ou container-type (o
+// cabeçalho da Visão geral, os cards com hover) prende o z-index dela, e os
+// KPIs e as dicas logo abaixo passavam por cima. Num <dialog>, ela vai para o
+// próprio diálogo, que está na camada do topo do navegador.
 export default function Menu({ rotulo, itens, texto, icone = 'mais' }) {
   const idBase = useId();
   const botao = useRef(null);
   const menu = useRef(null);
   const [aberto, setAberto] = useState(false);
   const [ativo, setAtivo] = useState(-1);
+  // Onde a lista é desenhada: o <dialog> em volta do botão ou o <body>,
+  // decidido ao abrir (o botão já está na página).
+  const [destino, setDestino] = useState(null);
 
   const opcoes = itens.map((item) => ({ rotulo: item.rotulo, desabilitada: item.desabilitado }));
   const fechar = () => setAberto(false);
@@ -37,6 +47,7 @@ export default function Menu({ rotulo, itens, texto, icone = 'mais' }) {
   }, [aberto, ativo]);
 
   function abrir(indice) {
+    setDestino(botao.current?.closest('dialog') ?? document.body);
     setAtivo(indice);
     setAberto(true);
   }
@@ -112,7 +123,9 @@ export default function Menu({ rotulo, itens, texto, icone = 'mais' }) {
         )}
       </button>
 
-      {presente && (
+      {presente &&
+        destino &&
+        createPortal(
         <div ref={menu} id={`${idBase}-menu`} role="menu" aria-labelledby={`${idBase}-botao`} className="lista-flutuante menu-flutuante"
           style={estilo} onKeyDown={teclarNoMenu}>
           {itens.map((item, indice) => (
@@ -133,8 +146,9 @@ export default function Menu({ rotulo, itens, texto, icone = 'mais' }) {
               </span>
             </button>
           ))}
-        </div>
-      )}
+        </div>,
+          destino,
+        )}
     </div>
   );
 }

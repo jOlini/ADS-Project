@@ -997,7 +997,17 @@
   }
 }
 
+/* O notebook em 3D, com acabamento de alumínio: a moldura preta com a
+   câmera e o vidro que reflete a luz de cima, a dobradiça escura, a base
+   escovada com o teclado em baixo relevo, as grades dos alto-falantes, o
+   touchpad de vidro fosco, a espessura da frente com o entalhe para o dedo e
+   a sombra no chão. Tudo em CSS (gradientes e sombras), sem imagem. */
 .lp-laptop {
+  --moldura: clamp(6px, 1.25vw, 12px);
+  --aluminio-claro: #e4e9ec;
+  --aluminio: #cfd7dc;
+  --aluminio-escuro: #a3aeb5;
+  position: relative;
   display: grid;
   justify-items: center;
   /* Espaço para a base deitada, que sai do fluxo (posição absoluta): vista
@@ -1005,6 +1015,23 @@
   padding-bottom: 15%;
   perspective: 1800px;
   perspective-origin: 50% 0%;
+}
+
+/* A sombra no chão: difusa e larga, mais escura bem embaixo da frente. */
+.lp-laptop::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: -2%;
+  right: -2%;
+  bottom: -1.5%;
+  height: 7%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(10 20 16 / 0.42), rgb(10 20 16 / 0.16) 60%, transparent);
+  filter: blur(8px);
+  /* A tampa abrindo (--abertura, de useNotebookPreso) projeta mais sombra. */
+  opacity: calc(0.45 + var(--abertura, 1) * 0.55);
+  pointer-events: none;
 }
 
 /* Tampa e base no mesmo espaço 3D: fechada, a tampa deita sobre a base. */
@@ -1027,23 +1054,70 @@
   transform: rotateX(var(--angulo-da-tampa));
 }
 
-.lp-laptop-tela,
+.lp-laptop-moldura,
 .lp-laptop-costas {
   grid-area: 1 / 1;
   backface-visibility: hidden;
 }
 
+/* As costas: alumínio com o brilho em diagonal e a borda chanfrada. */
 .lp-laptop-costas {
   display: grid;
   place-items: center;
   border-radius: 18px 18px 6px 6px;
-  background: linear-gradient(160deg, #e3e9ec, #b9c4ca 60%, #a4b0b7);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.5);
+  background:
+    linear-gradient(115deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 38%),
+    linear-gradient(160deg, var(--aluminio-claro), #bcc6cc 60%, var(--aluminio-escuro));
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.55),
+    inset 0 -2px 3px rgb(0 0 0 / 0.12);
   transform: rotateY(180deg);
 }
 
 .lp-laptop-costas .of-monograma {
   opacity: 0.8;
+  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.6));
+}
+
+/* A moldura: preto quase puro, com o aro de alumínio fino em volta (a
+   borda da tampa) e a sombra que a tela aberta joga para trás. */
+.lp-laptop-moldura {
+  position: relative;
+  padding: var(--moldura) var(--moldura) calc(var(--moldura) * 1.35);
+  border-radius: 18px 18px 6px 6px;
+  background: linear-gradient(180deg, #111715, #0a0f0d);
+  box-shadow:
+    0 0 0 1.5px #9aa6ad,
+    0 0 0 2.5px rgb(255 255 255 / 0.18),
+    inset 0 0 0 1px rgb(255 255 255 / 0.05),
+    0 50px 90px -50px rgb(26 36 48 / 0.6);
+}
+
+/* A câmera no meio da borda de cima, com a lente azulada e o brilho. */
+.lp-laptop-moldura::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--moldura) / 2);
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #5b6f86 0 18%, #1b2733 45%, #05080a 75%);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06);
+  transform: translate(-50%, -50%);
+}
+
+/* O vidro: um reflexo largo e suave vindo do alto à esquerda e um fio de luz
+   na borda de cima. Por cima da tela, sem receber o mouse. */
+.lp-laptop-moldura::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(118deg, rgb(255 255 255 / 0.11) 0%, rgb(255 255 255 / 0.04) 34%, rgb(255 255 255 / 0) 34.4%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0) 2px);
+  pointer-events: none;
 }
 
 .lp-laptop-tela {
@@ -1052,17 +1126,17 @@
   width: 100%;
   aspect-ratio: 16 / 10;
   overflow: hidden;
-  border: 10px solid #0f1b17;
-  border-radius: 18px 18px 6px 6px;
+  border-radius: 8px 8px 2px 2px;
   background: var(--fundo);
-  box-shadow: 0 50px 90px -50px rgb(26 36 48 / 0.55);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6);
   font-size: 10px;
 }
 
 /* A base, deitada (rotateX 90° a partir da dobradiça), vai em direção a
    quem olha e tem a profundidade da tela: a tampa fechada a cobre inteira. A
    câmera fica acima (perspective-origin no alto), então a base aparece como
-   o trapézio de um notebook visto de frente e de cima. */
+   o trapézio de um notebook visto de frente e de cima. Alumínio escovado:
+   riscos finos na horizontal sobre o degradê da luz. */
 .lp-laptop-teclado {
   position: absolute;
   top: 100%;
@@ -1070,14 +1144,33 @@
   width: 110%;
   aspect-ratio: var(--proporcao-da-base);
   border-radius: 0 0 18px 18px;
-  background: linear-gradient(180deg, #c3ccd2, #dde3e7 18%, #d2dade);
+  background:
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.05) 0 1px, rgb(0 0 0 / 0.018) 1px 3px),
+    linear-gradient(180deg, #b9c3c9, var(--aluminio-claro) 14%, var(--aluminio) 70%, #c4cdd2);
   box-shadow:
-    inset 0 -4px 0 #a9b4bb,
-    inset 0 1px 0 rgb(255 255 255 / 0.6);
+    inset 0 1px 0 rgb(255 255 255 / 0.7),
+    inset 0 -3px 4px rgb(0 0 0 / 0.1),
+    inset 1px 0 0 rgb(255 255 255 / 0.5),
+    inset -1px 0 0 rgb(0 0 0 / 0.08);
   transform-origin: 50% 0;
   transform: rotateX(90deg);
+  transform-style: preserve-3d;
 }
 
+/* A dobradiça: o vão escuro e arredondado entre a tampa e a base. */
+.lp-laptop-dobradica {
+  position: absolute;
+  top: 0;
+  left: 14%;
+  right: 14%;
+  height: 3.2%;
+  border-radius: 0 0 10px 10px;
+  background: linear-gradient(180deg, #2c3438, #545e64 55%, #7d888f);
+  box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.25);
+}
+
+/* O teclado em baixo relevo: o poço escuro e as teclas pretas separadas
+   pelas frestas, com o brilho de cima em cada fileira. */
 .lp-laptop-teclas {
   position: absolute;
   top: 9%;
@@ -1086,20 +1179,68 @@
   height: 44%;
   border-radius: 8px;
   background:
-    repeating-linear-gradient(90deg, transparent 0 5.6%, rgb(195 204 210 / 0.9) 5.6% 6.6%),
-    repeating-linear-gradient(180deg, transparent 0 17%, rgb(195 204 210 / 0.9) 17% 20%),
-    #8e9aa2;
+    repeating-linear-gradient(180deg, rgb(255 255 255 / 0.1) 0 1px, transparent 1px 20%),
+    repeating-linear-gradient(90deg, transparent 0 5.6%, #0c0f10 5.6% 6.6%),
+    repeating-linear-gradient(180deg, transparent 0 17%, #0c0f10 17% 20%),
+    linear-gradient(180deg, #2b3236, #1d2326);
+  box-shadow:
+    0 0 0 3px #9ba7ae,
+    inset 0 1px 3px rgb(0 0 0 / 0.6),
+    0 1px 0 4px rgb(255 255 255 / 0.35);
 }
 
+/* As grades dos alto-falantes, de cada lado do teclado. */
+.lp-laptop-teclas::before,
+.lp-laptop-teclas::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5.5%;
+  background: radial-gradient(circle, rgb(40 48 53 / 0.55) 0 0.7px, transparent 1px) 0 0 / 5px 5px;
+}
+
+.lp-laptop-teclas::before {
+  right: calc(100% + 2.6%);
+}
+
+.lp-laptop-teclas::after {
+  left: calc(100% + 2.6%);
+}
+
+/* O touchpad de vidro fosco, um tom abaixo do alumínio, com a borda
+   polida. */
 .lp-laptop-touchpad {
   position: absolute;
   bottom: 9%;
-  left: 36%;
-  width: 28%;
-  height: 28%;
+  left: 34%;
+  width: 32%;
+  height: 30%;
   border-radius: 8px;
-  background: rgb(169 180 187 / 0.45);
-  box-shadow: inset 0 0 0 1px rgb(142 154 162 / 0.6);
+  background: linear-gradient(180deg, #d9e0e4, #c9d2d7);
+  box-shadow:
+    inset 0 0 0 1px rgb(120 132 140 / 0.45),
+    inset 0 1px 2px rgb(0 0 0 / 0.12),
+    0 1px 0 rgb(255 255 255 / 0.6);
+}
+
+/* A espessura da frente: uma faixa que desce da borda da base (rotateX
+   -90° dentro do plano deitado), com o entalhe para abrir a tampa. A altura
+   em % da largura (padding) acompanha o tamanho do notebook. */
+.lp-laptop-frente {
+  position: absolute;
+  top: 100%;
+  left: 1.2%;
+  right: 1.2%;
+  height: 0;
+  padding-top: 1.6%;
+  border-radius: 0 0 14px 14px;
+  background:
+    radial-gradient(50% 120% at 50% 0%, rgb(0 0 0 / 0.28), transparent 62%) 50% 0 / 16% 100% no-repeat,
+    linear-gradient(180deg, #b3bdc3, #8f9aa1);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5);
+  transform-origin: 50% 0;
+  transform: rotateX(-90deg);
 }
 
 /* ------------------------------------------ Tela interativa do notebook */
@@ -1828,9 +1969,10 @@ button.lp-simulador-refazer:hover:not(:disabled) {
 
 .lp-planos-grade {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.14fr);
   gap: var(--espaco-10);
-  max-width: 1040px;
+  align-items: center;
+  max-width: 1080px;
   margin: var(--espaco-20) auto 0;
   text-align: left;
 }
@@ -1876,12 +2018,46 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   margin-top: var(--espaco-4);
 }
 
+/* A escada: a entrada é o cartão comum; o intermediário ganha um fundo de
+   menta e a borda verde; o principal (Empresarial) é o maior destaque:
+   esmeralda, mais alto que os vizinhos, com o selo, a sombra longa e a
+   borda viva (estilos/movimento.css). */
+.lp-plano.intermediario {
+  border-color: color-mix(in srgb, var(--of-verde) 35%, var(--linha));
+  background:
+    radial-gradient(90% 70% at 100% 0%, color-mix(in srgb, var(--of-menta) 90%, transparent), transparent 70%),
+    var(--superficie);
+}
+
 .lp-plano.destaque {
+  padding-block: calc(var(--espaco-14) + var(--espaco-6));
   border-color: transparent;
   background:
     radial-gradient(80% 60% at 100% 0%, rgb(100 191 141 / 0.3), transparent 70%),
     var(--of-esmeralda);
+  box-shadow:
+    0 40px 80px -40px rgb(16 60 44 / 0.7),
+    0 0 0 1px rgb(132 210 165 / 0.18);
   color: #ffffff;
+}
+
+.lp-plano.destaque .lp-plano-preco b {
+  font-size: 3.125rem;
+}
+
+.lp-plano-selo {
+  display: inline-flex;
+  gap: var(--espaco-3);
+  align-items: center;
+  justify-self: start;
+  padding: var(--espaco-2) var(--espaco-6);
+  border-radius: var(--raio-pilula);
+  background: rgb(132 210 165 / 0.18);
+  color: var(--lp-verde-na-esmeralda);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-forte);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .lp-plano.destaque .lp-plano-apoio,
@@ -1917,18 +2093,120 @@ button.lp-simulador-refazer:hover:not(:disabled) {
 }
 
 /* Tabela comparativa (regras/planos.ts): o recurso, com o "i" que explica em
-   palavras simples, e o que cada plano oferece. A coluna do Família leva a
-   cor do plano em destaque. Largura fixa das colunas: cabe no celular sem
+   palavras simples, e o que cada plano oferece. A coluna do Empresarial leva
+   a cor do plano em destaque. Largura fixa das colunas: cabe no celular sem
    rolar para o lado. */
 .lp-comparativo-moldura {
-  max-width: 1040px;
+  max-width: 1080px;
   margin: var(--espaco-16) auto 0;
-  padding: var(--espaco-4) var(--espaco-10) var(--espaco-10);
+  padding: var(--espaco-4) var(--espaco-10);
   border: var(--borda);
   border-radius: 20px;
   background: var(--superficie);
   box-shadow: var(--sombra);
   text-align: left;
+}
+
+/* O botão ocupa a largura da moldura: ícone, o nome com a frase de apoio e,
+   à direita, o estado (Recolher / Mostrar) com a seta que gira. */
+button.lp-comparativo-alternar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--espaco-6);
+  align-items: center;
+  width: 100%;
+  min-height: 64px;
+  padding: var(--espaco-5) var(--espaco-2);
+  color: var(--texto);
+  background: transparent;
+  border: 0;
+  border-radius: var(--raio);
+  text-align: left;
+}
+
+button.lp-comparativo-alternar:hover:not(:disabled) {
+  color: var(--texto);
+  background: transparent;
+}
+
+.lp-comparativo-alternar-icone {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.lp-comparativo-alternar-texto {
+  display: grid;
+  gap: 2px;
+  font-size: var(--fonte-corpo);
+  font-weight: var(--peso-semi);
+}
+
+.lp-comparativo-alternar-texto small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-medio);
+}
+
+.lp-comparativo-alternar-estado {
+  display: inline-flex;
+  gap: var(--espaco-3);
+  align-items: center;
+  padding: var(--espaco-3) var(--espaco-6);
+  border: var(--borda);
+  border-radius: var(--raio-pilula);
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-semi);
+  transition:
+    color var(--tempo) var(--curva),
+    border-color var(--tempo) var(--curva);
+}
+
+.lp-comparativo-alternar-estado .icone {
+  transition: transform var(--tempo-medio) var(--curva);
+}
+
+.lp-comparativo-moldura.aberto .lp-comparativo-alternar-estado .icone {
+  transform: rotate(180deg);
+}
+
+button.lp-comparativo-alternar:hover .lp-comparativo-alternar-estado {
+  border-color: color-mix(in srgb, var(--of-verde) 45%, var(--linha));
+  color: var(--texto);
+}
+
+/* Abre e recolhe pela altura da linha da grade (0fr e 1fr): a tabela
+   desliza sem o JS medir nada. Recolhida, some de vez depois da animação
+   (visibility), além de inerte. */
+.lp-comparativo-dobra {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition:
+    grid-template-rows var(--tempo-longo) var(--curva),
+    visibility 0s linear var(--tempo-longo);
+}
+
+.lp-comparativo-moldura.aberto .lp-comparativo-dobra {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition:
+    grid-template-rows var(--tempo-longo) var(--curva),
+    visibility 0s;
+}
+
+.lp-comparativo-conteudo {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lp-comparativo-moldura.aberto .lp-comparativo-conteudo {
+  padding-bottom: var(--espaco-6);
 }
 
 .lp-comparativo {
@@ -1966,8 +2244,94 @@ button.lp-simulador-refazer:hover:not(:disabled) {
 }
 
 .lp-comparativo tbody th[scope='row'] {
+  position: relative;
   font-weight: var(--peso-medio);
   text-align: left;
+}
+
+/* A linha sob o mouse ganha um fundo leve, e três folhas sobem flutuando da
+   célula do recurso, girando devagar e apagando no alto. Discreto: pequenas,
+   meio transparentes e só enquanto o mouse está na linha. */
+.lp-comparativo-linha > * {
+  transition: background-color var(--tempo) var(--curva);
+}
+
+.lp-comparativo-linha:hover > * {
+  background-color: color-mix(in srgb, var(--of-menta) 35%, transparent);
+}
+
+.lp-comparativo-linha:hover > .destaque {
+  background-color: color-mix(in srgb, var(--of-menta) 80%, transparent);
+}
+
+.lp-folhas-da-linha {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.lp-folhas-da-linha i {
+  position: absolute;
+  bottom: 30%;
+  left: var(--x);
+  width: var(--tamanho);
+  height: var(--tamanho);
+  border-radius: 100% 0;
+  background:
+    linear-gradient(135deg, transparent calc(50% - 0.5px), rgb(255 255 255 / 0.45) 50%, transparent calc(50% + 0.5px)),
+    linear-gradient(135deg, #64bf8d, #2b7857 70%);
+  opacity: 0;
+}
+
+.lp-folhas-da-linha i:nth-child(1) {
+  --x: 2%;
+  --tamanho: 8px;
+  --giro: -20deg;
+  --deriva: 10px;
+  --atraso: 0ms;
+}
+
+.lp-folhas-da-linha i:nth-child(2) {
+  --x: 46%;
+  --tamanho: 6px;
+  --giro: 35deg;
+  --deriva: -8px;
+  --atraso: 420ms;
+}
+
+.lp-folhas-da-linha i:nth-child(3) {
+  --x: 88%;
+  --tamanho: 7px;
+  --giro: 110deg;
+  --deriva: 6px;
+  --atraso: 860ms;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lp-comparativo-linha:hover .lp-folhas-da-linha i {
+    animation: lp-folha-flutua 2.6s cubic-bezier(0.37, 0, 0.3, 1) var(--atraso) infinite;
+  }
+}
+
+@keyframes lp-folha-flutua {
+  0% {
+    opacity: 0;
+    transform: translate(0, 8px) rotate(var(--giro)) scale(0.7);
+  }
+
+  25% {
+    opacity: 0.75;
+  }
+
+  60% {
+    transform: translate(var(--deriva), -12px) rotate(calc(var(--giro) + 70deg)) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--deriva) * -0.5), -26px) rotate(calc(var(--giro) + 140deg)) scale(0.9);
+  }
 }
 
 .lp-comparativo-nome {

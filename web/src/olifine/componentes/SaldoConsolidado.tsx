@@ -55,6 +55,7 @@ const SEM_NUMEROS = {
 //   fechamento previsto = saldo de hoje + a receber − a pagar até o fim do mês
 //   saldo livre         = fechamento previsto − investido
 //
+// Dentro da leitura, a barra de quanto do dinheiro do mês já tem destino.
 // A conta aberta fica no "i" (Dica), que flutua por cima da página. O card tem
 // sempre as mesmas partes, com ou sem números, e altura fixa no CSS: nada
 // aparece nem some depois de carregar, então o layout não pula.
@@ -67,7 +68,7 @@ export default function SaldoConsolidado({ saldo, resultado, investido, investid
   const ateQuando = ate ? `até ${ate}` : 'até o fim do mês';
 
   return (
-    <article className={`of-kpi of-kpi-saldo of-consolidado ${leitura.estado}`} aria-labelledby="titulo-saldo-livre">
+    <article className={`of-kpi of-kpi-saldo of-consolidado borda-viva ${leitura.estado}`} aria-labelledby="titulo-saldo-livre">
       <div className="of-kpi-topo">
         <h2 id="titulo-saldo-livre" className="of-kpi-rotulo">
           <span className="of-kpi-icone" aria-hidden="true">
@@ -94,6 +95,15 @@ export default function SaldoConsolidado({ saldo, resultado, investido, investid
           {leitura.titulo}
         </span>
         <p>{leitura.texto}</p>
+        {/* Quanto do dinheiro do mês já tem destino, à vista no card (a conta
+            aberta continua no "i"). Sempre presente: sem números, vazio. */}
+        <div className="of-saldo-livre-destino">
+          <span className={`of-conta-do-mes-barra ${leitura.estado}`} aria-hidden="true"
+            style={{ '--p': `${comprometido}%` } as CSSProperties}>
+            <i />
+          </span>
+          <small>{resultado ? `${comprometido}% já tem destino` : 'Nada comprometido ainda'}</small>
+        </div>
       </div>
 
       <dl className="of-consolidado-metricas">

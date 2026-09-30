@@ -1,6 +1,6 @@
 // Testes do saldo por conta da Visão geral: disponível x investido.
 import { describe, expect, it } from 'vitest';
-import { parteInvestida, separarSaldos, type ContaComSaldo } from './saldos';
+import { parteInvestida, separarSaldos, sobreOTipo, textoDaFatia, type ContaComSaldo } from './saldos';
 
 const contas: ContaComSaldo[] = [
   { id: 'c', nome: 'Conta corrente', tipo: 'CORRENTE', saldo: 420000 },
@@ -55,5 +55,19 @@ describe('parteInvestida', () => {
   it('diz quanto do patrimônio está aplicado', () => {
     expect(parteInvestida(separarSaldos(contas))).toBe(55);
     expect(parteInvestida(separarSaldos([]))).toBeNull();
+  });
+});
+
+describe('cards do saldo por conta', () => {
+  it('cada tipo tem ícone e frase de apoio', () => {
+    expect(sobreOTipo('CORRENTE')).toEqual({ icone: 'contas', texto: 'Dinheiro do dia a dia' });
+    expect(sobreOTipo('INVESTIMENTO').texto).toBe('Aplicado, fora do saldo livre');
+    expect(sobreOTipo('DESCONHECIDO' as never)).toEqual(sobreOTipo('CORRENTE'));
+  });
+
+  it('diz a parte da conta no grupo, e o negativo à parte', () => {
+    expect(textoDaFatia({ fatia: 0.384, saldo: 100 }, 'disponivel')).toBe('38% do disponível');
+    expect(textoDaFatia({ fatia: 1, saldo: 100 }, 'investido')).toBe('100% do investido');
+    expect(textoDaFatia({ fatia: 0, saldo: -500 }, 'disponivel')).toBe('No negativo (cheque especial)');
   });
 });

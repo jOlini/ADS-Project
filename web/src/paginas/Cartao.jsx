@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useOutletContext, useParams } from 'react-router-dom';
+import { useOutletContext, useParams } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import AvisoComAtalho from '../componentes/AvisoComAtalho';
 import BarraDeSelecao from '../componentes/BarraDeSelecao';
@@ -14,7 +14,7 @@ import Icone from '../componentes/Icone';
 import SimboloDoVazio from '../olifine/componentes/SimboloDoVazio';
 import ImportarExtrato from '../componentes/ImportarExtrato';
 import MedidorDoLimite from '../componentes/MedidorDoLimite';
-import Menu from '../componentes/Menu';
+import AcoesDaLinha from '../componentes/AcoesDaLinha';
 import Modal from '../componentes/Modal';
 import SeletorDeMes from '../componentes/SeletorDeMes';
 import { useToast } from '../componentes/toast/useToast';
@@ -218,10 +218,6 @@ export default function Cartao() {
     <div className="pagina-do-cartao">
       <header className="barra-do-extrato">
         <div className="titulo-do-cartao">
-          <Link to="/contas#cartoes" className="voltar">
-            <Icone nome="anterior" tamanho={16} />
-            Contas & Cartões
-          </Link>
           <h1>{painel.nome}</h1>
           <small>
             Fecha dia {painel.dia_fechamento} · vence dia {painel.dia_vencimento}
@@ -332,7 +328,7 @@ export default function Cartao() {
                 dias={dias}
                 mostrarSaldo={false}
                 selecao={selecaoDeItens}
-                acoes={(linha) => <Menu rotulo={`Ações de ${linha.descricao}`} itens={acoes.itens(linha)} />}
+                acoes={(linha) => <AcoesDaLinha rotulo={`Ações de ${linha.descricao}`} nome={linha.descricao} itens={acoes.itens(linha)} />}
               />
             ) : (
               <div className="vazio">

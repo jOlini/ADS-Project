@@ -11,7 +11,7 @@ import FormularioDeLancamento from '../componentes/FormularioDeLancamento';
 import Icone from '../componentes/Icone';
 import SimboloDoVazio from '../olifine/componentes/SimboloDoVazio';
 import ImportarExtrato from '../componentes/ImportarExtrato';
-import Menu from '../componentes/Menu';
+import AcoesDaLinha from '../componentes/AcoesDaLinha';
 import Modal from '../componentes/Modal';
 import SeletorDeMes from '../componentes/SeletorDeMes';
 import { useToast } from '../componentes/toast/useToast';
@@ -307,7 +307,7 @@ export default function Lancamentos() {
               mostrarSaldo={!filtrado && visao.saldoConfiavel}
               corDaPessoa={pessoasDaCasa.length > 0 ? (nome) => corDoResponsavel(nome, pessoasDaCasa) : undefined}
               selecao={selecao}
-              acoes={(linha) => <Menu rotulo={`Ações de ${linha.descricao}`} itens={acoes.itens(linha)} />}
+              acoes={(linha) => <AcoesDaLinha rotulo={`Ações de ${linha.descricao}`} nome={linha.descricao} itens={acoes.itens(linha)} />}
             />
           ) : (
             <div className="vazio">

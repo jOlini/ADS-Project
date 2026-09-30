@@ -232,57 +232,93 @@ function Oferta({ oferta }) {
 }
 
 // Tabela comparativa dos três planos (regras/planos.ts): cada recurso com o
-// "i" que explica, em palavras simples, o que ele faz.
+// "i" que explica, em palavras simples, o que ele faz. O botão "Comparar
+// todos os planos" abre e recolhe a tabela; ela começa aberta. Recolhida, a
+// tabela fica inerte (fora do Tab e do leitor de tela) e a altura vai a zero
+// com a animação de grid-template-rows (0fr ↔ 1fr), sem medir nada no JS.
+//
+// Cada linha de recurso traz três folhas escondidas (enfeite, fora do leitor
+// de tela), que sobem flutuando devagar quando o mouse passa pela linha.
 function ComparativoDosPlanos() {
+  const [aberto, setAberto] = useState(true);
+  const idDaTabela = useId();
   return (
-    <div className="lp-comparativo-moldura" data-revela="">
-      <table className="lp-comparativo">
-        <caption className="apenas-leitor">O que cada plano inclui: Free, Família e Empresarial</caption>
-        <colgroup>
-          <col className="lp-comparativo-recurso" />
-          {PLANOS.map((plano) => (
-            <col key={plano.id} />
-          ))}
-        </colgroup>
-        <thead>
-          <tr>
-            <th scope="col">
-              <span className="apenas-leitor">Recurso</span>
-            </th>
-            {PLANOS.map((plano) => (
-              <th key={plano.id} scope="col" className={plano.destaque ? 'destaque' : undefined}>
-                {plano.nome}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        {RECURSOS_DOS_PLANOS.map((grupo) => (
-          <tbody key={grupo.titulo}>
-            <tr className="lp-comparativo-grupo">
-              <th scope="colgroup" colSpan={PLANOS.length + 1}>
-                {grupo.titulo}
-              </th>
-            </tr>
-            {grupo.recursos.map((recurso) => (
-              <tr key={recurso.id}>
-                <th scope="row">
-                  <span className="lp-comparativo-nome">
-                    <span>{recurso.nome}</span>
-                    <Dica titulo={recurso.nome} alinhar="inicio">
-                      <p>{recurso.dica}</p>
-                    </Dica>
-                  </span>
+    <div className={`lp-comparativo-moldura${aberto ? ' aberto' : ''}`} data-revela="">
+      <button
+        type="button"
+        className="lp-comparativo-alternar"
+        aria-expanded={aberto}
+        aria-controls={idDaTabela}
+        onClick={() => setAberto((atual) => !atual)}
+      >
+        <span className="lp-comparativo-alternar-icone" aria-hidden="true">
+          <Icone nome="colunas" tamanho={18} />
+        </span>
+        <span className="lp-comparativo-alternar-texto">
+          Comparar todos os planos
+          <small>{aberto ? 'Recurso por recurso, lado a lado' : 'Veja o que cada plano inclui'}</small>
+        </span>
+        <span className="lp-comparativo-alternar-estado">
+          {aberto ? 'Recolher' : 'Mostrar'}
+          <Icone nome="seta" tamanho={16} />
+        </span>
+      </button>
+      <div className="lp-comparativo-dobra" id={idDaTabela} inert={!aberto}>
+        <div className="lp-comparativo-conteudo">
+          <table className="lp-comparativo">
+            <caption className="apenas-leitor">O que cada plano inclui: Free, Família e Empresarial</caption>
+            <colgroup>
+              <col className="lp-comparativo-recurso" />
+              {PLANOS.map((plano) => (
+                <col key={plano.id} />
+              ))}
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">
+                  <span className="apenas-leitor">Recurso</span>
                 </th>
                 {PLANOS.map((plano) => (
-                  <td key={plano.id} className={plano.destaque ? 'destaque' : undefined}>
-                    <Oferta oferta={recurso.oferta[plano.id]} />
-                  </td>
+                  <th key={plano.id} scope="col" className={plano.destaque ? 'destaque' : undefined}>
+                    {plano.nome}
+                  </th>
                 ))}
               </tr>
+            </thead>
+            {RECURSOS_DOS_PLANOS.map((grupo) => (
+              <tbody key={grupo.titulo}>
+                <tr className="lp-comparativo-grupo">
+                  <th scope="colgroup" colSpan={PLANOS.length + 1}>
+                    {grupo.titulo}
+                  </th>
+                </tr>
+                {grupo.recursos.map((recurso) => (
+                  <tr key={recurso.id} className="lp-comparativo-linha">
+                    <th scope="row">
+                      <span className="lp-folhas-da-linha" aria-hidden="true">
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                      <span className="lp-comparativo-nome">
+                        <span>{recurso.nome}</span>
+                        <Dica titulo={recurso.nome} alinhar="inicio">
+                          <p>{recurso.dica}</p>
+                        </Dica>
+                      </span>
+                    </th>
+                    {PLANOS.map((plano) => (
+                      <td key={plano.id} className={plano.destaque ? 'destaque' : undefined}>
+                        <Oferta oferta={recurso.oferta[plano.id]} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
             ))}
-          </tbody>
-        ))}
-      </table>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -641,15 +677,25 @@ export default function Landing() {
           <p className="lp-secao-apoio" data-revela="" style={{ '--ordem': 1 }}>
             Comece de graça. Quando a casa ou a empresa entrarem na conta, o plano cresce junto.
           </p>
+          {/* Da entrada ao principal, da esquerda para a direita: o Free
+              (entrada), o Família (intermediário, com um toque de menta) e o
+              Empresarial, o mais completo, em esmeralda, maior, com o selo e
+              a borda viva. */}
           <div className="lp-planos-grade">
             {PLANOS.map((plano, indice) => (
               <article
                 key={plano.id}
-                className={`lp-plano${plano.destaque ? ' destaque' : ''}`}
+                className={`lp-plano ${plano.nivel}${plano.destaque ? ' destaque borda-viva' : ''}`}
                 data-revela=""
                 data-inclina=""
                 style={{ '--ordem': indice + 1 }}
               >
+                {plano.selo && (
+                  <span className="lp-plano-selo">
+                    <Icone nome="estrela" tamanho={14} />
+                    {plano.selo}
+                  </span>
+                )}
                 <h3>{plano.nome}</h3>
                 <p className="lp-plano-apoio">{plano.apoio}</p>
                 <p className="lp-plano-preco">

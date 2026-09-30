@@ -34,25 +34,40 @@ export function familiaLiberada(plano: Plano): boolean {
 
 // ------------------------------------------------------ Tabela da landing
 
+// A escada dos planos na landing: a entrada, o intermediário e o principal
+// (o que tem tudo), que leva o maior destaque visual.
+export type NivelDoPlano = 'entrada' | 'intermediario' | 'principal';
+
 export interface DescricaoDoPlano {
   id: Plano;
   nome: string;
   apoio: string;
   // Sem preço decidido ainda: "Em breve" no lugar (D-F6 no cofre).
   preco: string | null;
+  nivel: NivelDoPlano;
+  // O selo acima do nome (só no principal).
+  selo?: string;
   destaque?: boolean;
 }
 
 export const PLANOS: readonly DescricaoDoPlano[] = [
-  { id: 'FREE', nome: 'Free', apoio: 'O essencial para organizar o seu dinheiro.', preco: 'R$ 0' },
+  { id: 'FREE', nome: 'Free', apoio: 'O essencial para organizar o seu dinheiro.', preco: 'R$ 0', nivel: 'entrada' },
   {
     id: 'FAMILIA',
     nome: 'Família',
     apoio: 'O dinheiro da casa, com o gasto de cada pessoa separado.',
     preco: null,
+    nivel: 'intermediario',
+  },
+  {
+    id: 'EMPRESARIAL',
+    nome: 'Empresarial',
+    apoio: 'Tudo do Família, mais as suas empresas.',
+    preco: null,
+    nivel: 'principal',
+    selo: 'O mais completo',
     destaque: true,
   },
-  { id: 'EMPRESARIAL', nome: 'Empresarial', apoio: 'Tudo do Família, mais as suas empresas.', preco: null },
 ];
 
 // true: incluso; false: não incluso; texto: incluso com esse limite.

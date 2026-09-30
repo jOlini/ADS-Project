@@ -612,6 +612,67 @@ button.link:hover:not(:disabled) {
   min-width: var(--tamanho-icone-botao);
 }
 
+/* A lista do extrato é um container: as ações da linha (AcoesDaLinha)
+   seguem a largura dela, e não a da janela. */
+.extrato {
+  container: extrato / inline-size;
+}
+
+/* Ações à vista: ícone e nome em botões baixos, discretos até o mouse
+   chegar. Excluir fica em vermelho só no texto (o vermelho cheio é da
+   confirmação). */
+.acoes-explicitas {
+  display: flex;
+  gap: var(--espaco-2);
+  align-items: center;
+}
+
+.acoes-no-menu {
+  display: none;
+}
+
+button.acao-explicita {
+  gap: var(--espaco-3);
+  min-height: 36px;
+  padding: 0 var(--espaco-5);
+  color: var(--suave);
+  background: transparent;
+  border: var(--borda);
+  border-radius: var(--raio-pequeno);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-semi);
+  white-space: nowrap;
+}
+
+button.acao-explicita:hover:not(:disabled) {
+  color: var(--texto);
+  background: var(--lateral);
+  border-color: var(--linha-forte);
+}
+
+button.acao-explicita.perigo {
+  color: var(--erro);
+  background: transparent;
+}
+
+button.acao-explicita.perigo:hover:not(:disabled) {
+  color: var(--erro);
+  background: color-mix(in srgb, var(--erro) 10%, transparent);
+  border-color: color-mix(in srgb, var(--erro) 45%, transparent);
+}
+
+/* Lista estreita (menos de 768 px): os botões apertariam a descrição, e as
+   ações voltam para o menu de três pontinhos. */
+@container extrato (max-width: 767.98px) {
+  .acoes-explicitas {
+    display: none;
+  }
+
+  .acoes-no-menu {
+    display: contents;
+  }
+}
+
 .marca-da-categoria {
   width: var(--tamanho-marca-categoria);
   height: var(--tamanho-marca-categoria);
@@ -1602,7 +1663,6 @@ button.toast-fechar:hover:not(:disabled) {
   }
 
   .esqueci-a-senha,
-  a.voltar,
   a.of-ver-mais,
   a.marca {
     display: inline-flex;

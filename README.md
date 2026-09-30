@@ -417,9 +417,12 @@ reage ao mouse (as folhas sob ele se levantam) e segue pela página como folhas 
 (WebGL, carregado só ao rolar), cada bloco entra ao rolar e os cartões giram com o mouse. Na seção do notebook, a
 página fica presa enquanto a rolagem abre a tampa e só volta a descer com ela aberta; aberta, a tela é o app de
 exemplo e responde ao mouse (telas, gráfico, categorias, contas e a meta que cresce a cada rega). Pedindo menos
-movimento ao sistema, tudo fica parado e o notebook já aparece aberto. A área logada tem a Visão geral (o saldo
-livre em destaque, com o patrimônio total, o investido e o fechamento do mês, números do mês, evolução do saldo, despesas por categoria,
-últimas transações, metas e os dados do cadastro), a aba Metas (as metas ficam no navegador até a API de metas e
+movimento ao sistema, tudo fica parado e o notebook já aparece aberto. Os planos sobem de nível da esquerda para
+a direita (Free, Família e o Empresarial em destaque), e o botão "Comparar todos os planos" abre e recolhe a tabela
+comparativa (começa aberta; folhas sobem da linha sob o mouse). A área logada tem a Visão geral (o saldo
+livre em destaque, com o patrimônio total, o investido, o fechamento e quanto do mês já tem destino, números do mês,
+evolução do saldo, despesas por categoria, últimas transações, metas, o saldo de cada conta em cards, o total das
+faturas com as miniaturas dos cartões e os dados do cadastro), a aba Metas (as metas ficam no navegador até a API de metas e
 saem dele no logout; a meta completa abre a colheita) e, com a API, Lançamentos, Contas & Cartões, Categorias e
 Relatórios. No topo, **Pessoal** e **Empresarial** trocam o espaço na hora. No pessoal, a chave **Família** liga o
 Modo Família: a página Pessoas da casa cadastra quem mora com você (nome e cor), e Visão geral, Lançamentos e
@@ -427,7 +430,9 @@ Relatórios ganham o filtro "de quem" e o gasto por pessoa. No Plano Free, a cha
 explica o Plano Família; a landing compara os três planos numa tabela, com o "i" em cada recurso. No empresarial, o seletor ao lado escolhe (ou
 cadastra, com CNPJ e regime) a empresa, e o menu ganha a Gestão: Fluxo de caixa, DRE, Custos, Sociedade &
 aportes, Impostos (com os alertas de vencimento no sino) e Pessoal (RH). A barra lateral recolhe para uma coluna
-de ícones (o nome aparece ao passar o mouse). O botão de lua ou sol no topo troca o tema.
+de ícones (o nome aparece ao passar o mouse). O botão de lua ou sol no topo troca o tema. Toda tela fora da Visão
+geral começa pelo botão "← Voltar" (a tela do cartão volta a Contas & Cartões). No extrato, Editar, Estornar e
+Excluir ficam à vista em cada linha; com a lista estreita (menos de 768 px), voltam para o menu de três pontinhos.
 
 ### Front-end em container (nginx)
 
@@ -522,6 +527,7 @@ poucos.
 | Front-end | `web/src/regras/sessao.test.js` e `servicos/contas.test.js` | Área logada só com sessão e e-mail confirmado; cadastro no Firebase com o link de confirmação, logout e "Já confirmei" com o SDK simulado |
 | Front-end | `web/src/regras/acaoDaConta.test.js` e `servicos/emailsDaConta.test.js` | Links dos e-mails: código no fragmento ou na consulta, modo do Firebase para cada página, senha nova repetida, e quando a API manda o e-mail ou o Firebase assume |
 | Front-end | `web/src/regras/tema.test.js` | Tema salvo ou do sistema e alternância |
+| Front-end | `web/src/regras/voltar.test.ts` | Destino do "← Voltar" de cada tela (sem botão na Visão geral; o cartão volta à carteira) |
 | Front-end | `web/src/regras/mascaras.test.ts` e `sanitizacao.test.ts` | Máscara de valor (milhar, vírgula, dois decimais, sinal, cursor, colar) e de inteiro, teclas barradas por tipo de campo, e a limpeza do texto antes de ir à API |
 | Front-end | `web/src/regras/arquivoDoExtrato.test.ts` e `conferenciaDaImportacao.test.ts` | Arquivo do extrato (extensão, tipo, planilha ou PDF renomeado, binário, UTF-8, Windows-1252 e UTF-16) e a edição de descrição e categoria na conferência |
 | Front-end | `web/src/regras/*.test.js` e `responsavel.test.ts` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, responsável e racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |

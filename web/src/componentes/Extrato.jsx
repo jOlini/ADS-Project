@@ -23,8 +23,14 @@ const textoDoRacha = (pessoas) => pessoas.map((parte) => `${parte.pessoa} ${form
 // (useSelecao), se vier, põe a caixa de marcar no começo de cada linha.
 // corDaPessoa(nome), se vier (Modo Família), dá a cor do responsável que é da
 // família: a etiqueta ganha o ponto da cor dela.
+//
+// A lista mora em .extrato, um container (estilos/lancamentos.css): as ações
+// da linha (AcoesDaLinha) trocam os botões pelo menu pela largura dela, e não
+// pela da janela, que muda com a barra lateral aberta ou recolhida.
 export default function Extrato({ dias, mostrarSaldo = true, acoes, selecao, corDaPessoa }) {
-  return dias.map((dia) => (
+  return (
+    <div className="extrato">
+  {dias.map((dia) => (
     <div key={dia.data}>
       <p className="dia">
         <span>{DIA_LONGO.format(comoData(dia.data))}</span>
@@ -97,5 +103,7 @@ export default function Extrato({ dias, mostrarSaldo = true, acoes, selecao, cor
         </article>
       ))}
     </div>
-  ));
+  ))}
+    </div>
+  );
 }

@@ -112,7 +112,20 @@ describe('resumoDasMetas', () => {
       total: 3,
       concluidas: 1,
       emAndamento: 2,
+      guardado: 1010,
+      alvo: 3000,
+      porcentagem: 33,
     });
+  });
+
+  it('o que passa do alvo de uma meta não enche a barra geral', () => {
+    const resumo = resumoDasMetas([meta(1000, 1500), meta(1000)]);
+    expect(resumo.guardado).toBe(1000);
+    expect(resumo.porcentagem).toBe(50);
+  });
+
+  it('sem metas, tudo zerado', () => {
+    expect(resumoDasMetas([])).toEqual({ total: 0, concluidas: 0, emAndamento: 0, guardado: 0, alvo: 0, porcentagem: 0 });
   });
 });
 

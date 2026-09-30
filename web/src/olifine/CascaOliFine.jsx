@@ -6,6 +6,7 @@ import { faturasAVencer } from '../regras/cartoes';
 import { hojeIso } from '../regras/datas';
 import { ehEmpresa, nomeDoEspaco } from '../regras/espacos';
 import { familiaAtiva } from '../regras/familia';
+import { destinoDoVoltar } from '../regras/voltar';
 import { guardarLateralRecolhida, lerLateralRecolhida } from '../servicos/lateral';
 import { apiConfigurada, EVENTO_DOS_TRIBUTOS, listarCartoes, listarTributos } from '../servicos/livroCaixa';
 import { alertasDosTributos, textoDaCompetencia } from './regras/impostos';
@@ -129,6 +130,8 @@ export default function CascaOliFine({ contexto }) {
     const caixa = elemento.getBoundingClientRect();
     setDica({ texto, x: caixa.right + 12, y: caixa.top + caixa.height / 2 });
   }
+
+  const voltar = destinoDoVoltar(pathname);
 
   const dados = pessoa.dados;
   const nome = dados ? `${dados.nome} ${dados.sobrenome}`.trim() : (usuario.email ?? 'Sua conta');
@@ -356,6 +359,14 @@ export default function CascaOliFine({ contexto }) {
                 listas, seleção) sobra no estado da página. A tela nova
                 chega por opacidade (movimento.css), sem piscar. */}
             <div key={espacoId ?? 'sem-espaco'} className="of-troca-de-espaco">
+              {voltar && (
+                // Toda tela fora da Visão geral começa pelo caminho de volta,
+                // com alvo grande (44 px de altura, a linha inteira do texto).
+                <Link to={voltar.para} className="of-voltar" aria-label={`Voltar para ${voltar.rotulo}`}>
+                  <span aria-hidden="true">←</span>
+                  Voltar
+                </Link>
+              )}
               <Outlet context={contexto} />
             </div>
           </LimiteDeErro>

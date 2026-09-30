@@ -6,9 +6,11 @@ import FiltroDePessoa from '../../componentes/FiltroDePessoa';
 import FormularioDeCartao from '../../componentes/FormularioDeCartao';
 import FormularioDeConta from '../../componentes/FormularioDeConta';
 import FormularioDeLancamento from '../../componentes/FormularioDeLancamento';
+import MiniaturaDoCartao from '../../componentes/MiniaturaDoCartao';
 import Menu from '../../componentes/Menu';
 import Modal from '../../componentes/Modal';
 import { useCarga } from '../../componentes/useCarga';
+import { resumoDasFaturas, usoDoLimite } from '../../regras/cartoes';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
 import { formatarData, hojeIso } from '../../regras/datas';
 import { donoDasMetas } from '../../regras/espacos';
@@ -52,7 +54,7 @@ import {
 } from '../dados/exemplo';
 import { iconeDaLinha } from '../regras/icones';
 import { calcularSaldoLivre } from '../regras/saldoLivre';
-import { parteInvestida, separarSaldos } from '../regras/saldos';
+import { parteInvestida, separarSaldos, sobreOTipo, textoDaFatia } from '../regras/saldos';
 import { guardado, porcentagem, progresso, proximaFase, resumoDasMetas, sementeDaMeta } from '../regras/metas';
 import { somarDias } from '../regras/serie';
 import { leituraDaVariacao, textoDaVariacao, variacaoPercentual } from '../regras/tendencia';
@@ -307,11 +309,7 @@ export default function VisaoGeral() {
   // Cartões e cadastros do "+ Novo": só com a API (o exemplo não tem cartão).
   const cadastros = real ? livro.dados : null;
   const cartoes = cadastros?.cartoes ?? [];
-  const compromisso = {
-    usado: cartoes.reduce((soma, cartao) => soma + Math.max(0, cartao.usado_centavos), 0),
-    faturasAtuais: cartoes.reduce((soma, cartao) => soma + cartao.fatura_atual_centavos, 0),
-    futuras: cartoes.reduce((soma, cartao) => soma + cartao.parcelamentos_futuros_centavos, 0),
-  };
+  const faturas = resumoDasFaturas(cartoes, hoje);
   const contasAtivas = cadastros ? contasBancarias(cadastros.contas).filter((conta) => conta.ativa) : [];
   // O racha com nome e parte de cada pessoa é do Plano Família (a API confere).
   const divisaoPorPessoa = familiaLiberada(planoDoCliente(espacos));
@@ -523,45 +521,79 @@ export default function VisaoGeral() {
         </article>
 
         {/* O card inteiro leva às metas (o link se estica por cima dele), e o
-            "i" fica por cima do link: botão dentro de link não é válido. */}
-        <article className="of-kpi of-kpi-link">
-          <div className="of-kpi-topo">
-            <p className="of-kpi-rotulo">
-              <span className="of-kpi-icone meta" aria-hidden="true">
-                <Icone nome="broto" tamanho={18} />
-              </span>
-              <Link to="/metas" className="of-kpi-alvo">
-                Metas
-              </Link>
-            </p>
-            <Dica titulo="Metas">
-              <p>
-                Quantas metas você está regando agora e quantas já concluiu. Cada meta é uma árvore: cada valor guardado
-                a faz crescer.
+            "i" fica por cima do link: botão dentro de link não é válido. À
+            esquerda, a contagem e a barra de todas as metas juntas; à
+            direita (card largo), as mais adiantadas, cada uma com a sua
+            barra. Só texto do lado direito: o link é o card inteiro. */}
+        <article className="of-kpi of-kpi-link of-kpi-metas">
+          <div className="of-kpi-metas-corpo">
+          <div className="of-kpi-metas-resumo">
+            <div className="of-kpi-topo">
+              <p className="of-kpi-rotulo">
+                <span className="of-kpi-icone meta" aria-hidden="true">
+                  <Icone nome="broto" tamanho={18} />
+                </span>
+                <Link to="/metas" className="of-kpi-alvo">
+                  Metas
+                </Link>
               </p>
-            </Dica>
+              <Dica titulo="Metas">
+                <p>
+                  Quantas metas você está regando agora e quantas já concluiu. A barra soma todas: quanto já foi
+                  guardado do total que você quer juntar. Cada meta é uma árvore: cada valor guardado a faz crescer.
+                </p>
+              </Dica>
+            </div>
+            <p className="of-kpi-valor">
+              {resumo.total > 0 ? (
+                <>
+                  {resumo.emAndamento} <small>de {resumo.total} em andamento</small>
+                </>
+              ) : (
+                '0'
+              )}
+            </p>
+            <div className="of-kpi-metas-geral">
+              <span className="of-progresso" aria-hidden="true">
+                <i style={{ '--p': `${resumo.porcentagem}%` }} />
+              </span>
+              <small>
+                {resumo.total > 0
+                  ? `${formatarBRL(resumo.guardado)} de ${formatarBRL(resumo.alvo)} · ${resumo.porcentagem}%`
+                  : 'Nada guardado ainda'}
+              </small>
+            </div>
+            <p className="of-kpi-rodape">
+              {resumo.total === 0 ? (
+                <span className="of-kpi-rodape-texto">Plante a primeira meta</span>
+              ) : resumo.concluidas > 0 ? (
+                <>
+                  <span className="of-tendencia bom">{`${resumo.concluidas} concluída${resumo.concluidas > 1 ? 's' : ''}`}</span>
+                  <span className="of-kpi-rodape-texto">com frutos colhidos</span>
+                </>
+              ) : (
+                <span className="of-kpi-rodape-texto">Nenhuma concluída ainda</span>
+              )}
+            </p>
           </div>
-          <p className="of-kpi-valor">
-            {resumo.total > 0 ? (
-              <>
-                {resumo.emAndamento} <small>de {resumo.total}</small>
-              </>
+          <ul className="of-kpi-metas-lista" aria-label="Metas mais adiantadas">
+            {metasEmDestaque.length > 0 ? (
+              metasEmDestaque.slice(0, 3).map((meta) => (
+                <li key={meta.id}>
+                  <span className="of-kpi-metas-nome">{meta.nome}</span>
+                  <b>{porcentagem(meta)}%</b>
+                  <span className="of-progresso" aria-hidden="true">
+                    <i style={{ '--p': `${porcentagem(meta)}%` }} />
+                  </span>
+                </li>
+              ))
             ) : (
-              '0'
+              <li className="of-kpi-metas-dica">
+                Reserva, viagem, notebook: cada meta vira uma árvore que cresce a cada valor guardado.
+              </li>
             )}
-          </p>
-          <p className="of-kpi-rodape">
-            {resumo.total === 0 ? (
-              <span className="of-kpi-rodape-texto">Plante a primeira meta</span>
-            ) : (
-              <>
-                <span className="of-tendencia bom">em andamento</span>
-                {resumo.concluidas > 0 && (
-                  <span className="of-kpi-rodape-texto">{`${resumo.concluidas} concluída${resumo.concluidas > 1 ? 's' : ''}`}</span>
-                )}
-              </>
-            )}
-          </p>
+          </ul>
+          </div>
         </article>
       </section>
 
@@ -681,7 +713,7 @@ export default function VisaoGeral() {
               ))}
             </ul>
             {pertoDeCrescer && (
-              <div className="of-regar-convite">
+              <div className="of-regar-convite borda-viva">
                 <span className="of-regar-convite-icone" aria-hidden="true">
                   <Icone nome="gota" tamanho={18} />
                 </span>
@@ -720,22 +752,66 @@ export default function VisaoGeral() {
                 <Icone nome="proximo" tamanho={14} />
               </Link>
             </div>
-            {/* O que as faturas já comprometem, separado do saldo das contas. */}
-            <div className="of-compromisso">
-              <span>Compromisso nas faturas</span>
-              <b>{formatarBRL(compromisso.usado)}</b>
-              <small>
-                {formatarBRL(compromisso.faturasAtuais)} nas faturas atuais · {formatarBRL(compromisso.futuras)} em
-                parcelas futuras
-              </small>
+            {/* Primeiro o total das faturas (o que vai sair das contas), com o
+                próximo vencimento; ao lado, o que ainda vem e o limite livre.
+                Separado do saldo das contas: cartão é dívida. */}
+            <div className="of-faturas-destaque borda-viva">
+              <div className="of-faturas-total">
+                <span className="of-faturas-rotulo">
+                  <Icone nome="cartao" tamanho={16} />
+                  Total das faturas
+                  <Dica titulo="Total das faturas">
+                    <p>
+                      A soma das faturas de todos os cartões: as que já fecharam e ainda não foram pagas, mais a
+                      fatura aberta de cada um. As parcelas dos meses seguintes ficam à parte.
+                    </p>
+                  </Dica>
+                </span>
+                <b>{formatarBRL(faturas.total)}</b>
+                <small>
+                  {formatarBRL(faturas.fechadas)} fechadas a pagar · {formatarBRL(faturas.abertas)} nas abertas
+                </small>
+                {faturas.proximo && (
+                  <span className={`of-faturas-proximo${faturas.proximo.vencida ? ' vencida' : ''}`}>
+                    <Icone nome={faturas.proximo.vencida ? 'alerta' : 'calendario'} tamanho={14} />
+                    {faturas.proximo.vencida ? 'Venceu' : 'Próximo vencimento'} {formatarData(faturas.proximo.vencimento).slice(0, 5)}
+                    {' · '}
+                    {faturas.proximo.nome}, {formatarBRL(faturas.proximo.valor)}
+                  </span>
+                )}
+              </div>
+              <dl className="of-faturas-numeros">
+                <div>
+                  <dt>Parcelas futuras</dt>
+                  <dd>{formatarBRL(faturas.futuras)}</dd>
+                </div>
+                <div>
+                  <dt>Compromisso total</dt>
+                  <dd>{formatarBRL(faturas.usado)}</dd>
+                </div>
+                <div>
+                  <dt>Limite livre</dt>
+                  <dd>{formatarBRL(faturas.disponivel)}</dd>
+                </div>
+              </dl>
             </div>
             <ul className="of-cartoes">
               {cartoes.map((cartao) => (
-                <li key={cartao.id} className={`cor-${cartao.cor ?? 'grafite'}`}>
-                  <span className="of-cartoes-pastilha" aria-hidden="true" />
-                  <Link to={`/contas/cartoes/${cartao.id}`}>{cartao.nome}</Link>
-                  <span className="of-cartoes-valor">{formatarBRL(cartao.fatura_atual_centavos)}</span>
-                  <small>fatura atual · vence {formatarData(cartao.fatura_atual.vencimento).slice(0, 5)}</small>
+                <li key={cartao.id}>
+                  <MiniaturaDoCartao cartao={cartao} titular={dados ? `${dados.nome} ${dados.sobrenome}`.trim() : ''} />
+                  <span className="of-cartoes-legenda">
+                    <Link to={`/contas/cartoes/${cartao.id}`}>{cartao.nome}</Link>
+                    <span className="of-cartoes-valor">{formatarBRL(cartao.fatura_atual_centavos)}</span>
+                    <span className="of-cartoes-limite">
+                      <span className="of-progresso" aria-hidden="true">
+                        <i style={{ '--p': `${usoDoLimite(cartao)}%` }} />
+                      </span>
+                      {usoDoLimite(cartao)}% do limite
+                    </span>
+                    <small>
+                      fatura atual · vence {formatarData(cartao.fatura_atual.vencimento).slice(0, 5)}
+                    </small>
+                  </span>
                 </li>
               ))}
             </ul>
@@ -795,22 +871,34 @@ export default function VisaoGeral() {
   );
 }
 
-// Saldo de cada conta, com o disponível (o dinheiro para usar: corrente,
-// carteira e poupança) separado do investido (o patrimônio aplicado). A barra
-// de cima mostra a divisão; cada conta tem a parte dela no seu grupo.
+// Saldo de cada conta em cards no padrão dos KPIs do topo (ícone, nome,
+// valor e uma linha que explica), com o disponível (o dinheiro para usar:
+// corrente, carteira e poupança) separado do investido (o patrimônio
+// aplicado). Os dois totais abrem a fileira, cada um com o "i"; cada conta diz
+// o que ela é e quanto pesa no seu grupo, em texto, sem gráfico.
 function SaldoPorConta({ saldos, investida, real }) {
   const grupos = saldos
     ? [
-        { id: 'disponivel', titulo: 'Disponível para usar', icone: 'contas', grupo: saldos.disponivel, legenda: 'corrente, carteira e poupança' },
+        {
+          id: 'disponivel',
+          titulo: 'Disponível para usar',
+          icone: 'contas',
+          grupo: saldos.disponivel,
+          legenda: investida === null ? 'Corrente, carteira e poupança' : `${100 - investida}% do patrimônio`,
+          dica: 'O dinheiro que dá para usar a qualquer hora: conta corrente, carteira e poupança. É dele que sai o saldo livre do mês.',
+        },
         {
           id: 'investido',
           titulo: 'Investido',
           icone: 'crescimento',
           grupo: saldos.investido,
-          legenda: investida === null ? 'patrimônio aplicado' : `${investida}% do patrimônio`,
+          legenda: investida === null ? 'Patrimônio aplicado' : `${investida}% do patrimônio`,
+          dica: 'O dinheiro nas contas do tipo Investimento. Ele conta no patrimônio, mas fica fora do saldo livre para não ser gasto no dia a dia.',
         },
       ]
     : [];
+  const contas = grupos.flatMap(({ id, grupo }) => grupo.contas.map((conta) => ({ ...conta, grupo: id })));
+  const contar = (quantidade) => `${quantidade} ${quantidade === 1 ? 'conta' : 'contas'}`;
   return (
     <section className="cartao of-painel of-painel-saldos" aria-labelledby="titulo-saldos">
       <div className="of-painel-cabecalho">
@@ -823,28 +911,52 @@ function SaldoPorConta({ saldos, investida, real }) {
         )}
       </div>
       {saldos ? (
-        <div className="of-saldos-corpo">
-          <div className="of-saldos-lado">
-          <div className="of-saldos-resumo">
-            {grupos.map(({ id, titulo, icone, grupo, legenda }) => (
-              <div key={id} className={`of-saldo-grupo ${id}`}>
-                <span className="of-saldo-grupo-titulo">
-                  <Icone nome={icone} tamanho={16} />
-                  {titulo}
-                </span>
-                <b>{formatarBRL(grupo.total)}</b>
-                <small>{legenda}</small>
-              </div>
+        <>
+          <ul className="of-saldos-cards" aria-label="Totais e saldo de cada conta">
+            {grupos.map(({ id, titulo, icone, grupo, legenda, dica }) => (
+              <li key={id} className={`of-kpi of-saldo-card total ${id}`}>
+                <div className="of-kpi-topo">
+                  <p className="of-kpi-rotulo">
+                    <span className="of-kpi-icone" aria-hidden="true">
+                      <Icone nome={icone} tamanho={16} />
+                    </span>
+                    {titulo}
+                  </p>
+                  <Dica titulo={titulo}>
+                    <p>{dica}</p>
+                  </Dica>
+                </div>
+                <p className={`of-kpi-valor${grupo.total < 0 ? ' negativo' : ''}`}>{formatarBRL(grupo.total)}</p>
+                <p className="of-kpi-origem">{legenda}</p>
+                <p className="of-kpi-rodape">
+                  <span className="of-tendencia">{contar(grupo.contas.length)}</span>
+                </p>
+              </li>
             ))}
-          </div>
-          {investida !== null && (
-            <span
-              className="of-saldos-divisao"
-              role="img"
-              aria-label={`${100 - investida}% disponível e ${investida}% investido`}
-              style={{ '--investido': `${investida}%` }}
-            />
-          )}
+            {contas.map((conta) => {
+              const sobre = sobreOTipo(conta.tipo);
+              const tipo = rotuloDoTipoDeConta(conta.tipo);
+              return (
+                <li key={conta.id ?? conta.nome} className={`of-kpi of-saldo-card ${conta.grupo}`}>
+                  <div className="of-kpi-topo">
+                    <p className="of-kpi-rotulo">
+                      <span className="of-kpi-icone" aria-hidden="true">
+                        <Icone nome={sobre.icone} tamanho={16} />
+                      </span>
+                      <span className="of-saldo-card-nome">{conta.nome}</span>
+                    </p>
+                    {/* O tipo só quando o nome não é o próprio tipo ("Conta corrente"). */}
+                    {normalizarTexto(conta.nome) !== normalizarTexto(tipo) && <span className="of-saldo-card-tipo">{tipo}</span>}
+                  </div>
+                  <p className={`of-kpi-valor${conta.saldo < 0 ? ' negativo' : ''}`}>{formatarBRL(conta.saldo)}</p>
+                  <p className="of-kpi-origem">{sobre.texto}</p>
+                  <p className="of-kpi-rodape">
+                    <span className={`of-tendencia${conta.saldo < 0 ? ' ruim' : ''}`}>{textoDaFatia(conta, conta.grupo)}</span>
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
           {saldos.investido.contas.length === 0 && (
             <p className="of-discreto">
               Tem dinheiro aplicado? Uma conta do tipo Investimento separa o patrimônio do que está disponível para usar.
@@ -856,34 +968,7 @@ function SaldoPorConta({ saldos, investida, real }) {
               )}
             </p>
           )}
-          </div>
-          <div className="of-saldos-lado">
-          {grupos
-            .filter(({ grupo }) => grupo.contas.length > 0)
-            .map(({ id, grupo }) => (
-              <div key={id} className="of-saldos-lista">
-                <h3 className="of-saldos-lista-titulo">{id === 'disponivel' ? 'Contas' : 'Investimentos'}</h3>
-                <ul>
-                  {grupo.contas.map((conta) => (
-                    <li key={conta.id ?? conta.nome}>
-                      <span className="of-saldos-nome">
-                        <b>{conta.nome}</b>
-                        {/* O tipo só quando o nome não é o próprio tipo ("Conta corrente"). */}
-                        {normalizarTexto(conta.nome) !== normalizarTexto(rotuloDoTipoDeConta(conta.tipo)) && (
-                          <small>{rotuloDoTipoDeConta(conta.tipo)}</small>
-                        )}
-                      </span>
-                      <span className={`of-saldos-valor${conta.saldo < 0 ? ' negativo' : ''}`}>{formatarBRL(conta.saldo)}</span>
-                      <span className={`of-progresso ${id}`} aria-hidden="true">
-                        <i style={{ '--p': `${Math.round(conta.fatia * 100)}%` }} />
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
+        </>
       ) : (
         <p className="of-discreto">
           Com as contas cadastradas, o saldo de cada uma aparece aqui, com o disponível separado do investido.
