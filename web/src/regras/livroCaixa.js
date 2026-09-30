@@ -4,7 +4,7 @@
 // aqui só poupa uma ida ao servidor e põe a mensagem no campo certo.
 import { lerValor } from './dinheiro';
 import { dataExiste } from './datas';
-import { camposDaDivisao, corpoDaDivisao, validarDivisao } from './divisao';
+import { camposDaDivisao, corpoDaDivisao, erroDoDivididoEntre, lerDivididoEntre, validarDivisao } from './divisao';
 import { erroDoResponsavel, responsavelParaApi } from './responsavel';
 
 // Tipos de conta onde o dinheiro está. O cartão de crédito também é uma
@@ -132,6 +132,8 @@ export function paraExtrato(lancamentos, contas, categorias, { pontoDeVista } = 
       conta,
       valor: partidaDaConta?.valor_centavos ?? 0,
       pessoas: (lancamento.divisao ?? []).map((parte) => ({ pessoa: parte.pessoa, valor: parte.valor_centavos })),
+      // A anotação do Free: em quantas pessoas foi dividido (sem nomes).
+      divididoEntre: lancamento.dividido_entre ?? null,
       responsavel: lancamento.responsavel ?? null,
       estorno: Boolean(lancamento.estorno_de),
       estornado: Boolean(lancamento.estornado_por),
@@ -186,7 +188,17 @@ export function estaNoMes(iso, { ano, mes }) {
 
 // ---------------------------------------------------------- Formulários
 
-export const ORDEM_DO_LANCAMENTO = ['descricao', 'valor', 'data', 'conta_id', 'categoria_id', 'conta_destino_id', 'responsavel', 'meio'];
+export const ORDEM_DO_LANCAMENTO = [
+  'descricao',
+  'valor',
+  'data',
+  'conta_id',
+  'categoria_id',
+  'conta_destino_id',
+  'responsavel',
+  'meio',
+  'dividido_entre',
+];
 
 // Ordem dos campos do formulário de lançamento, com os da divisão no fim.
 export function ordemDoLancamento(formulario) {
@@ -251,6 +263,11 @@ export function validarLancamento(formulario) {
   if (temDivisao(formulario)) {
     Object.assign(erros, validarDivisao(formulario.divisao, valor || null));
   }
+  // A divisão do Free (só o número de pessoas), também fora da transferência.
+  const erroDaDivisao = formulario.tipo === 'TRANSFERENCIA' ? '' : erroDoDivididoEntre(formulario.dividido_entre);
+  if (erroDaDivisao) {
+    erros.dividido_entre = erroDaDivisao;
+  }
 
   return erros;
 }
@@ -272,6 +289,10 @@ export function corpoDoLancamento(formulario) {
   }
   if (temDivisao(formulario)) {
     corpo.divisao = corpoDaDivisao(formulario.divisao);
+  }
+  const divididoEntre = formulario.tipo === 'TRANSFERENCIA' ? null : lerDivididoEntre(formulario.dividido_entre);
+  if (divididoEntre) {
+    corpo.dividido_entre = divididoEntre;
   }
   const responsavel = formulario.tipo === 'TRANSFERENCIA' ? null : responsavelParaApi(formulario.responsavel);
   if (responsavel) {

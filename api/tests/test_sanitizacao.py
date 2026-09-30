@@ -58,7 +58,8 @@ def test_texto_que_so_tem_o_que_sai_e_recusado(ana):
     assert "nome" in resposta.json()["campos"]
 
 
-def test_pessoa_do_racha_e_gravada_limpa(ana):
+def test_pessoa_do_racha_e_gravada_limpa(ana, assinar):
+    assinar("uid-ana")
     conta_id = ana.criar_conta("Carteira", 10000, tipo="CARTEIRA")
     corpo = {
         "tipo": "DESPESA",

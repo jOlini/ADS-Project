@@ -60,6 +60,28 @@ class RegimeTributario(StrEnum):
     REAL = "REAL"  # Lucro Real
 
 
+class Plano(StrEnum):
+    """Plano de assinatura da pessoa, guardado no espaço pessoal dela (um por
+    pessoa). Nasce FREE. O cliente não troca o próprio plano: sem checkout
+    ainda, só o back-office muda (PUT /clientes/{uid}/plano), e é a API que
+    decide o que cada plano libera. Assim, esconder um botão na tela nunca é a
+    única trava."""
+
+    FREE = "FREE"
+    FAMILIA = "FAMILIA"
+    # Tudo do Família, mais as empresas.
+    EMPRESARIAL = "EMPRESARIAL"
+
+
+# Planos que liberam o Modo Família (pessoas da casa, filtro "de quem") e a
+# divisão do gasto com o nome e a parte de cada pessoa.
+PLANOS_COM_FAMILIA = frozenset({Plano.FAMILIA, Plano.EMPRESARIAL})
+
+
+def libera_familia(plano: "Plano") -> bool:
+    return plano in PLANOS_COM_FAMILIA
+
+
 class Papel(StrEnum):
     """Papel de uma pessoa dentro de um espaço."""
 
@@ -246,6 +268,8 @@ class Espaco:
     regime: RegimeTributario | None = None
     # Só no pessoal.
     familia: Familia = field(default_factory=Familia)
+    # Só no pessoal: o plano da pessoa dona dele.
+    plano: Plano = Plano.FREE
     id: str | None = None
 
     def papel_de(self, uid: str) -> Papel | None:
@@ -342,6 +366,9 @@ class Lancamento:
     # importada de novo não vira outro lançamento.
     chave_importacao: str | None = None
     divisao: list[Parte] = field(default_factory=list)
+    # A divisão do Free: só em quantas pessoas o gasto foi dividido, como
+    # anotação. Sem nomes, não separa o gasto de ninguém.
+    dividido_entre: int | None = None
     # Pessoa responsável pelo lançamento (quem gastou ou de quem é a receita),
     # só o nome. Vazio = quem lançou. Diferente da divisão: o valor inteiro é
     # dela, sem partes.
@@ -406,6 +433,9 @@ Descricao = Annotated[
 Identificador = Annotated[str, StringConstraints(min_length=1, max_length=64)]
 Booleano = Annotated[bool, Field(strict=True)]
 Data = Annotated[date, BeforeValidator(_data_sem_numero)]
+# Em quantas pessoas o gasto foi dividido (a anotação do Free), contando
+# quem lançou: de 2 ao máximo de uma divisão.
+DivididoEntre = Annotated[int, Field(strict=True, ge=2, le=MAXIMO_DE_PESSOAS)]
 # Dia do mês. 29, 30 e 31 viram o último dia nos meses mais curtos.
 DiaDoMes = Annotated[int, Field(strict=True, ge=1, le=31)]
 
@@ -473,6 +503,13 @@ class NovaPessoaDaFamilia(Entrada):
     cor: CorDoMembro
 
 
+class AtualizacaoPlano(Entrada):
+    """Troca o plano de um cliente (back-office). Sem checkout ainda: é o
+    caminho para liberar o Família ou o Empresarial."""
+
+    plano: Plano
+
+
 class NovaConta(Entrada):
     """Cartão de crédito (tipo CARTAO_CREDITO) pede limite e os dias de
     fechamento e vencimento da fatura, e aceita a cor; as outras contas não
@@ -529,7 +566,10 @@ class NovoLancamento(Entrada):
     regras.conferir_lancamento. As partidas são montadas pela API, nunca
     enviadas pelo cliente: assim a soma zero não depende de quem chama.
 
-    divisao (opcional, só receita e despesa) reparte o valor entre pessoas.
+    divisao (opcional, só receita e despesa) reparte o valor entre pessoas,
+    com o nome e a parte de cada uma: só no Plano Família ou Empresarial.
+    dividido_entre (opcional, só receita e despesa) é a divisão do Free: só
+    em quantas pessoas o valor foi dividido, como anotação. Um ou outro.
     responsavel (opcional, só receita e despesa) diz de quem é o lançamento
     inteiro, sem precisar de divisão.
     meio (opcional) diz como o dinheiro se moveu: PIX, débito, dinheiro ou
@@ -543,6 +583,7 @@ class NovoLancamento(Entrada):
     categoria_id: Identificador | None = None
     conta_destino_id: Identificador | None = None
     divisao: Annotated[list[NovaParte], Field(max_length=MAXIMO_DE_PESSOAS)] = []
+    dividido_entre: DivididoEntre | None = None
     responsavel: Nome | None = None
     meio: MeioDePagamento | None = None
 
@@ -572,8 +613,8 @@ class NovaCompra(Entrada):
     """Compra no cartão de crédito. Em parcelas, cada uma vira uma despesa no
     cartão, a primeira na data da compra e as outras um mês depois da
     anterior: cada parcela cai numa fatura. O valor é o total da compra.
-    Racha (divisao) só na compra à vista; o responsável vale para todas as
-    parcelas."""
+    Racha (divisao, ou dividido_entre no Free) só na compra à vista; o
+    responsável vale para todas as parcelas."""
 
     descricao: Descricao
     data: Data
@@ -581,6 +622,7 @@ class NovaCompra(Entrada):
     categoria_id: Identificador
     parcelas: Annotated[int, Field(strict=True, ge=1, le=MAXIMO_DE_PARCELAS)] = 1
     divisao: Annotated[list[NovaParte], Field(max_length=MAXIMO_DE_PESSOAS)] = []
+    dividido_entre: DivididoEntre | None = None
     responsavel: Nome | None = None
 
 
@@ -666,15 +708,18 @@ class PessoaDaFamiliaResposta(BaseModel):
 
 
 class FamiliaResposta(BaseModel):
+    # Ligado de verdade: o modo gravado E um plano que libera a família. Sem
+    # o plano, sai false mesmo com o modo gravado ligado (as pessoas ficam
+    # guardadas para quando o plano voltar).
     ativa: bool
     pessoas: list[PessoaDaFamiliaResposta]
     # Quantas pessoas cabem além do titular (a assinatura da família é uma só).
     maximo_de_pessoas: int
 
     @classmethod
-    def de(cls, familia: Familia) -> "FamiliaResposta":
+    def de(cls, familia: Familia, plano: Plano) -> "FamiliaResposta":
         return cls(
-            ativa=familia.ativa,
+            ativa=familia.ativa and libera_familia(plano),
             pessoas=[PessoaDaFamiliaResposta(id=p.id, nome=p.nome, cor=p.cor) for p in familia.pessoas],
             maximo_de_pessoas=MAXIMO_DE_MEMBROS_DA_FAMILIA,
         )
@@ -692,9 +737,11 @@ class EspacoResposta(BaseModel):
     regime: RegimeTributario | None
     # Só no pessoal; null na empresa.
     familia: FamiliaResposta | None
+    plano: Plano | None
 
     @classmethod
     def de(cls, espaco: Espaco, uid: str) -> "EspacoResposta":
+        pessoal = espaco.tipo == TipoEspaco.PF
         return cls(
             id=espaco.id,
             tipo=espaco.tipo,
@@ -704,8 +751,14 @@ class EspacoResposta(BaseModel):
             papel=espaco.papel_de(uid),
             cnpj=espaco.cnpj,
             regime=espaco.regime,
-            familia=FamiliaResposta.de(espaco.familia) if espaco.tipo == TipoEspaco.PF else None,
+            familia=FamiliaResposta.de(espaco.familia, espaco.plano) if pessoal else None,
+            plano=espaco.plano if pessoal else None,
         )
+
+
+class PlanoResposta(BaseModel):
+    uid: str
+    plano: Plano
 
 
 class ContaResposta(BaseModel):
@@ -792,6 +845,8 @@ class LancamentoResposta(BaseModel):
     conta_destino_id: str | None
     partidas: list[PartidaResposta]
     divisao: list[ParteResposta]
+    # A anotação do Free: em quantas pessoas foi dividido (null sem ela).
+    dividido_entre: int | None = None
     responsavel: str | None
     estorno_de: str | None
     estornado_por: str | None
@@ -823,6 +878,7 @@ class LancamentoResposta(BaseModel):
                 for partida in lancamento.partidas
             ],
             divisao=[ParteResposta(pessoa=parte.pessoa, valor_centavos=parte.valor_centavos) for parte in lancamento.divisao],
+            dividido_entre=lancamento.dividido_entre,
             responsavel=lancamento.responsavel,
             estorno_de=lancamento.estorno_de,
             estornado_por=lancamento.estornado_por,

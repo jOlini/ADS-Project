@@ -24,6 +24,7 @@ import { mesDaReferencia } from '../regras/cartoes';
 import { formatarBRL } from '../regras/dinheiro';
 import { comAFamilia, corDoResponsavel, filtrarPorPessoa, pessoasDaFamilia, TITULAR, TODOS } from '../regras/familia';
 import { destinoDaImportacao } from '../regras/importacao';
+import { familiaLiberada, planoDoCliente } from '../regras/planos';
 import {
   cartoesDe,
   contasBancarias,
@@ -86,7 +87,7 @@ async function carregarMes(espacoId, mes) {
 // Cada linha tem o menu com Editar, Estornar (lançamento inverso, o
 // histórico fica) e Excluir (apaga de vez).
 export default function Lancamentos() {
-  const { espaco } = useOutletContext();
+  const { espaco, espacos } = useOutletContext();
   const toast = useToast();
   const [mes, setMes] = useState(() => mesDe(new Date()));
   const [filtro, setFiltro] = useState('tudo');
@@ -338,6 +339,7 @@ export default function Lancamentos() {
           temCartoes={temCartoes}
           categorias={categorias}
           pessoasConhecidas={pessoasConhecidas}
+          divisaoPorPessoa={familiaLiberada(planoDoCliente(espacos))}
           aoLancar={aposLancar}
           aoCancelar={fecharModal}
           aoMudarOcupado={setModalOcupado}

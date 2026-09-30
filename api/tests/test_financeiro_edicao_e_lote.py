@@ -138,7 +138,8 @@ def test_meio_na_conta_sim_na_compra_do_cartao_nao(ana):
     assert set(no_cartao.json()["campos"]) == {"meio"}
 
 
-def test_novo_valor_nao_fica_abaixo_do_racha(ana):
+def test_novo_valor_nao_fica_abaixo_do_racha(ana, assinar):
+    assinar("uid-ana")
     corrente = ana.criar_conta("Conta corrente")
     corpo = {
         "tipo": "DESPESA",

@@ -1,12 +1,14 @@
-import { useId, useMemo, useRef, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
 import AlternadorDeTema from '../../componentes/AlternadorDeTema';
 import Arvore from '../componentes/Arvore';
 import CampoDoPomar from '../componentes/CampoDoPomar';
+import Dica from '../componentes/Dica';
 import FolhasAoVento from '../componentes/FolhasAoVento';
 import Notebook from '../componentes/Notebook';
 import Icone from '../../componentes/Icone';
+import { PLANOS, RECURSOS_DOS_PLANOS, textoDaOferta } from '../../regras/planos';
 import Logo, { SLOGAN } from '../componentes/Logo';
 import { HOJE_DE_EXEMPLO, LANCAMENTOS_DE_EXEMPLO, MESES_DE_EXEMPLO, METAS_DE_EXEMPLO, SALDO_DE_EXEMPLO } from '../dados/exemplo';
 import { desenhoDaMiniatura } from '../regras/curva';
@@ -213,13 +215,83 @@ const SEGURANCA = [
   },
 ];
 
-const RECURSOS_GRATUITOS = [
-  'Contas e cartões de crédito com fatura',
-  'Lançamentos com categoria e racha',
-  'Importação do extrato em CSV',
-  'Visão geral do mês com gráficos',
-  'Metas com a árvore que cresce',
-];
+// O que cada plano oferece numa célula da tabela: o visto, o traço ou o
+// limite escrito. O leitor de tela ouve "Incluso", "Não incluso" ou o texto.
+function Oferta({ oferta }) {
+  if (typeof oferta === 'string') {
+    return <span className="lp-oferta-texto">{oferta}</span>;
+  }
+  return (
+    <>
+      <span className={oferta ? 'lp-oferta-sim' : 'lp-oferta-nao'} aria-hidden="true">
+        {oferta ? <Icone nome="certo" tamanho={18} /> : '—'}
+      </span>
+      <span className="apenas-leitor">{textoDaOferta(oferta)}</span>
+    </>
+  );
+}
+
+// Tabela comparativa dos três planos (regras/planos.ts): cada recurso com o
+// "i" que explica, em palavras simples, o que ele faz.
+function ComparativoDosPlanos() {
+  return (
+    <div className="lp-comparativo-moldura" data-revela="">
+      <table className="lp-comparativo">
+        <caption className="apenas-leitor">O que cada plano inclui: Free, Família e Empresarial</caption>
+        <colgroup>
+          <col className="lp-comparativo-recurso" />
+          {PLANOS.map((plano) => (
+            <col key={plano.id} />
+          ))}
+        </colgroup>
+        <thead>
+          <tr>
+            <th scope="col">
+              <span className="apenas-leitor">Recurso</span>
+            </th>
+            {PLANOS.map((plano) => (
+              <th key={plano.id} scope="col" className={plano.destaque ? 'destaque' : undefined}>
+                {plano.nome}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        {RECURSOS_DOS_PLANOS.map((grupo) => (
+          <tbody key={grupo.titulo}>
+            <tr className="lp-comparativo-grupo">
+              <th scope="colgroup" colSpan={PLANOS.length + 1}>
+                {grupo.titulo}
+              </th>
+            </tr>
+            {grupo.recursos.map((recurso) => (
+              <tr key={recurso.id}>
+                <th scope="row">
+                  <span className="lp-comparativo-nome">
+                    <span>{recurso.nome}</span>
+                    <Dica titulo={recurso.nome} alinhar="inicio">
+                      <p>{recurso.dica}</p>
+                    </Dica>
+                  </span>
+                </th>
+                {PLANOS.map((plano) => (
+                  <td key={plano.id} className={plano.destaque ? 'destaque' : undefined}>
+                    <Oferta oferta={recurso.oferta[plano.id]} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        ))}
+      </table>
+    </div>
+  );
+}
+
+// O texto de cada plano sem preço ainda (a decisão do preço está em aberto).
+const NOTA_DO_PLANO = {
+  FAMILIA: 'Estamos preparando. Por enquanto, comece pelo Free.',
+  EMPRESARIAL: 'Para quem tem CNPJ: o caixa de cada empresa, separado do seu.',
+};
 
 // Um controle deslizante do simulador, em reais inteiros, com o valor escrito
 // ao lado (e lido pelo leitor de tela em aria-valuetext).
@@ -368,6 +440,14 @@ export default function Landing() {
   const pistaDoNotebook = useRef(null);
   useMovimentoDaLanding(raiz);
   const notebookAberto = useNotebookPreso(pistaDoNotebook);
+  const { hash } = useLocation();
+  // "Conhecer os planos" (da página da família) chega com #planos: a página
+  // é carregada sob demanda, então o navegador não acha a seção sozinho.
+  useEffect(() => {
+    if (hash) {
+      document.getElementById(hash.slice(1))?.scrollIntoView();
+    }
+  }, [hash]);
 
   return (
     <div className="lp" ref={raiz}>
@@ -559,41 +639,41 @@ export default function Landing() {
             Escolha o plano para a sua jornada.
           </h2>
           <p className="lp-secao-apoio" data-revela="" style={{ '--ordem': 1 }}>
-            Comece de graça com tudo o que já existe hoje.
+            Comece de graça. Quando a casa ou a empresa entrarem na conta, o plano cresce junto.
           </p>
           <div className="lp-planos-grade">
-            <article className="lp-plano" data-revela="" data-inclina="" style={{ '--ordem': 1 }}>
-              <h3>Gratuito</h3>
-              <p className="lp-plano-apoio">O essencial para organizar o seu dinheiro.</p>
-              <p className="lp-plano-preco">
-                <b>R$ 0</b>
-                <small>sem cartão de crédito</small>
-              </p>
-              <ul className="lp-lista-certa">
-                {RECURSOS_GRATUITOS.map((recurso) => (
-                  <li key={recurso}>
-                    <Icone nome="certo" tamanho={16} />
-                    {recurso}
-                  </li>
-                ))}
-              </ul>
-              <Link to={logado ? '/principal' : '/cadastro'} className="lp-botao largo">
-                {logado ? 'Abrir o app' : 'Começar gratuitamente'}
-              </Link>
-            </article>
-
-            <article className="lp-plano destaque" data-revela="" data-inclina="" style={{ '--ordem': 2 }}>
-              <p className="lp-plano-selo">Em breve</p>
-              <h3>Família</h3>
-              <p className="lp-plano-apoio">Para organizar o dinheiro da casa junto com quem mora com você.</p>
-              <div className="lp-plano-arvores" aria-hidden="true">
-                <Arvore semente={11} progresso={0.9} compacta rotulo="" />
-                <Arvore semente={29} progresso={0.55} compacta rotulo="" />
-                <Arvore semente={47} progresso={0.3} compacta rotulo="" />
-              </div>
-              <p className="lp-plano-nota">Estamos preparando. Por enquanto, comece pelo Gratuito.</p>
-            </article>
+            {PLANOS.map((plano, indice) => (
+              <article
+                key={plano.id}
+                className={`lp-plano${plano.destaque ? ' destaque' : ''}`}
+                data-revela=""
+                data-inclina=""
+                style={{ '--ordem': indice + 1 }}
+              >
+                <h3>{plano.nome}</h3>
+                <p className="lp-plano-apoio">{plano.apoio}</p>
+                <p className="lp-plano-preco">
+                  <b>{plano.preco ?? 'Em breve'}</b>
+                  <small>{plano.preco ? 'sem cartão de crédito' : 'preço em definição'}</small>
+                </p>
+                {plano.destaque && (
+                  <div className="lp-plano-arvores" aria-hidden="true">
+                    <Arvore semente={11} progresso={0.9} compacta rotulo="" />
+                    <Arvore semente={29} progresso={0.55} compacta rotulo="" />
+                    <Arvore semente={47} progresso={0.3} compacta rotulo="" />
+                  </div>
+                )}
+                {plano.preco ? (
+                  <Link to={logado ? '/principal' : '/cadastro'} className="lp-botao largo">
+                    {logado ? 'Abrir o app' : 'Começar gratuitamente'}
+                  </Link>
+                ) : (
+                  <p className="lp-plano-nota">{NOTA_DO_PLANO[plano.id]}</p>
+                )}
+              </article>
+            ))}
           </div>
+          <ComparativoDosPlanos />
         </section>
 
         {/* A revelação fica nos filhos: a faixa em si não pode ganhar

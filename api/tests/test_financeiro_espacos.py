@@ -44,6 +44,7 @@ def test_cadastra_a_empresa_com_as_categorias_de_empresa(api, cabecalho):
         "cnpj": "11222333000181",
         "regime": "SIMPLES",
         "familia": None,
+        "plano": None,
     }
     assert resposta.headers["Location"].endswith(f"/espacos/{empresa['id']}")
     nomes = {c["nome"] for c in api.get(f"/espacos/{empresa['id']}/categorias", headers=cabecalho).json()}

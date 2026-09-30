@@ -65,7 +65,8 @@ describe('calcularSaldoLivre', () => {
     expect(resultado.saude).toBe('negativo');
     expect(resultado.folgaAparente).toBe(true);
     expect(resultado.comprometido).toBe(1);
-    expect(leituraDoSaldoLivre(resultado, reais)).toMatch(/positivo, mas as contas previstas passam dele em R\$ 900\.00/);
+    expect(leituraDoSaldoLivre(resultado, reais, '30/09')).toMatchObject({ estado: 'negativo', titulo: 'Vai faltar dinheiro' });
+    expect(leituraDoSaldoLivre(resultado, reais, '30/09').texto).toMatch(/parece boa.*até 30\/09.*faltam R\$ 900\.00/);
   });
 
   it('pagamento de fatura marcado para o mês seguinte continua a pagar', () => {
@@ -107,9 +108,38 @@ describe('dividaDasFaturas', () => {
 });
 
 describe('leituraDoSaldoLivre', () => {
-  it('diz quando não há nada previsto', () => {
-    const resultado = calcularSaldoLivre({ saldo: 100_000, linhasDasContas: [], hoje: HOJE });
+  const ler = (entrada: Parameters<typeof calcularSaldoLivre>[0]) => leituraDoSaldoLivre(calcularSaldoLivre(entrada), reais, '30/09');
 
-    expect(leituraDoSaldoLivre(resultado, reais)).toMatch(/Nenhuma conta prevista/);
+  it('positivo com folga: verde, com o valor seguro para gastar', () => {
+    const leitura = ler({ saldo: 100_000, linhasDasContas: [], hoje: HOJE });
+
+    expect(leitura).toMatchObject({ estado: 'positivo', titulo: 'Seguro para gastar' });
+    expect(leitura.texto).toBe('Você pode gastar até R$ 1000.00 até 30/09 sem faltar dinheiro para as contas previstas.');
+  });
+
+  it('positivo com pouca folga ou zerado: neutro', () => {
+    // A fatura do cartão leva quase tudo (ou tudo) o que há nas contas.
+    const fatura = (usado: number) => [{ usado_centavos: usado, parcelamentos_futuros_centavos: 0 }];
+    const pouco = ler({ saldo: 10_000, linhasDasContas: [], cartoes: fatura(9_900), hoje: HOJE });
+    const zerado = ler({ saldo: 10_000, linhasDasContas: [], cartoes: fatura(10_000), hoje: HOJE });
+
+    expect(pouco).toMatchObject({ estado: 'neutro', titulo: 'Sobra pouco' });
+    expect(pouco.texto).toMatch(/até R\$ 1\.00 até 30\/09/);
+    expect(zerado).toMatchObject({ estado: 'neutro', titulo: 'Tudo já tem destino' });
+  });
+
+  it('negativo: vermelho, com quanto falta e o que fazer', () => {
+    const semDinheiro = ler({
+      saldo: 10_000,
+      linhasDasContas: [],
+      cartoes: [{ usado_centavos: 40_000, parcelamentos_futuros_centavos: 0 }],
+      hoje: HOJE,
+    });
+    const soComInvestido = ler({ saldo: 100_000, investido: 250_000, linhasDasContas: [], hoje: HOJE });
+
+    expect(semDinheiro.estado).toBe('negativo');
+    expect(semDinheiro.texto).toMatch(/faltam R\$ 300\.00\. Evite gastos novos/);
+    expect(soComInvestido).toMatchObject({ estado: 'negativo', titulo: 'Só fecha usando o investido' });
+    expect(soComInvestido.texto).toMatch(/faltam R\$ 1500\.00/);
   });
 });

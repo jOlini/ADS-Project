@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useOutletContext } from 'react-router-dom';
+import { Link, Navigate, useOutletContext } from 'react-router-dom';
 import Confirmacao from '../../componentes/Confirmacao';
 import Esqueleto from '../../componentes/Esqueleto';
 import FormularioDePessoa from '../../componentes/FormularioDePessoa';
@@ -7,6 +7,7 @@ import Icone from '../../componentes/Icone';
 import Menu from '../../componentes/Menu';
 import Modal from '../../componentes/Modal';
 import { useToast } from '../../componentes/toast/useToast';
+import { familiaLiberada, planoDoEspaco } from '../../regras/planos';
 import { removerPessoa } from '../../servicos/livroCaixa';
 import ChaveDaFamilia from '../componentes/ChaveDaFamilia';
 import SimboloDoVazio from '../componentes/SimboloDoVazio';
@@ -27,6 +28,11 @@ const iniciais = (nome) =>
 // quando o "responsável" tem o nome dela, e é assim que as telas separam o
 // gasto de cada um. Uma assinatura só, a do titular, cobre a casa inteira.
 // Numa empresa, a página volta à Visão geral.
+//
+// No Plano Free, a página explica o Plano Família em vez de cadastrar: sem
+// "Incluir pessoa" e sem editar. Quem já estava na família (de um plano
+// anterior) aparece e ainda pode sair, porque apagar dado é sempre possível.
+// A API confere o plano de novo (403) em cada ação.
 export default function Familia() {
   const { espaco, pessoa, recarregarEspacos } = useOutletContext();
   const toast = useToast();
@@ -43,7 +49,8 @@ export default function Familia() {
 
   const familia = pessoal.familia ?? { ativa: false, pessoas: [], maximo_de_pessoas: 5 };
   const pessoas = familia.pessoas;
-  const cabe = pessoas.length < familia.maximo_de_pessoas;
+  const liberada = familiaLiberada(planoDoEspaco(pessoal));
+  const cabe = liberada && pessoas.length < familia.maximo_de_pessoas;
   const titular = pessoa.dados ? `${pessoa.dados.nome} ${pessoa.dados.sobrenome}`.trim() : 'Você';
 
   function fechar() {
@@ -78,14 +85,34 @@ export default function Familia() {
         </div>
         <div className="of-cabecalho-acoes">
           <ChaveDaFamilia espaco={pessoal} recarregarEspacos={recarregarEspacos} />
-          <button type="button" onClick={() => setJanela({ tipo: 'pessoa' })} disabled={!cabe}>
-            <Icone nome="mais" tamanho={16} />
-            Incluir pessoa
-          </button>
+          {liberada && (
+            <button type="button" onClick={() => setJanela({ tipo: 'pessoa' })} disabled={!cabe}>
+              <Icone nome="mais" tamanho={16} />
+              Incluir pessoa
+            </button>
+          )}
         </div>
       </header>
 
-      {!familia.ativa && (
+      {!liberada && (
+        <section className="cartao of-painel of-familia-plano" aria-labelledby="titulo-plano-familia">
+          <span className="of-familia-plano-icone" aria-hidden="true">
+            <Icone nome="cadeado" tamanho={20} />
+          </span>
+          <div>
+            <h2 id="titulo-plano-familia">O Modo Família faz parte do Plano Família</h2>
+            <p>
+              No Free, o espaço pessoal é só seu. Com o Plano Família, você inclui até {familia.maximo_de_pessoas} pessoas da
+              casa, vê quanto cada uma gastou e divide um gasto com o nome e a parte de cada pessoa.
+            </p>
+          </div>
+          <Link to="/#planos" className="botao">
+            Conhecer os planos
+          </Link>
+        </section>
+      )}
+
+      {liberada && !familia.ativa && (
         <p className="mensagem info of-familia-desligada" role="status">
           <Icone nome="alerta" tamanho={16} />
           O Modo Família está desligado: os filtros por pessoa e o gasto de cada um não aparecem nas telas. As pessoas
@@ -123,7 +150,9 @@ export default function Familia() {
                 <Menu
                   rotulo={`Ações de ${alvo.nome}`}
                   itens={[
-                    { id: 'editar', rotulo: 'Editar nome e cor', icone: 'editar', aoEscolher: () => setJanela({ tipo: 'pessoa', alvo }) },
+                    ...(liberada
+                      ? [{ id: 'editar', rotulo: 'Editar nome e cor', icone: 'editar', aoEscolher: () => setJanela({ tipo: 'pessoa', alvo }) }]
+                      : []),
                     {
                       id: 'remover',
                       rotulo: 'Tirar da família',
@@ -141,10 +170,14 @@ export default function Familia() {
             <div className="vazio of-familia-vazio">
               <SimboloDoVazio icone="pessoas" semente={31} />
               <h3>Ninguém da família ainda</h3>
-              <p>Inclua quem mora com você: cônjuge, filhos, quem divide as contas da casa.</p>
+              <p>
+                {liberada
+                  ? 'Inclua quem mora com você: cônjuge, filhos, quem divide as contas da casa.'
+                  : 'Com o Plano Família, quem mora com você entra aqui, cada um com a sua cor.'}
+              </p>
             </div>
           )}
-          {!cabe && (
+          {liberada && !cabe && (
             <p className="of-discreto">
               A família está completa: a assinatura cobre você e mais {familia.maximo_de_pessoas} pessoas.
             </p>

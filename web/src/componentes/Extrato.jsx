@@ -81,6 +81,13 @@ export default function Extrato({ dias, mostrarSaldo = true, acoes, selecao, cor
                 </span>
               </small>
             )}
+            {/* A divisão do Free: só a anotação do número de pessoas. */}
+            {lancamento.divididoEntre > 1 && (
+              <small className="racha">
+                <Icone nome="pessoas" tamanho={14} />
+                <span className="texto-do-racha">Dividido entre {lancamento.divididoEntre} pessoas</span>
+              </small>
+            )}
           </span>
           <span className={`valor${lancamento.valor > 0 ? ' entrada' : lancamento.tipo === 'transferencia' ? '' : ' saida'}`}>
             {lancamento.estornado && <span className="apenas-leitor">Estornado: </span>}

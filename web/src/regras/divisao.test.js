@@ -4,7 +4,10 @@ import {
   camposDaDivisao,
   corpoDaDivisao,
   dividirIgualmente,
+  erroDoDivididoEntre,
+  lerDivididoEntre,
   MAXIMO_DE_PESSOAS,
+  parteDeCada,
   parteVazia,
   pessoasParaSugerir,
   repartirIgualmente,
@@ -85,6 +88,30 @@ describe('validarDivisao', () => {
     const muitas = Array.from({ length: MAXIMO_DE_PESSOAS + 1 }, (_, indice) => ({ pessoa: `P${indice}`, valor: '1,00' }));
 
     expect(validarDivisao(muitas, 100000).divisao).toBe('Divida entre no máximo 20 pessoas.');
+  });
+});
+
+describe('a divisão do Free (só o número de pessoas)', () => {
+  it('aceita de 2 ao máximo, e vazio', () => {
+    expect(lerDivididoEntre('3')).toBe(3);
+    expect(lerDivididoEntre(' 20 ')).toBe(MAXIMO_DE_PESSOAS);
+    expect(lerDivididoEntre('')).toBeNull();
+    expect(erroDoDivididoEntre('')).toBe('');
+    expect(erroDoDivididoEntre('2')).toBe('');
+  });
+
+  it('recusa 1, acima do máximo, fração e texto', () => {
+    for (const texto of ['1', '0', '21', '2,5', '-3', 'três']) {
+      expect(lerDivididoEntre(texto)).toBeNull();
+      expect(erroDoDivididoEntre(texto)).toMatch(/de 2 a 20/);
+    }
+  });
+
+  it('mostra a parte de cada um, com o centavo que sobra no primeiro', () => {
+    expect(parteDeCada(10000, '3')).toBe(3334);
+    expect(parteDeCada(9000, '2')).toBe(4500);
+    expect(parteDeCada(null, '3')).toBeNull();
+    expect(parteDeCada(9000, '1')).toBeNull();
   });
 });
 

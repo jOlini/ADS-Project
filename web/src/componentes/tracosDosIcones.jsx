@@ -257,6 +257,14 @@ export const TRACOS = {
   olhoFechado: <path d="M3 10.2c2.6 3.7 5.6 5.5 9 5.5s6.4-1.8 9-5.5M6.1 14.2l-1.5 2.1M12 15.8v2.6M17.9 14.2l1.5 2.1" />,
 
   // ------------------------------------------------------------ Avisos
+  // Informação: o "i" no círculo, que abre a dica de um número ou recurso.
+  info: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v5.2" />
+      <circle className="ponto" cx="12" cy="7.9" r="1" />
+    </>
+  ),
   alerta: (
     <>
       <path d="M10.3 4.7a2 2 0 0 1 3.4 0l7.2 12.4a2 2 0 0 1-1.7 3H4.8a2 2 0 0 1-1.7-3Z" />

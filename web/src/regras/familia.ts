@@ -6,9 +6,12 @@
 // quem" das telas e o gasto por pessoa. Testado em familia.test.ts.
 //
 // Assinatura: uma só, a do titular, cobre a casa inteira (o titular e até
-// maximo_de_pessoas pessoas). Ninguém da família precisa assinar.
+// maximo_de_pessoas pessoas). Ninguém da família precisa assinar. O modo só
+// vale com o Plano Família ou o Empresarial (regras/planos.ts); no Free, as
+// pessoas não aparecem mesmo com o modo gravado ligado.
 
 import { mesmaPessoa } from './responsavel';
+import { familiaLiberada, planoDoEspaco } from './planos';
 import { limparTexto } from './sanitizacao';
 import type { CorDaPessoa, Espaco, PessoaDaFamilia } from './espacos';
 
@@ -30,16 +33,19 @@ export const CORES_DA_FAMILIA: readonly { valor: CorDaPessoa; rotulo: string }[]
   { valor: 'grafite', rotulo: 'Grafite' },
 ];
 
-// As pessoas que aparecem na tela: só com o modo ligado e no espaço pessoal.
-export function pessoasDaFamilia(espaco: Pick<Espaco, 'tipo' | 'familia'> | null | undefined): PessoaDaFamilia[] {
-  if (espaco?.tipo !== 'PF' || !espaco.familia?.ativa) {
+type EspacoDaFamilia = Pick<Espaco, 'tipo' | 'familia' | 'plano'>;
+
+// As pessoas que aparecem na tela: só no espaço pessoal, com o modo ligado e
+// um plano que libera a família.
+export function pessoasDaFamilia(espaco: EspacoDaFamilia | null | undefined): PessoaDaFamilia[] {
+  if (!familiaAtiva(espaco)) {
     return [];
   }
-  return espaco.familia.pessoas;
+  return espaco?.familia?.pessoas ?? [];
 }
 
-export function familiaAtiva(espaco: Pick<Espaco, 'tipo' | 'familia'> | null | undefined): boolean {
-  return espaco?.tipo === 'PF' && Boolean(espaco.familia?.ativa);
+export function familiaAtiva(espaco: EspacoDaFamilia | null | undefined): boolean {
+  return espaco?.tipo === 'PF' && Boolean(espaco.familia?.ativa) && familiaLiberada(planoDoEspaco(espaco));
 }
 
 // De quem é um lançamento: o id da pessoa da família, o titular (sem

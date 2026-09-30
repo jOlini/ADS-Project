@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AvisoComAtalho from './AvisoComAtalho';
 import Campo from './Campo';
 import CampoDeResponsavel from './CampoDeResponsavel';
+import DivididoEntre from './DivididoEntre';
 import DivisaoEntrePessoas from './DivisaoEntrePessoas';
 import Seletor from './Seletor';
 import SeletorDeData from './SeletorDeData';
@@ -16,9 +17,19 @@ import { comprarNoCartao } from '../servicos/livroCaixa';
 // Formulário da "Nova compra" no cartão (dentro do modal): à vista ou
 // parcelada. O valor é o total da compra; a API cria uma despesa por parcela,
 // cada uma numa fatura, e o total ocupa o limite desde já. O responsável vale
-// para todas as parcelas; racha entre pessoas só na compra à vista.
-// aoComprar recebe as parcelas criadas.
-export default function FormularioDeCompra({ espacoId, cartao, categorias, pessoasConhecidas, aoComprar, aoCancelar, aoMudarOcupado }) {
+// para todas as parcelas; racha entre pessoas só na compra à vista (com o
+// nome e a parte de cada um no Plano Família, divisaoPorPessoa; no Free, só o
+// número de pessoas). aoComprar recebe as parcelas criadas.
+export default function FormularioDeCompra({
+  espacoId,
+  cartao,
+  categorias,
+  pessoasConhecidas,
+  divisaoPorPessoa = false,
+  aoComprar,
+  aoCancelar,
+  aoMudarOcupado,
+}) {
   const toast = useToast();
   const [formulario, setFormulario] = useState(compraVazia);
   const [erros, setErros] = useState({});
@@ -43,7 +54,11 @@ export default function FormularioDeCompra({ espacoId, cartao, categorias, pesso
   const ordem = [...ORDEM_DA_COMPRA, ...camposDaDivisao(formulario.divisao)];
 
   function mudar(campo, valor, campoDoErro = campo) {
-    setFormulario((atual) => ({ ...atual, [campo]: valor, ...(campo === 'parcelas' && valor !== '1' ? { divisao: [] } : {}) }));
+    setFormulario((atual) => ({
+      ...atual,
+      [campo]: valor,
+      ...(campo === 'parcelas' && valor !== '1' ? { divisao: [], dividido_entre: '' } : {}),
+    }));
     setErros((atuais) => ({ ...atuais, [campoDoErro]: undefined, ...(campo === 'valor' || campo === 'divisao' ? { divisao: undefined } : {}) }));
   }
 
@@ -116,7 +131,7 @@ export default function FormularioDeCompra({ espacoId, cartao, categorias, pesso
           A primeira parcela cai na fatura da data da compra, e cada uma das outras na fatura seguinte. O valor total ocupa o
           limite desde já e volta a cada pagamento.
         </p>
-      ) : (
+      ) : divisaoPorPessoa ? (
         <DivisaoEntrePessoas
           partes={formulario.divisao}
           total={total || null}
@@ -124,6 +139,9 @@ export default function FormularioDeCompra({ espacoId, cartao, categorias, pesso
           pessoasConhecidas={pessoasConhecidas}
           aoMudar={(partes, campo) => mudar('divisao', partes, campo)}
         />
+      ) : (
+        <DivididoEntre valor={formulario.dividido_entre} total={total || null} erro={erros.dividido_entre}
+          aoMudar={(numero) => mudar('dividido_entre', numero)} />
       )}
 
       <div className="acoes-do-formulario">

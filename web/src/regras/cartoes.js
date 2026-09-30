@@ -5,7 +5,7 @@
 // de ir à rede.
 import { formatarData, hojeIso } from './datas';
 import { formatarBRL, lerValor, valorParaCampo } from './dinheiro';
-import { corpoDaDivisao, validarDivisao } from './divisao';
+import { corpoDaDivisao, erroDoDivididoEntre, lerDivididoEntre, validarDivisao } from './divisao';
 import { erroDoResponsavel, responsavelParaApi } from './responsavel';
 
 // Mesmos limites da API.
@@ -75,7 +75,7 @@ export function textoDasParcelas(total, parcelas) {
 
 // ------------------------------------------------------------ Compra
 
-export const ORDEM_DA_COMPRA = ['descricao', 'valor', 'data', 'categoria_id', 'parcelas', 'responsavel'];
+export const ORDEM_DA_COMPRA = ['descricao', 'valor', 'data', 'categoria_id', 'parcelas', 'responsavel', 'dividido_entre'];
 
 export const compraVazia = () => ({
   descricao: '',
@@ -85,6 +85,8 @@ export const compraVazia = () => ({
   parcelas: '1',
   responsavel: '',
   divisao: [],
+  // A divisão do Free: só o número de pessoas (regras/divisao.js).
+  dividido_entre: '',
 });
 
 const aVista = (formulario) => Number(formulario.parcelas) === 1;
@@ -126,6 +128,10 @@ export function validarCompra(formulario) {
   if (aVista(formulario) && formulario.divisao?.length > 0) {
     Object.assign(erros, validarDivisao(formulario.divisao, valor || null));
   }
+  const erroDaDivisao = aVista(formulario) ? erroDoDivididoEntre(formulario.dividido_entre) : '';
+  if (erroDaDivisao) {
+    erros.dividido_entre = erroDaDivisao;
+  }
   return erros;
 }
 
@@ -139,6 +145,10 @@ export function corpoDaCompra(formulario) {
   };
   if (aVista(formulario) && formulario.divisao?.length > 0) {
     corpo.divisao = corpoDaDivisao(formulario.divisao);
+  }
+  const divididoEntre = aVista(formulario) ? lerDivididoEntre(formulario.dividido_entre) : null;
+  if (divididoEntre) {
+    corpo.dividido_entre = divididoEntre;
   }
   // O responsável vale para todas as parcelas.
   const responsavel = responsavelParaApi(formulario.responsavel);

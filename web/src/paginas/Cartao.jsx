@@ -27,6 +27,7 @@ import { formatarData } from '../regras/datas';
 import { formatarBRL } from '../regras/dinheiro';
 import { destinoDaImportacao } from '../regras/importacao';
 import { contasBancarias, paraExtrato } from '../regras/livroCaixa';
+import { familiaLiberada, planoDoCliente } from '../regras/planos';
 import { agruparPorDia } from '../regras/resumo';
 import {
   apiConfigurada,
@@ -64,7 +65,7 @@ async function carregarCartao(espacoId, cartaoId) {
 // das contas; o pagamento da fatura sai de uma conta e libera o limite. Os
 // itens da fatura e as faturas inteiras têm seleção em lote para remover.
 export default function Cartao() {
-  const { espaco } = useOutletContext();
+  const { espaco, espacos } = useOutletContext();
   const { cartaoId } = useParams();
   const toast = useToast();
   // null = a fatura atual (vem do painel).
@@ -389,6 +390,7 @@ export default function Cartao() {
           cartao={painel}
           categorias={categorias}
           pessoasConhecidas={pessoas}
+          divisaoPorPessoa={familiaLiberada(planoDoCliente(espacos))}
           aoComprar={aposMudar}
           aoCancelar={fecharModal}
           aoMudarOcupado={setModalOcupado}

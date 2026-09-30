@@ -8,11 +8,16 @@ já existem passam a separar por pessoa sem mudar o livro-caixa.
 
 Assinatura: uma só, a do titular, cobre a casa inteira (o titular e até
 MAXIMO_DE_MEMBROS_DA_FAMILIA pessoas). Ninguém da família precisa assinar.
+
+Trava do plano: ligar o modo, incluir ou editar pessoas e filtrar relatórios
+por pessoa pedem o Plano Família (ou o Empresarial, que inclui o Família). No
+Free, a API responde 403 mesmo que a tela seja burlada. Tirar uma pessoa
+continua liberado: é apagar dado, e isso a pessoa sempre pode.
 """
 
 from uuid import uuid4
 
-from app.erros import ErroConflito, ErroNaoEncontrado, ErroValidacao
+from app.erros import ErroConflito, ErroNaoEncontrado, ErroPermissao, ErroValidacao
 from app.financeiro.modelos import (
     MAXIMO_DE_MEMBROS_DA_FAMILIA,
     AtualizacaoFamilia,
@@ -22,6 +27,7 @@ from app.financeiro.modelos import (
     NovaPessoaDaFamilia,
     PessoaDaFamilia,
     TipoEspaco,
+    libera_familia,
 )
 from app.financeiro.regras import chave_da_pessoa
 from app.financeiro.repositorio import RepositorioLivroCaixa
@@ -34,6 +40,10 @@ LIMITE_DA_FAMILIA = (
 )
 NOME_REPETIDO = "Já existe uma pessoa com este nome na família."
 NOME_DO_TITULAR = '"Você" é o titular da conta. Use o nome da pessoa.'
+SO_NO_PLANO_FAMILIA = (
+    "O Modo Família faz parte do Plano Família. No Free, o espaço pessoal é só seu: "
+    "as pessoas da casa e o filtro por pessoa ficam bloqueados."
+)
 # Valor do filtro dos relatórios para os lançamentos sem responsável.
 TITULAR = "titular"
 
@@ -50,11 +60,15 @@ class ServicoFamilia:
         """Liga ou desliga. Desligado, a família some da tela, mas as pessoas
         continuam guardadas para quando o modo voltar."""
         self._conferir_pessoal(espaco)
+        # Desligar é sempre possível; ligar pede o plano.
+        if dados.ativa:
+            self._conferir_plano(espaco)
         espaco.familia.ativa = dados.ativa
         return self.repositorio.atualizar_familia(espaco).familia
 
     def incluir(self, espaco: Espaco, dados: NovaPessoaDaFamilia) -> PessoaDaFamilia:
         self._conferir_pessoal(espaco)
+        self._conferir_plano(espaco)
         if len(espaco.familia.pessoas) >= MAXIMO_DE_MEMBROS_DA_FAMILIA:
             raise ErroConflito(LIMITE_DA_FAMILIA)
         self._conferir_nome(espaco, dados.nome)
@@ -68,6 +82,7 @@ class ServicoFamilia:
         responsável (ou parte de um racha) passam para ele: o histórico dela
         continua dela. Devolve a pessoa e quantos lançamentos mudaram."""
         self._conferir_pessoal(espaco)
+        self._conferir_plano(espaco)
         pessoa = self._pessoa(espaco, id)
         self._conferir_nome(espaco, dados.nome, ignorar=pessoa.id)
         antigo, pessoa.nome, pessoa.cor = pessoa.nome, dados.nome, dados.cor
@@ -90,6 +105,7 @@ class ServicoFamilia:
             return None
         if espaco.tipo != TipoEspaco.PF:
             raise ErroValidacao({"membro": SO_NO_PESSOAL})
+        self._conferir_plano(espaco)
         if membro == TITULAR:
             return FiltroDePessoa(None)
         pessoa = next((p for p in espaco.familia.pessoas if p.id == membro), None)
@@ -102,6 +118,12 @@ class ServicoFamilia:
         # 404 e não 409: numa empresa, a família simplesmente não existe.
         if espaco.tipo != TipoEspaco.PF:
             raise ErroNaoEncontrado(SO_NO_PESSOAL)
+
+    @staticmethod
+    def _conferir_plano(espaco: Espaco) -> None:
+        # 403: o espaço é da pessoa, mas o plano dela não cobre o recurso.
+        if not libera_familia(espaco.plano):
+            raise ErroPermissao(SO_NO_PLANO_FAMILIA)
 
     @staticmethod
     def _pessoa(espaco: Espaco, id: str) -> PessoaDaFamilia:

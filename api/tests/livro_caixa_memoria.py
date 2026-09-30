@@ -68,6 +68,10 @@ class LivroCaixaMemoria:
         self.espacos[espaco.id].familia = deepcopy(espaco.familia)
         return espaco
 
+    def atualizar_plano(self, espaco):
+        self.espacos[espaco.id].plano = espaco.plano
+        return espaco
+
     def excluir_espaco(self, id):
         if id not in self.espacos:
             return False

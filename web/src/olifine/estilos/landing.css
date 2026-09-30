@@ -1828,9 +1828,9 @@ button.lp-simulador-refazer:hover:not(:disabled) {
 
 .lp-planos-grade {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--espaco-10);
-  max-width: 860px;
+  max-width: 1040px;
   margin: var(--espaco-20) auto 0;
   text-align: left;
 }
@@ -1889,16 +1889,6 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   color: var(--lp-apoio-esmeralda);
 }
 
-.lp-plano-selo {
-  justify-self: start;
-  padding: var(--espaco-2) var(--espaco-6);
-  border-radius: var(--raio-pilula);
-  background: #64bf8d;
-  color: var(--of-tinta-cta);
-  font-size: var(--fonte-micro);
-  font-weight: var(--peso-semi);
-}
-
 .lp-plano-arvores {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1918,7 +1908,101 @@ button.lp-simulador-refazer:hover:not(:disabled) {
 }
 
 .lp-plano-nota {
+  align-self: end;
   font-size: var(--fonte-rotulo);
+}
+
+.lp-plano:not(.destaque) .lp-plano-nota {
+  color: var(--suave);
+}
+
+/* Tabela comparativa (regras/planos.ts): o recurso, com o "i" que explica em
+   palavras simples, e o que cada plano oferece. A coluna do Família leva a
+   cor do plano em destaque. Largura fixa das colunas: cabe no celular sem
+   rolar para o lado. */
+.lp-comparativo-moldura {
+  max-width: 1040px;
+  margin: var(--espaco-16) auto 0;
+  padding: var(--espaco-4) var(--espaco-10) var(--espaco-10);
+  border: var(--borda);
+  border-radius: 20px;
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+  text-align: left;
+}
+
+.lp-comparativo {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--fonte-rotulo);
+}
+
+.lp-comparativo col.lp-comparativo-recurso {
+  width: 40%;
+}
+
+.lp-comparativo thead th {
+  padding: var(--espaco-10) var(--espaco-4) var(--espaco-6);
+  font-size: var(--fonte-corpo);
+  font-weight: var(--peso-semi);
+  text-align: center;
+}
+
+.lp-comparativo .lp-comparativo-grupo th {
+  padding: var(--espaco-12) var(--espaco-4) var(--espaco-4);
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.lp-comparativo tbody tr:not(.lp-comparativo-grupo) > * {
+  padding: var(--espaco-5) var(--espaco-4);
+  border-top: 1px solid var(--linha);
+  vertical-align: middle;
+}
+
+.lp-comparativo tbody th[scope='row'] {
+  font-weight: var(--peso-medio);
+  text-align: left;
+}
+
+.lp-comparativo-nome {
+  display: flex;
+  gap: var(--espaco-2);
+  align-items: center;
+}
+
+.lp-comparativo td {
+  color: var(--texto);
+  font-size: var(--fonte-apoio);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.lp-comparativo .destaque {
+  background: color-mix(in srgb, var(--of-menta) 55%, transparent);
+}
+
+.lp-comparativo thead th.destaque {
+  border-radius: var(--raio) var(--raio) 0 0;
+  color: var(--of-sobre-menta);
+}
+
+.lp-oferta-sim {
+  display: inline-grid;
+  color: var(--marca);
+}
+
+.lp-oferta-nao {
+  color: var(--suave);
+}
+
+.lp-oferta-texto {
+  font-weight: var(--peso-medio);
 }
 
 /* ------------------------------------------------ Chamada e rodapé */
@@ -2351,6 +2435,35 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   .lp-planos-grade,
   .lp-simulador {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Celular: a tabela continua com as quatro colunas, mais justa. */
+  .lp-comparativo-moldura {
+    padding: var(--espaco-2) var(--espaco-4) var(--espaco-6);
+  }
+
+  .lp-comparativo {
+    font-size: var(--fonte-apoio);
+  }
+
+  .lp-comparativo col.lp-comparativo-recurso {
+    width: 43%;
+  }
+
+  /* "Empresarial" não cabe inteiro na coluna estreita: quebra com hífen. */
+  .lp-comparativo thead th {
+    font-size: var(--fonte-apoio);
+    hyphens: auto;
+    overflow-wrap: anywhere;
+  }
+
+  .lp-comparativo td {
+    font-size: var(--fonte-micro);
+  }
+
+  .lp-comparativo tbody tr:not(.lp-comparativo-grupo) > *,
+  .lp-comparativo thead th {
+    padding-inline: var(--espaco-2);
   }
 
   .lp-rodape {

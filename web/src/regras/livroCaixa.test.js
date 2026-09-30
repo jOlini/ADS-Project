@@ -49,7 +49,8 @@ describe('paraExtrato', () => {
 
     expect(linha).toEqual({
       id: 'l1', data: '2026-09-19', descricao: 'Supermercado', tipo: 'despesa', categoria: 'Mercado', cor: 'mercado',
-      conta: 'Conta corrente', valor: -21437, pessoas: [], responsavel: null, estorno: false, estornado: false, parcela: null,
+      conta: 'Conta corrente', valor: -21437, pessoas: [], divididoEntre: null, responsavel: null, estorno: false, estornado: false,
+      parcela: null,
       noCartao: false, meio: '', original: expect.objectContaining({ id: 'l1' }),
     });
   });
@@ -280,6 +281,16 @@ describe('corpoDoLancamento', () => {
     expect(corpoDoLancamento(comRacha).divisao).toEqual([{ pessoa: 'Ana', valor_centavos: 10000 }]);
     expect(corpoDoLancamento({ ...DESPESA_VALIDA, divisao: [] })).not.toHaveProperty('divisao');
     expect(corpoDoLancamento({ ...comRacha, tipo: 'TRANSFERENCIA', conta_destino_id: 'c2' })).not.toHaveProperty('divisao');
+  });
+
+  it('manda o número de pessoas do Free, nunca na transferência', () => {
+    expect(corpoDoLancamento({ ...DESPESA_VALIDA, dividido_entre: ' 3 ' })).toMatchObject({ dividido_entre: 3 });
+    expect(corpoDoLancamento({ ...DESPESA_VALIDA, dividido_entre: '' })).not.toHaveProperty('dividido_entre');
+    expect(corpoDoLancamento({ ...DESPESA_VALIDA, tipo: 'TRANSFERENCIA', conta_destino_id: 'c2', dividido_entre: '3' })).not.toHaveProperty(
+      'dividido_entre',
+    );
+    expect(validarLancamento({ ...DESPESA_VALIDA, dividido_entre: '1' }).dividido_entre).toMatch(/de 2 a 20/);
+    expect(validarLancamento({ ...DESPESA_VALIDA, dividido_entre: '4' })).toEqual({});
   });
 
   it('manda o responsável limpo, sem divisão, e nunca na transferência', () => {

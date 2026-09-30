@@ -27,6 +27,8 @@ from app.financeiro.rotas import ERRO_400, ERRO_404, obter_servico
 from app.financeiro.servicos import ServicoLivroCaixa
 from app.financeiro.servicos_familia import ServicoFamilia
 
+ERRO_403_PLANO = {403: {"description": "Filtro por pessoa (`membro`) no Free: pede o Plano Família"}}
+
 # Categoria que sumiu do cadastro continua na soma: o dinheiro foi gasto.
 CATEGORIA_REMOVIDA = "Categoria removida"
 
@@ -47,7 +49,10 @@ PARAMETRO_CONTA = Query(None, max_length=64, description="Só os lançamentos de
 PARAMETRO_MEMBRO = Query(
     None,
     max_length=64,
-    description="Modo Família: só os lançamentos de uma pessoa da família (id) ou do titular (`titular`)",
+    description=(
+        "Modo Família: só os lançamentos de uma pessoa da família (id) ou do titular (`titular`). "
+        "Pede o Plano Família ou o Empresarial (no Free, 403)"
+    ),
 )
 
 
@@ -55,7 +60,7 @@ PARAMETRO_MEMBRO = Query(
     "/{espaco_id}/relatorios/mensal",
     response_model=RelatorioMensalResposta,
     summary="Receita × despesa e saldo no fim de cada mês",
-    responses={**ERRO_400, **ERRO_404},
+    responses={**ERRO_400, **ERRO_403_PLANO, **ERRO_404},
 )
 def relatorio_mensal(
     de: str | None = PARAMETRO_DE,
@@ -96,7 +101,7 @@ def relatorio_mensal(
     "/{espaco_id}/relatorios/categorias",
     response_model=GastoPorCategoriaResposta,
     summary="Gasto por categoria no período",
-    responses={**ERRO_400, **ERRO_404},
+    responses={**ERRO_400, **ERRO_403_PLANO, **ERRO_404},
 )
 def gasto_por_categoria(
     de: str | None = PARAMETRO_DE,
