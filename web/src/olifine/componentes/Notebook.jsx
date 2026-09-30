@@ -291,6 +291,9 @@ export default function Notebook({ demo, aberto }) {
         <div className="lp-laptop-costas" aria-hidden="true">
           <MarcaOliFine tamanho={44} />
         </div>
+        {/* A moldura preta com a câmera no alto e o vidro com o reflexo por
+            cima da tela (a tela continua clicável por baixo dele). */}
+        <div className="lp-laptop-moldura">
         <div className="lp-laptop-tela" role="group" aria-label="Demonstração do app com dados fictícios" inert={!aberto}>
           <nav className="lp-mini-lateral" aria-label="Telas da demonstração">
             <MarcaOliFine tamanho={18} />
@@ -309,11 +312,14 @@ export default function Notebook({ demo, aberto }) {
             {tela === 'metas' && <MiniMetas />}
           </div>
         </div>
+        </div>
       </div>
       {/* A base deitada, com o teclado e o touchpad: a tampa fecha sobre ela. */}
       <div className="lp-laptop-teclado" aria-hidden="true">
+        <span className="lp-laptop-dobradica" />
         <span className="lp-laptop-teclas" />
         <span className="lp-laptop-touchpad" />
+        <span className="lp-laptop-frente" />
       </div>
       </div>
     </div>

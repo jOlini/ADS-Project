@@ -46,6 +46,11 @@ describe('tabela da landing', () => {
     expect(PLANOS.map((plano) => plano.preco)).toEqual(['R$ 0', null, null]);
   });
 
+  it('sobe de nível da esquerda para a direita, com o Empresarial como o único destaque', () => {
+    expect(PLANOS.map((plano) => plano.nivel)).toEqual(['entrada', 'intermediario', 'principal']);
+    expect(PLANOS.filter((plano) => plano.destaque).map((plano) => plano.id)).toEqual(['EMPRESARIAL']);
+  });
+
   it('todo recurso tem dica e oferta nos três planos, sem id repetido', () => {
     expect(new Set(recursos.map((recurso) => recurso.id)).size).toBe(recursos.length);
     for (const recurso of recursos) {
