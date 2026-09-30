@@ -1,20 +1,32 @@
 """Mesmo contrato do LivroCaixaMongo, guardando tudo em dicionários.
 
 Reproduz as garantias que no MongoDB vêm dos índices únicos: um espaço
-pessoal por pessoa, um estorno por lançamento e uma chave de importação por
-espaço.
+pessoal por pessoa, um estorno por lançamento, uma chave de importação por
+espaço e uma origem (tributo ou folha da competência) por espaço.
 """
 
+from copy import deepcopy
 from dataclasses import replace
 
 from bson import ObjectId
 
 from app.erros import ErroConflito
-from app.financeiro.repositorio import MENSAGEM_JA_ESTORNADO, EspacoPessoalJaExiste, LancamentoJaImportado
+from app.financeiro.modelos import Parte
+from app.financeiro.regras import chave_da_pessoa
+from app.financeiro.repositorio import (
+    MENSAGEM_JA_ESTORNADO,
+    Cadastro,
+    EspacoPessoalJaExiste,
+    LancamentoJaGerado,
+    LancamentoJaImportado,
+)
 
 
-def _copia(entidade):
-    return replace(entidade) if entidade else None
+def _da_pessoa(lancamento, pessoa):
+    # Como o MongoDB com a ordenação de força 1: sem caixa nem acento.
+    if pessoa.nome is None:
+        return not lancamento.responsavel
+    return bool(lancamento.responsavel) and chave_da_pessoa(lancamento.responsavel) == chave_da_pessoa(pessoa.nome)
 
 
 class LivroCaixaMemoria:
@@ -23,34 +35,45 @@ class LivroCaixaMemoria:
         self.contas = {}
         self.categorias = {}
         self.lancamentos = {}
+        self.cadastros = {cadastro: {} for cadastro in Cadastro}
 
     # --- Espaços ---
 
+    # O espaço guarda listas (membros, pessoas da família): a cópia é funda,
+    # como um documento lido de novo do banco.
+
     def buscar_espaco(self, id):
-        return _copia(self.espacos.get(id))
+        return deepcopy(self.espacos.get(id))
 
     def buscar_espaco_pessoal(self, uid):
-        return next((replace(e) for e in self.espacos.values() if e.pessoal_de == uid), None)
+        return next((deepcopy(e) for e in self.espacos.values() if e.pessoal_de == uid), None)
 
     def listar_espacos_do_membro(self, uid):
         espacos = [e for e in self.espacos.values() if e.papel_de(uid)]
-        return [replace(e) for e in sorted(espacos, key=lambda e: e.criado_em)]
+        return [deepcopy(e) for e in sorted(espacos, key=lambda e: e.criado_em)]
 
     def inserir_espaco(self, espaco):
         if espaco.pessoal_de and self.buscar_espaco_pessoal(espaco.pessoal_de):
             raise EspacoPessoalJaExiste()
         espaco.id = str(ObjectId())
-        self.espacos[espaco.id] = replace(espaco)
+        self.espacos[espaco.id] = deepcopy(espaco)
         return espaco
 
     def atualizar_espaco(self, espaco):
-        self.espacos[espaco.id] = replace(espaco)
+        guardado = self.espacos[espaco.id]
+        guardado.nome, guardado.cnpj, guardado.regime = espaco.nome, espaco.cnpj, espaco.regime
+        return espaco
+
+    def atualizar_familia(self, espaco):
+        self.espacos[espaco.id].familia = deepcopy(espaco.familia)
         return espaco
 
     def excluir_espaco(self, id):
         if id not in self.espacos:
             return False
         self.categorias = {chave: c for chave, c in self.categorias.items() if c.espaco_id != id}
+        for cadastro, itens in self.cadastros.items():
+            self.cadastros[cadastro] = {chave: item for chave, item in itens.items() if item.espaco_id != id}
         del self.espacos[id]
         return True
 
@@ -136,6 +159,10 @@ class LivroCaixaMemoria:
             lancamento.espaco_id, [lancamento.chave_importacao]
         ):
             raise LancamentoJaImportado()
+        if lancamento.origem and any(
+            l.espaco_id == lancamento.espaco_id and l.origem == lancamento.origem for l in self.lancamentos.values()
+        ):
+            raise LancamentoJaGerado()
         lancamento.id = str(ObjectId())
         self.lancamentos[lancamento.id] = replace(lancamento, estornado_por=None)
         return lancamento
@@ -188,6 +215,57 @@ class LivroCaixaMemoria:
         nas_divisoes = {parte.pessoa for l in do_espaco for parte in l.divisao}
         return list(nas_divisoes | {l.responsavel for l in do_espaco if l.responsavel})
 
+    def listar_lancamentos_de_origem(self, espaco_id, tipos):
+        gerados = [
+            l for l in self.lancamentos.values() if l.espaco_id == espaco_id and l.origem and l.origem.tipo in tipos
+        ]
+        gerados.sort(key=lambda l: (l.origem.competencia, l.data), reverse=True)
+        return [replace(l) for l in gerados]
+
+    # --- Cadastros da empresa ---
+
+    def listar_cadastros(self, cadastro, espaco_id):
+        itens = [item for item in self.cadastros[cadastro].values() if item.espaco_id == espaco_id]
+        return [deepcopy(item) for item in sorted(itens, key=lambda item: item.criado_em)]
+
+    def buscar_cadastro(self, cadastro, espaco_id, id):
+        item = self.cadastros[cadastro].get(id)
+        return deepcopy(item) if item and item.espaco_id == espaco_id else None
+
+    def inserir_cadastro(self, cadastro, entidade):
+        entidade.id = str(ObjectId())
+        self.cadastros[cadastro][entidade.id] = deepcopy(entidade)
+        return entidade
+
+    def atualizar_cadastro(self, cadastro, entidade):
+        self.cadastros[cadastro][entidade.id] = deepcopy(entidade)
+        return entidade
+
+    def excluir_cadastro(self, cadastro, espaco_id, id):
+        item = self.cadastros[cadastro].get(id)
+        if not item or item.espaco_id != espaco_id:
+            return False
+        del self.cadastros[cadastro][id]
+        return True
+
+    def renomear_pessoa(self, espaco_id, antigo, novo):
+        chave = chave_da_pessoa(antigo)
+        mudados = 0
+        for id, lancamento in list(self.lancamentos.items()):
+            if lancamento.espaco_id != espaco_id:
+                continue
+            responsavel = novo if lancamento.responsavel and chave_da_pessoa(lancamento.responsavel) == chave else None
+            divisao = [
+                Parte(novo, parte.valor_centavos) if chave_da_pessoa(parte.pessoa) == chave else parte
+                for parte in lancamento.divisao
+            ]
+            if responsavel or divisao != lancamento.divisao:
+                self.lancamentos[id] = replace(
+                    lancamento, responsavel=responsavel or lancamento.responsavel, divisao=divisao
+                )
+                mudados += 1
+        return mudados
+
     def buscar_estornos(self, espaco_id, ids):
         return {
             l.estorno_de: l.id
@@ -212,12 +290,14 @@ class LivroCaixaMemoria:
                     somas[partida.conta_id] = somas.get(partida.conta_id, 0) + partida.valor_centavos
         return somas
 
-    def somar_categorias_por_mes(self, espaco_id, de, ate, conta_id=None):
+    def somar_categorias_por_mes(self, espaco_id, de, ate, conta_id=None, pessoa=None):
         somas = {}
         for lancamento in self.lancamentos.values():
             if lancamento.espaco_id != espaco_id or not de <= lancamento.data <= ate:
                 continue
             if conta_id and lancamento.conta_id != conta_id:
+                continue
+            if pessoa is not None and not _da_pessoa(lancamento, pessoa):
                 continue
             mes = lancamento.data.isoformat()[:7]
             for partida in lancamento.partidas:

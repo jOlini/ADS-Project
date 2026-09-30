@@ -4,6 +4,7 @@ Dinheiro é sempre inteiro em centavos, nunca float: 0.1 + 0.2 não dá 0.3 em
 ponto flutuante, e um centavo perdido num saldo é erro de verdade.
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
@@ -22,9 +23,12 @@ LIMITE_EM_CENTAVOS = 100_000_000_000
 TAMANHO_MAXIMO_DO_CSV = 500_000
 # Pessoas numa divisão (racha) de um lançamento.
 MAXIMO_DE_PESSOAS = 20
-# Espaços que uma pessoa cria além do pessoal (família e empresa). Barra quem
-# criaria livros-caixa vazios sem fim com a mesma conta.
-MAXIMO_DE_ESPACOS_CRIADOS = 5
+# Empresas que uma pessoa cadastra no espaço empresarial. Barra quem criaria
+# livros-caixa vazios sem fim com a mesma conta.
+MAXIMO_DE_EMPRESAS = 5
+# Pessoas da família além do titular no Modo Família. É o que uma assinatura
+# da família cobre: o titular assina e a casa inteira (até 6 pessoas) entra.
+MAXIMO_DE_MEMBROS_DA_FAMILIA = 5
 # Parcelas de uma compra no cartão de crédito (4 anos).
 MAXIMO_DE_PARCELAS = 48
 # Lançamentos numa exclusão em lote (o teto de uma consulta do extrato).
@@ -34,18 +38,46 @@ MAXIMO_DE_AJUSTES = 1000
 
 
 class TipoEspaco(StrEnum):
-    """Cada espaço é um livro-caixa separado: trocar de espaço é trocar de
-    livro, e nada de um aparece no outro."""
+    """Só dois tipos: o espaço pessoal e o empresarial. Cada documento é um
+    livro-caixa separado: trocar de livro é trocar de documento, e nada de um
+    aparece no outro.
+
+    O pessoal é um por pessoa e leva o Modo Família dentro dele (a família não
+    é um terceiro tipo). O espaço empresarial é o conjunto das empresas da
+    pessoa, e cada empresa é um livro-caixa próprio: contas, caixa e DRE de dois
+    CNPJs nunca se misturam."""
 
     PF = "PF"  # pessoal: um por pessoa, criado sozinho no primeiro acesso
-    FAMILIA = "FAMILIA"  # o dinheiro da casa, fora do pessoal de cada um
-    PJ = "PJ"  # uma empresa
+    PJ = "PJ"  # uma empresa do espaço empresarial
+
+
+class RegimeTributario(StrEnum):
+    """Regime da empresa: decide os tributos sugeridos na aba Impostos."""
+
+    MEI = "MEI"
+    SIMPLES = "SIMPLES"  # Simples Nacional
+    PRESUMIDO = "PRESUMIDO"  # Lucro Presumido
+    REAL = "REAL"  # Lucro Real
 
 
 class Papel(StrEnum):
     """Papel de uma pessoa dentro de um espaço."""
 
     DONO = "DONO"
+
+
+class CorDoMembro(StrEnum):
+    """Cor com que cada pessoa da família aparece nos filtros, no extrato e nos
+    relatórios. Só ajuda a achar: o nome está sempre escrito ao lado."""
+
+    MENTA = "menta"
+    AZUL = "azul"
+    ROXO = "roxo"
+    CORAL = "coral"
+    AMBAR = "ambar"
+    ROSA = "rosa"
+    TURQUESA = "turquesa"
+    GRAFITE = "grafite"
 
 
 class TipoConta(StrEnum):
@@ -108,6 +140,42 @@ class SituacaoDaLinha(StrEnum):
     INVALIDA = "INVALIDA"  # a linha não virou lançamento (motivo em "erro")
 
 
+class ClasseDeCusto(StrEnum):
+    """Como uma despesa da empresa entra na aba Custos (e na margem de lucro)."""
+
+    # Cresce com as vendas: fornecedores, insumos, impostos sobre a venda.
+    VARIAVEL = "VARIAVEL"
+    # Não muda com as vendas: aluguel, folha, pró-labore, contador.
+    FIXO = "FIXO"
+    # O dia a dia da operação: marketing, tarifas, manutenção.
+    OPERACIONAL = "OPERACIONAL"
+    # Não é custo: distribuição de lucros aos sócios.
+    FORA = "FORA"
+
+
+class FuncaoDaCategoria(StrEnum):
+    """Categoria que a gestão da empresa usa sozinha (aporte do sócio, folha,
+    tributo): é pela função, e não pelo nome, que ela é achada, então renomear
+    a categoria não quebra nada."""
+
+    APORTE = "APORTE"
+    DISTRIBUICAO = "DISTRIBUICAO"
+    PRO_LABORE = "PRO_LABORE"
+    SALARIOS = "SALARIOS"
+    BENEFICIOS = "BENEFICIOS"
+    PRESTADORES = "PRESTADORES"
+    ENCARGOS = "ENCARGOS"
+    IMPOSTOS = "IMPOSTOS"
+
+
+class TipoDeOrigem(StrEnum):
+    """O que gerou um lançamento da gestão da empresa."""
+
+    TRIBUTO = "TRIBUTO"  # pagamento de um tributo na competência
+    SALARIO = "SALARIO"  # salário, pró-labore ou serviço PJ da folha
+    BENEFICIOS = "BENEFICIOS"  # benefícios da folha (VR, VT, plano de saúde)
+
+
 class CorCategoria(StrEnum):
     """Mesmos nomes das variáveis --cat-* do CSS da área do cliente."""
 
@@ -131,6 +199,36 @@ class Membro:
 
 
 @dataclass
+class PessoaDaFamilia:
+    """Alguém da casa no Modo Família (cônjuge, filho, quem divide as
+    contas). É um perfil dentro do espaço pessoal do titular, sem login
+    próprio: o titular lança por ela. O lançamento é dela quando o
+    "responsável" tem o nome dela."""
+
+    id: str
+    nome: str
+    cor: CorDoMembro
+
+
+@dataclass
+class Familia:
+    """Modo Família do espaço pessoal. Desligar só esconde a família da tela:
+    as pessoas cadastradas continuam guardadas para quando religar."""
+
+    ativa: bool = False
+    pessoas: list[PessoaDaFamilia] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class FiltroDePessoa:
+    """De quem são os lançamentos de um relatório: do titular (nome None,
+    lançamento sem responsável) ou de uma pessoa da família (o nome, sem
+    diferença de caixa nem de acento)."""
+
+    nome: str | None
+
+
+@dataclass
 class Espaco:
     """Um livro-caixa. Toda conta, categoria e lançamento pertence a um espaço,
     e toda consulta filtra por ele."""
@@ -143,6 +241,11 @@ class Espaco:
     criado_em: datetime
     # uid do dono quando é o espaço pessoal (um por pessoa, índice único).
     pessoal_de: str | None = None
+    # Só na empresa: CNPJ (só os caracteres, sem pontuação) e regime.
+    cnpj: str | None = None
+    regime: RegimeTributario | None = None
+    # Só no pessoal.
+    familia: Familia = field(default_factory=Familia)
     id: str | None = None
 
     def papel_de(self, uid: str) -> Papel | None:
@@ -178,6 +281,10 @@ class Categoria:
     cor: CorCategoria
     ativa: bool
     criada_em: datetime
+    # Só nas despesas da empresa: a classe na aba Custos (None = a tela
+    # sugere pelo nome) e a função na gestão (aporte, folha, tributo).
+    classe_de_custo: ClasseDeCusto | None = None
+    funcao: FuncaoDaCategoria | None = None
     id: str | None = None
 
 
@@ -189,6 +296,18 @@ class Partida:
     valor_centavos: int
     conta_id: str | None = None
     categoria_id: str | None = None
+
+
+@dataclass(frozen=True)
+class Origem:
+    """Lançamento gerado pela gestão da empresa: o pagamento de um tributo ou a
+    folha de uma pessoa, numa competência (AAAA-MM). Único no espaço: a mesma
+    folha ou o mesmo imposto não entram duas vezes. Excluir o lançamento
+    libera a competência para lançar de novo."""
+
+    tipo: TipoDeOrigem
+    id: str
+    competencia: str
 
 
 @dataclass(frozen=True)
@@ -237,6 +356,7 @@ class Lancamento:
     # chega, mesmo depois de a pessoa renomear a compra.
     chave_parcelamento: str | None = None
     meio: MeioDePagamento | None = None
+    origem: Origem | None = None
     id: str | None = None
     # Calculado na leitura (id do estorno deste lançamento); não é gravado.
     estornado_por: str | None = field(default=None, compare=False)
@@ -290,16 +410,67 @@ Data = Annotated[date, BeforeValidator(_data_sem_numero)]
 DiaDoMes = Annotated[int, Field(strict=True, ge=1, le=31)]
 
 
+def _cnpj(valor):
+    # CNPJ numérico ou alfanumérico (o da Receita Federal desde julho de 2026):
+    # 12 caracteres de 0 a 9 ou A a Z e 2 dígitos verificadores. Pontuação e
+    # espaço não contam; o que fica gravado são os 14 caracteres. Texto vazio
+    # é "sem CNPJ".
+    if not isinstance(valor, str):
+        return valor
+    limpo = re.sub(r"[.\-/\s]", "", valor).upper()
+    if not limpo:
+        return None
+    if not re.fullmatch(r"[0-9A-Z]{12}[0-9]{2}", limpo) or len(set(limpo)) == 1 or not _digitos_conferem(limpo):
+        raise ValueError("CNPJ inválido. Confira os 14 caracteres.")
+    return limpo
+
+
+def _digitos_conferem(cnpj: str) -> bool:
+    # Cada caractere vale o código ASCII menos 48 (os dígitos continuam 0 a 9),
+    # com os pesos de sempre do CNPJ.
+    valores = [ord(caractere) - 48 for caractere in cnpj]
+    for tamanho in (12, 13):
+        pesos = [(indice % 8) + 2 for indice in range(tamanho)][::-1]
+        resto = sum(valor * peso for valor, peso in zip(valores[:tamanho], pesos, strict=True)) % 11
+        if valores[tamanho] != (0 if resto < 2 else 11 - resto):
+            return False
+    return True
+
+
+Cnpj = Annotated[str | None, BeforeValidator(_cnpj)]
+
+
 class NovoEspaco(Entrada):
-    """Espaço de família ou de empresa. O pessoal não entra por aqui: ele já
-    existe desde o primeiro acesso (servicos.criar_espaco recusa PF)."""
+    """Empresa do espaço empresarial (tipo PJ). O pessoal não entra por aqui:
+    ele já existe desde o primeiro acesso (servicos.criar_espaco recusa PF).
+    CNPJ e regime são opcionais; o regime decide os tributos sugeridos."""
 
     tipo: TipoEspaco
     nome: Nome
+    cnpj: Cnpj = None
+    regime: RegimeTributario | None = None
 
 
 class AtualizacaoEspaco(Entrada):
+    """PATCH: o nome e, na empresa, o CNPJ e o regime enviados. cnpj: null (ou
+    vazio) tira o CNPJ."""
+
+    nome: Nome | None = None
+    cnpj: Cnpj = None
+    regime: RegimeTributario | None = None
+
+
+class AtualizacaoFamilia(Entrada):
+    """Liga ou desliga o Modo Família do espaço pessoal."""
+
+    ativa: Booleano
+
+
+class NovaPessoaDaFamilia(Entrada):
+    """Pessoa da família (nova ou editada: o PUT substitui nome e cor)."""
+
     nome: Nome
+    cor: CorDoMembro
 
 
 class NovaConta(Entrada):
@@ -488,6 +659,27 @@ class PedidoDeEstrutura(Entrada):
 # --- Saída ---------------------------------------------------------------------
 
 
+class PessoaDaFamiliaResposta(BaseModel):
+    id: str
+    nome: str
+    cor: CorDoMembro
+
+
+class FamiliaResposta(BaseModel):
+    ativa: bool
+    pessoas: list[PessoaDaFamiliaResposta]
+    # Quantas pessoas cabem além do titular (a assinatura da família é uma só).
+    maximo_de_pessoas: int
+
+    @classmethod
+    def de(cls, familia: Familia) -> "FamiliaResposta":
+        return cls(
+            ativa=familia.ativa,
+            pessoas=[PessoaDaFamiliaResposta(id=p.id, nome=p.nome, cor=p.cor) for p in familia.pessoas],
+            maximo_de_pessoas=MAXIMO_DE_MEMBROS_DA_FAMILIA,
+        )
+
+
 class EspacoResposta(BaseModel):
     id: str
     tipo: TipoEspaco
@@ -495,6 +687,11 @@ class EspacoResposta(BaseModel):
     moeda: str
     fuso: str
     papel: Papel
+    # Só na empresa; null no pessoal.
+    cnpj: str | None
+    regime: RegimeTributario | None
+    # Só no pessoal; null na empresa.
+    familia: FamiliaResposta | None
 
     @classmethod
     def de(cls, espaco: Espaco, uid: str) -> "EspacoResposta":
@@ -505,6 +702,9 @@ class EspacoResposta(BaseModel):
             moeda=espaco.moeda,
             fuso=espaco.fuso,
             papel=espaco.papel_de(uid),
+            cnpj=espaco.cnpj,
+            regime=espaco.regime,
+            familia=FamiliaResposta.de(espaco.familia) if espaco.tipo == TipoEspaco.PF else None,
         )
 
 
@@ -546,6 +746,10 @@ class CategoriaResposta(BaseModel):
     tipo: TipoCategoria
     cor: CorCategoria
     ativa: bool
+    # Só na empresa (null no pessoal): a classe na aba Custos, se a pessoa
+    # escolheu, e a função da categoria na gestão.
+    classe_de_custo: ClasseDeCusto | None = None
+    funcao: FuncaoDaCategoria | None = None
 
     @classmethod
     def de(cls, categoria: Categoria) -> "CategoriaResposta":
@@ -555,6 +759,8 @@ class CategoriaResposta(BaseModel):
             tipo=categoria.tipo,
             cor=categoria.cor,
             ativa=categoria.ativa,
+            classe_de_custo=categoria.classe_de_custo,
+            funcao=categoria.funcao,
         )
 
 
@@ -567,6 +773,12 @@ class PartidaResposta(BaseModel):
 class ParteResposta(BaseModel):
     pessoa: str
     valor_centavos: int
+
+
+class OrigemResposta(BaseModel):
+    tipo: TipoDeOrigem
+    id: str
+    competencia: str
 
 
 class LancamentoResposta(BaseModel):
@@ -587,6 +799,8 @@ class LancamentoResposta(BaseModel):
     parcela: int | None
     parcelas: int | None
     meio: MeioDePagamento | None
+    # Tributo pago ou folha lançada pela gestão da empresa; null nos outros.
+    origem: OrigemResposta | None = None
     criado_em: datetime
 
     @classmethod
@@ -616,6 +830,7 @@ class LancamentoResposta(BaseModel):
             parcela=lancamento.parcela,
             parcelas=lancamento.parcelas,
             meio=lancamento.meio,
+            origem=OrigemResposta(**vars(lancamento.origem)) if lancamento.origem else None,
             criado_em=lancamento.criado_em,
         )
 
@@ -824,6 +1039,8 @@ class RelatorioMensalResposta(BaseModel):
     de: str
     ate: str
     conta_id: str | None
+    # Pessoa da família (id) ou "titular" do filtro; null = todos.
+    membro: str | None = None
     meses: list[MesDoRelatorioResposta]
 
 
@@ -840,6 +1057,7 @@ class GastoPorCategoriaResposta(BaseModel):
     de: str
     ate: str
     conta_id: str | None
+    membro: str | None = None
     total_centavos: int
     # Da categoria com mais gasto para a com menos; só as que têm gasto.
     categorias: list[GastoDaCategoriaResposta]

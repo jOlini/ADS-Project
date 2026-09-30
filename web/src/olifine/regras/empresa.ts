@@ -7,14 +7,23 @@ import { normalizarTexto } from '../../regras/texto';
 
 // ------------------------------------------------------------- DRE
 
-// Linhas do DRE simplificado, na ordem em que aparecem.
-export type GrupoDaDre = 'RECEITA' | 'DEDUCAO' | 'CUSTO' | 'DESPESA_OPERACIONAL' | 'FINANCEIRO';
+// Linhas do DRE simplificado, na ordem em que aparecem. FORA não é linha:
+// é o dinheiro entre a empresa e os sócios (aporte de capital, distribuição
+// de lucros), que não é receita nem despesa do negócio.
+export type GrupoDaDre = 'RECEITA' | 'DEDUCAO' | 'CUSTO' | 'DESPESA_OPERACIONAL' | 'FINANCEIRO' | 'FORA';
 
 export interface CategoriaDaEmpresa {
   id: string;
   nome: string;
   tipo: string;
+  // Função da categoria na gestão da empresa (API): APORTE, DISTRIBUICAO,
+  // PRO_LABORE, SALARIOS, BENEFICIOS, PRESTADORES, ENCARGOS, IMPOSTOS.
+  funcao?: string | null;
+  classe_de_custo?: string | null;
 }
+
+// Funções das categorias do dinheiro dos sócios, fora do resultado.
+const FUNCOES_DOS_SOCIOS = ['APORTE', 'DISTRIBUICAO'];
 
 export interface Partida {
   conta_id: string;
@@ -28,6 +37,8 @@ export interface LancamentoDaEmpresa {
   conta_id: string;
   conta_destino_id?: string | null;
   categoria_id?: string | null;
+  // De quem é o lançamento (o sócio no aporte, a pessoa na folha).
+  responsavel?: string | null;
   partidas: readonly Partida[];
 }
 
@@ -43,21 +54,33 @@ export interface ContaDaEmpresa {
 // Palavras inteiras, sem acento: "DAS" é o imposto do MEI, mas "Vendas" e
 // "Comidas" não são.
 const PALAVRAS: readonly [GrupoDaDre, RegExp][] = [
+  ['FORA', /\b(aportes?|capital social|distribuicao de lucros?|dividendos?|lucros distribuidos)\b/],
   ['DEDUCAO', /\b(impostos?|das|simples nacional|icms|iss|pis|cofins|tributos?)\b/],
   ['CUSTO', /\b(fornecedor(es)?|insumos?|mercadorias?|materia[- ]prima|embalagens?|frete de compra)\b/],
   ['FINANCEIRO', /\b(tarifas?|juros|iof|rendimentos?|multas? bancarias?)\b/],
 ];
 
-export function grupoDaCategoria(categoria: Pick<CategoriaDaEmpresa, 'nome' | 'tipo'> | undefined, valor = 0): GrupoDaDre {
+export function grupoDaCategoria(
+  categoria: Pick<CategoriaDaEmpresa, 'nome' | 'tipo' | 'funcao'> | undefined,
+  valor = 0,
+): GrupoDaDre {
   if (!categoria) {
     return valor > 0 ? 'RECEITA' : 'DESPESA_OPERACIONAL';
+  }
+  // A função gravada pela gestão vale mais que o nome (renomear a categoria
+  // "Aportes dos sócios" não a transforma em receita).
+  if (categoria.funcao && FUNCOES_DOS_SOCIOS.includes(categoria.funcao)) {
+    return 'FORA';
+  }
+  if (categoria.funcao === 'IMPOSTOS') {
+    return 'DEDUCAO';
   }
   const nome = normalizarTexto(categoria.nome);
   for (const [grupo, palavras] of PALAVRAS) {
     if (palavras.test(nome)) {
       // Imposto e custo só fazem sentido como despesa; uma receita com esse
       // nome (devolução de imposto, por exemplo) continua receita.
-      if (grupo === 'FINANCEIRO' || categoria.tipo !== 'RECEITA') {
+      if (grupo === 'FINANCEIRO' || grupo === 'FORA' || categoria.tipo !== 'RECEITA') {
         return grupo;
       }
     }
@@ -78,7 +101,7 @@ export interface LinhaDaDre {
 }
 
 export interface Dre {
-  grupos: Record<GrupoDaDre, LinhaDaDre>;
+  grupos: Record<Exclude<GrupoDaDre, 'FORA'>, LinhaDaDre>;
   receitaBruta: number;
   deducoes: number;
   receitaLiquida: number;
@@ -105,14 +128,15 @@ const porcento = (parte: number, todo: number) => (todo > 0 ? Math.round((parte 
 
 // DRE do período pelo mês de cada lançamento: receitas e despesas das contas
 // e as compras no cartão na data da compra (a fatura paga depois é
-// transferência e não conta de novo). Transferências ficam de fora.
+// transferência e não conta de novo). Transferências e o dinheiro dos
+// sócios (aporte, distribuição de lucros) ficam de fora.
 export function montarDre(
   lancamentos: readonly LancamentoDaEmpresa[],
   categorias: readonly CategoriaDaEmpresa[],
   { de, ate }: { de: string; ate: string },
 ): Dre {
   const categoriaPorId = new Map(categorias.map((categoria) => [categoria.id, categoria]));
-  const grupos: Record<GrupoDaDre, Map<string, number>> = {
+  const grupos: Record<Exclude<GrupoDaDre, 'FORA'>, Map<string, number>> = {
     RECEITA: new Map(),
     DEDUCAO: new Map(),
     CUSTO: new Map(),
@@ -127,13 +151,16 @@ export function montarDre(
     const valor = valorNaOrigem(lancamento);
     const categoria = lancamento.categoria_id ? categoriaPorId.get(lancamento.categoria_id) : undefined;
     const grupo = grupoDaCategoria(categoria, valor);
+    if (grupo === 'FORA') {
+      continue;
+    }
     const nome = categoria?.nome ?? 'Sem categoria';
     grupos[grupo].set(nome, (grupos[grupo].get(nome) ?? 0) + valor);
     contados += 1;
   }
 
   // Receita e financeiro com o sinal do caixa; os outros como o que saiu.
-  const linha = (grupo: GrupoDaDre): LinhaDaDre => {
+  const linha = (grupo: Exclude<GrupoDaDre, 'FORA'>): LinhaDaDre => {
     const sinal = grupo === 'RECEITA' || grupo === 'FINANCEIRO' ? 1 : -1;
     const itens = [...grupos[grupo]]
       .map(([nome, valor]) => ({ nome, valor: valor * sinal }))
@@ -201,26 +228,34 @@ export interface MesDoFluxo {
   // aplicado − resgatado: quanto a empresa investiu no mês (negativo =
   // resgatou mais do que aplicou).
   investido: number;
-  // O que mudou no caixa da operação: geração − investido.
+  // Dinheiro dos sócios: aportes que entraram menos lucros distribuídos
+  // (financiamento, fora da operação).
+  socios: number;
+  // O que mudou no caixa da operação: geração − investido + sócios.
   variacaoDoCaixa: number;
 }
 
 const mesDaData = (data: string) => data.slice(0, 7);
 
 function mesVazio(mes: string): MesDoFluxo {
-  return { mes, entradas: 0, saidas: 0, geracao: 0, aplicado: 0, resgatado: 0, investido: 0, variacaoDoCaixa: 0 };
+  return { mes, entradas: 0, saidas: 0, geracao: 0, aplicado: 0, resgatado: 0, investido: 0, socios: 0, variacaoDoCaixa: 0 };
 }
 
 // Fluxo de caixa operacional por mês (regime de caixa de verdade): só o que
 // passou pelas contas da operação. A compra no cartão entra quando a fatura é
 // paga; a transferência entre contas da operação não muda o caixa; ir para a
-// conta de investimento (ou voltar dela) é investimento, não operação. O que
-// foi lançado com data depois de hoje ainda não aconteceu e fica de fora.
+// conta de investimento (ou voltar dela) é investimento, não operação; o
+// aporte do sócio e a distribuição de lucros são financiamento (sócios), não
+// operação. O que foi lançado com data depois de hoje ainda não aconteceu e
+// fica de fora.
 export function fluxoDeCaixa(
   lancamentos: readonly LancamentoDaEmpresa[],
   contas: readonly ContaDaEmpresa[],
-  { meses, hoje }: { meses: readonly string[]; hoje: string },
+  { meses, hoje, categorias = [] }: { meses: readonly string[]; hoje: string; categorias?: readonly CategoriaDaEmpresa[] },
 ): MesDoFluxo[] {
+  const dosSocios = new Set(
+    categorias.filter((categoria) => grupoDaCategoria(categoria) === 'FORA').map((categoria) => categoria.id),
+  );
   const papel = new Map(contas.map((conta) => [conta.id, papelDaConta(conta)]));
   const porMes = new Map(meses.map((mes) => [mes, mesVazio(mes)]));
   const partida = (lancamento: LancamentoDaEmpresa, conta: string | null | undefined) =>
@@ -249,7 +284,9 @@ export function fluxoDeCaixa(
     // Receita soma o que entrou; despesa, o que saiu. O estorno tem a
     // partida trocada e desconta do mesmo lado.
     const valor = partida(lancamento, lancamento.conta_id);
-    if (lancamento.tipo === 'RECEITA') {
+    if (lancamento.categoria_id && dosSocios.has(lancamento.categoria_id)) {
+      mes.socios += valor;
+    } else if (lancamento.tipo === 'RECEITA') {
       mes.entradas += valor;
     } else {
       mes.saidas -= valor;
@@ -260,7 +297,7 @@ export function fluxoDeCaixa(
     const mes = porMes.get(chave) ?? mesVazio(chave);
     const geracao = mes.entradas - mes.saidas;
     const investido = mes.aplicado - mes.resgatado;
-    return { ...mes, geracao, investido, variacaoDoCaixa: geracao - investido };
+    return { ...mes, geracao, investido, variacaoDoCaixa: geracao - investido + mes.socios };
   });
 }
 

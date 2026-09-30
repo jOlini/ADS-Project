@@ -1,0 +1,654 @@
+/* Gestão da empresa (espaço empresarial): Custos, Sociedade & aportes,
+   Impostos, Pessoal (RH) e a folha prevista no Fluxo de caixa.
+   Mesma grade e mesmos cartões das visões da empresa (olifine.css, "Espaço
+   de empresa"); aqui só o que é próprio de cada aba. */
+
+/* Cor de cada classe de custo nas marcas (barra, chave da legenda), sem
+   texto em cima: o nome e o valor estão sempre escritos ao lado. */
+.of-gestao {
+  --classe-variavel: var(--cat-transporte);
+  --classe-fixo: var(--cat-moradia);
+  --classe-operacional: var(--cat-lazer);
+  --classe-lucro: var(--of-verde);
+  --classe-fora: var(--cat-neutro);
+}
+
+.of-gestao .chave {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--cor-da-chave, var(--classe-fora));
+}
+
+.of-gestao .variavel {
+  --cor-da-chave: var(--classe-variavel);
+}
+
+.of-gestao .fixo {
+  --cor-da-chave: var(--classe-fixo);
+}
+
+.of-gestao .operacional {
+  --cor-da-chave: var(--classe-operacional);
+}
+
+.of-gestao .lucro {
+  --cor-da-chave: var(--classe-lucro);
+}
+
+.of-gestao .fora {
+  --cor-da-chave: var(--classe-fora);
+}
+
+/* Período das apurações (Este mês, Este ano, 12 meses). */
+.abas.of-periodo-da-gestao {
+  justify-self: start;
+  background: var(--superficie);
+  box-shadow: inset 0 0 0 var(--espessura) var(--linha);
+}
+
+.of-periodo-da-gestao button[aria-pressed='true'],
+.of-periodo-da-gestao button[aria-pressed='true']:hover:not(:disabled) {
+  color: var(--of-sobre-menta);
+  background: var(--of-menta);
+  box-shadow: inset 0 0 0 1.5px var(--marca);
+}
+
+.of-aviso-da-gestao:not(:empty) {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+}
+
+.of-aviso-da-gestao .icone {
+  flex: none;
+  color: var(--suave);
+}
+
+/* ------------------------------------------------------------- Custos */
+
+/* Para onde vai cada R$ 100 vendidos: uma barra só, em faixas. */
+.of-cada-100 {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  overflow: hidden;
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
+}
+
+.of-cada-100 .faixa {
+  flex: var(--parte) 0 0;
+  min-width: 4px;
+  background: var(--cor-da-chave);
+}
+
+.of-cada-100-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4) var(--espaco-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+}
+
+.of-cada-100-legenda li {
+  display: inline-flex;
+  gap: var(--espaco-4);
+  align-items: center;
+}
+
+.of-cada-100-legenda b {
+  color: var(--texto);
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-custos-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--espaco-8);
+  align-items: start;
+}
+
+.of-custos-grupo h2 {
+  display: inline-flex;
+  gap: var(--espaco-4);
+  align-items: center;
+}
+
+.of-custos-total {
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-custos-total small {
+  color: var(--suave);
+  font-weight: var(--peso-regular);
+}
+
+.of-custos-descricao {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+/* Uma despesa por linha: o nome (com "sugerida pelo nome" quando a classe
+   não foi escolhida), o valor e a troca de classe ali mesmo. */
+.of-custos-lista {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.of-custos-lista li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(9.5rem, auto);
+  gap: var(--espaco-6);
+  align-items: center;
+  padding: var(--espaco-3) 0;
+  border-top: 1px dashed var(--linha);
+  font-size: var(--fonte-rotulo);
+}
+
+.of-custos-lista li:first-child {
+  border-top: 0;
+}
+
+.of-custos-lista .nome {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.of-custos-lista .nome small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-custos-lista b {
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Nos cartões de cada classe, a troca de classe desce para a linha de baixo:
+   o nome e o valor ficam inteiros na de cima. */
+.of-custos-grupo .of-custos-lista li {
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: var(--espaco-3);
+}
+
+.of-custos-grupo .of-custos-lista li > .seletor {
+  grid-column: 1 / -1;
+}
+
+.of-custos-todas .of-custos-lista li {
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, 16rem);
+}
+
+/* A troca de classe é um controle de apoio: mais baixa e com a letra do
+   texto da lista. */
+.of-custos-lista .seletor.compacto .controle-do-seletor {
+  height: 36px;
+  min-height: 36px;
+  font-size: var(--fonte-rotulo);
+}
+
+.of-custos-todas > summary {
+  display: flex;
+  gap: var(--espaco-6);
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  cursor: pointer;
+}
+
+.of-custos-todas > summary::-webkit-details-marker {
+  display: none;
+}
+
+.of-custos-todas > summary span {
+  display: grid;
+}
+
+.of-custos-todas > summary small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-custos-todas > summary .icone {
+  flex: none;
+  color: var(--suave);
+  transition: rotate var(--transicao);
+}
+
+.of-custos-todas[open] > summary .icone {
+  rotate: 180deg;
+}
+
+/* ------------------------------------------------- Tabelas da gestão */
+
+/* A tabela larga rola dentro do cartão, sem esticar a página; o position
+   prende aqui os textos só para leitor de tela (absolutos). */
+.of-tabela-da-gestao {
+  position: relative;
+  overflow-x: auto;
+}
+
+.of-tabela-da-gestao table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fonte-apoio);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-tabela-da-gestao th,
+.of-tabela-da-gestao td {
+  padding: var(--espaco-4) var(--espaco-5);
+  border-bottom: var(--borda);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.of-tabela-da-gestao th:first-child {
+  text-align: left;
+}
+
+.of-tabela-da-gestao thead th {
+  color: var(--suave);
+  font-weight: var(--peso-medio);
+}
+
+.of-tabela-da-gestao tbody th {
+  font-weight: var(--peso-semi);
+}
+
+.of-tabela-da-gestao tfoot th,
+.of-tabela-da-gestao tfoot td {
+  border-bottom: 0;
+  font-weight: var(--peso-semi);
+}
+
+.of-tabela-da-gestao td.destaque {
+  color: var(--marca);
+  font-weight: var(--peso-semi);
+}
+
+.of-tabela-da-gestao td.acao {
+  width: 1%;
+  padding-block: 0;
+}
+
+/* ------------------------------------------------- Sociedade & aportes */
+
+.of-socio {
+  display: inline-flex;
+  gap: var(--espaco-5);
+  align-items: center;
+}
+
+.of-socio-marca {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+  font-size: var(--fonte-caps);
+  font-weight: var(--peso-forte);
+}
+
+.of-participacao {
+  display: inline-grid;
+  gap: var(--espaco-2);
+  justify-items: end;
+  min-width: 5rem;
+}
+
+.of-participacao .barra {
+  display: block;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
+}
+
+.of-participacao .barra i {
+  display: block;
+  width: var(--largura);
+  height: 100%;
+  background: var(--of-verde);
+}
+
+/* ------------------------------------------------------------ Impostos */
+
+/* Pílula da situação de cada guia: menta (paga), rosa (atrasada), âmbar
+   (vence logo) e neutra (a vencer, em curso). */
+.of-situacao {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--espaco-4);
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+  white-space: nowrap;
+}
+
+.of-situacao.bom {
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.of-situacao.ruim {
+  background: var(--of-rosa-suave);
+  color: var(--of-sobre-rosa);
+}
+
+.of-situacao.atencao {
+  background: color-mix(in srgb, var(--aviso) 16%, var(--superficie));
+  color: var(--aviso);
+}
+
+/* Agenda: uma guia por linha, com a marca, o nome e a competência, o prazo,
+   o valor, a situação e o "Pagar". */
+.of-agenda,
+.of-tributos,
+.of-sugestoes-de-tributo {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.of-agenda li {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto 9.5rem 5.5rem;
+  gap: var(--espaco-6);
+  align-items: center;
+  padding: var(--espaco-4) 0;
+  border-top: 1px dashed var(--linha);
+}
+
+.of-agenda li:first-child,
+.of-tributos li:first-child,
+.of-sugestoes-de-tributo li:first-child {
+  border-top: 0;
+}
+
+.of-agenda-marca {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--lateral);
+  color: var(--suave);
+}
+
+.of-agenda li.atrasada .of-agenda-marca {
+  background: var(--of-rosa-suave);
+  color: var(--of-sobre-rosa);
+}
+
+.of-agenda li.paga .of-agenda-marca {
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.of-agenda-textos {
+  display: grid;
+  min-width: 0;
+}
+
+.of-agenda-textos b {
+  overflow: hidden;
+  font-weight: var(--peso-semi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-agenda-textos small,
+.of-agenda-valor small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-agenda-valor {
+  display: grid;
+  justify-items: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.of-agenda-valor b {
+  font-weight: var(--peso-semi);
+}
+
+.of-agenda li .of-situacao {
+  justify-self: start;
+}
+
+.of-agenda-acao {
+  justify-self: end;
+}
+
+.of-tributos li,
+.of-sugestoes-de-tributo li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: var(--espaco-6);
+  align-items: center;
+  padding: var(--espaco-4) 0;
+  border-top: 1px dashed var(--linha);
+}
+
+.of-sugestoes-de-tributo li {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.of-sugestoes-de-tributo span {
+  display: grid;
+}
+
+.of-sugestoes-de-tributo small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-tributos li.inativo .of-agenda-textos {
+  opacity: 0.62;
+}
+
+.of-tributo-guia {
+  display: grid;
+  place-items: center;
+  min-width: 3.6rem;
+  height: 28px;
+  padding: 0 var(--espaco-4);
+  border-radius: var(--raio-mini);
+  background: var(--lateral);
+  box-shadow: inset 0 0 0 var(--espessura) var(--linha);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-forte);
+  letter-spacing: 0.02em;
+}
+
+/* -------------------------------------------------------- Pessoal (RH) */
+
+.of-folha-em-dia {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  color: var(--of-sobre-menta);
+  font-weight: var(--peso-semi);
+}
+
+.of-folha-pendente {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-6);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.of-folha-pendente p {
+  display: grid;
+}
+
+.of-folha-pendente small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-pessoa-da-folha {
+  display: grid;
+}
+
+.of-pessoa-da-folha small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-regular);
+}
+
+.of-tabela-da-gestao tr.inativo th,
+.of-tabela-da-gestao tr.inativo td:not(.acao) {
+  opacity: 0.62;
+}
+
+.of-vinculo {
+  display: inline-flex;
+  padding: 1px var(--espaco-4);
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-semi);
+}
+
+.of-vinculo.clt {
+  background: color-mix(in srgb, var(--cat-moradia) 14%, var(--superficie));
+}
+
+.of-vinculo.pj {
+  background: color-mix(in srgb, var(--cat-lazer) 14%, var(--superficie));
+}
+
+.of-vinculo.pro_labore {
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+/* Benefícios no formulário da pessoa: nome, valor e o botão de tirar. */
+.of-beneficios {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+  margin: 0 0 var(--espaco-6);
+  padding: 0;
+  border: 0;
+}
+
+.of-beneficios > button {
+  justify-self: start;
+}
+
+.of-beneficio {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: var(--espaco-4);
+  align-items: start;
+}
+
+.of-beneficio > .botao-icone {
+  margin-top: 26px;
+}
+
+/* Quem entra na folha, no modal de lançar. */
+.of-folha-pendentes {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0 0 var(--espaco-8);
+  padding: 0;
+  list-style: none;
+}
+
+.of-folha-pendentes li {
+  display: flex;
+  gap: var(--espaco-6);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--espaco-3) 0;
+  border-bottom: 1px dashed var(--linha);
+  font-size: var(--fonte-rotulo);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-folha-pendentes li span {
+  display: grid;
+}
+
+.of-folha-pendentes small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-folha-pendentes li.total {
+  border-bottom: 0;
+  font-weight: var(--peso-semi);
+}
+
+/* Fluxo de caixa: a folha que ainda não saiu. */
+.of-folha-prevista:not(:empty) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4) var(--espaco-6);
+  align-items: center;
+}
+
+.of-folha-prevista .icone {
+  flex: none;
+  color: var(--suave);
+}
+
+.of-folha-prevista a {
+  margin-left: auto;
+  color: var(--marca);
+  font-weight: var(--peso-semi);
+}
+
+@media (max-width: 760px) {
+  .of-agenda li {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+
+  .of-agenda li .of-situacao {
+    grid-column: 2;
+  }
+
+  .of-agenda-acao {
+    grid-column: 3;
+  }
+
+  .of-tributos li {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .of-tributos li .of-situacao {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .of-custos-todas .of-custos-lista li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

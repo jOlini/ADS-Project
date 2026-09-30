@@ -16,18 +16,38 @@ const {
   MENSAGEM_SEM_API,
   MENSAGEM_SESSAO_ENCERRADA,
   apiConfigurada,
-  criarEspaco,
+  atualizarEmpresa,
+  classificarCustos,
+  criarEmpresa,
+  editarColaborador,
+  editarPessoa,
+  editarSocio,
+  editarTributo,
   estornar,
   excluirEspaco,
   estruturaDoExtrato,
   excluir,
+  incluirColaborador,
+  incluirPessoa,
+  incluirSocio,
+  incluirTributo,
   lancar,
+  lancarFolha,
+  lancarMovimentoDoSocio,
+  ligarFamilia,
   listarEspacos,
   listarLancamentos,
+  listarColaboradores,
   listarPessoas,
+  listarSocios,
+  listarTributos,
+  pagarTributo,
   relatorioCategorias,
   relatorioMensal,
-  renomearEspaco,
+  removerColaborador,
+  removerPessoa,
+  removerSocio,
+  removerTributo,
 } = await import('./livroCaixa');
 
 function resposta(status, corpo) {
@@ -88,27 +108,27 @@ describe('API do livro-caixa', () => {
     expect(JSON.parse(opcoes.body)).toEqual({ tipo: 'DESPESA', valor_centavos: 21437 });
   });
 
-  it('cria, renomeia e exclui espaço, com o nome limpo antes de sair', async () => {
-    fetch.mockResolvedValueOnce(resposta(201, { id: 'f1', tipo: 'FAMILIA' }));
-    fetch.mockResolvedValueOnce(resposta(200, { id: 'f1', nome: 'Casa' }));
+  it('cadastra, edita e exclui empresa, com o nome limpo antes de sair', async () => {
+    fetch.mockResolvedValueOnce(resposta(201, { id: 'e1', tipo: 'PJ' }));
+    fetch.mockResolvedValueOnce(resposta(200, { id: 'e1', nome: 'Oficina' }));
     fetch.mockResolvedValueOnce(resposta(204, null));
 
-    await criarEspaco({ tipo: 'FAMILIA', nome: ' <b>Casa</b> ' });
-    await renomearEspaco('f/1', 'Casa');
-    const excluido = await excluirEspaco('f1');
+    await criarEmpresa({ nome: ' <b>Oficina</b> ', cnpj: null, regime: 'MEI' });
+    await atualizarEmpresa('e/1', { nome: 'Oficina', regime: 'SIMPLES' });
+    const excluido = await excluirEspaco('e1');
 
-    const [[urlCriar, criar], [urlRenomear, renomear], [urlExcluir, excluir]] = fetch.mock.calls;
+    const [[urlCriar, criar], [urlEditar, editar], [urlExcluir, excluir]] = fetch.mock.calls;
     expect([urlCriar, criar.method, JSON.parse(criar.body)]).toEqual([
       'http://api.teste/espacos',
       'POST',
-      { tipo: 'FAMILIA', nome: 'bCasa/b' },
+      { tipo: 'PJ', nome: 'bOficina/b', cnpj: null, regime: 'MEI' },
     ]);
-    expect([urlRenomear, renomear.method, JSON.parse(renomear.body)]).toEqual([
-      'http://api.teste/espacos/f%2F1',
+    expect([urlEditar, editar.method, JSON.parse(editar.body)]).toEqual([
+      'http://api.teste/espacos/e%2F1',
       'PATCH',
-      { nome: 'Casa' },
+      { nome: 'Oficina', regime: 'SIMPLES' },
     ]);
-    expect([urlExcluir, excluir.method, excluido]).toEqual(['http://api.teste/espacos/f1', 'DELETE', null]);
+    expect([urlExcluir, excluir.method, excluido]).toEqual(['http://api.teste/espacos/e1', 'DELETE', null]);
   });
 
   it('monta o filtro de período e codifica os ids na URL', async () => {
@@ -192,5 +212,90 @@ describe('API do livro-caixa', () => {
 
     expect(fetch.mock.calls[0][0]).toBe('http://api.teste/espacos/e1/relatorios/categorias?de=2026-04&ate=2026-09');
     expect(fetch.mock.calls[1][0]).toBe('http://api.teste/espacos/e1/relatorios/categorias');
+  });
+
+  it('filtra os relatórios por pessoa da família (Modo Família)', async () => {
+    fetch.mockResolvedValue(resposta(200, { meses: [] }));
+
+    await relatorioMensal('p1', { de: '2026-09', ate: '2026-09', membro: 'titular' });
+    await relatorioCategorias('p1', { membro: 'l1' });
+
+    expect(fetch.mock.calls[0][0]).toBe('http://api.teste/espacos/p1/relatorios/mensal?de=2026-09&ate=2026-09&membro=titular');
+    expect(fetch.mock.calls[1][0]).toBe('http://api.teste/espacos/p1/relatorios/categorias?membro=l1');
+  });
+
+  it('grava as classes de custo e cuida dos sócios da empresa', async () => {
+    fetch.mockResolvedValue(resposta(200, {}));
+
+    await classificarCustos('e1', { c1: 'FIXO', c2: null });
+    await incluirSocio('e1', { nome: ' <Ana> ', participacao_centesimos: 6000 });
+    await editarSocio('e1', 's/1', { nome: 'Ana', participacao_centesimos: 5000 });
+    await lancarMovimentoDoSocio('e1', 's1', { tipo: 'APORTE', conta_id: 'c', valor_centavos: 100, data: '2026-09-01' });
+    await removerSocio('e1', 's1');
+    await listarSocios('e1');
+
+    const chamadas = fetch.mock.calls.map(([url, opcoes]) => [url, opcoes.method, opcoes.body && JSON.parse(opcoes.body)]);
+    expect(chamadas).toEqual([
+      ['http://api.teste/espacos/e1/custos/classes', 'PUT', { classes: { c1: 'FIXO', c2: null } }],
+      ['http://api.teste/espacos/e1/socios', 'POST', { nome: 'Ana', participacao_centesimos: 6000 }],
+      ['http://api.teste/espacos/e1/socios/s%2F1', 'PUT', { nome: 'Ana', participacao_centesimos: 5000 }],
+      [
+        'http://api.teste/espacos/e1/socios/s1/movimentos',
+        'POST',
+        { tipo: 'APORTE', conta_id: 'c', valor_centavos: 100, data: '2026-09-01' },
+      ],
+      ['http://api.teste/espacos/e1/socios/s1', 'DELETE', undefined],
+      ['http://api.teste/espacos/e1/socios', 'GET', undefined],
+    ]);
+  });
+
+  it('cuida dos tributos e da folha da empresa', async () => {
+    fetch.mockResolvedValue(resposta(200, {}));
+
+    await incluirTributo('e1', { nome: 'DAS', tipo: 'DAS', base: 'FATURAMENTO', aliquota_centesimos: 600 });
+    await editarTributo('e1', 't/1', { nome: 'DAS', ativo: false });
+    await pagarTributo('e1', 't1', { competencia: '2026-08', conta_id: 'c', valor_centavos: 100, data: '2026-09-20' });
+    await removerTributo('e1', 't1');
+    await incluirColaborador('e1', { nome: 'Carla', vinculo: 'CLT', salario_centavos: 300000 });
+    await editarColaborador('e1', 'p/1', { nome: 'Carla', ativo: false });
+    await lancarFolha('e1', { competencia: '2026-09', conta_id: 'c' });
+    await removerColaborador('e1', 'p1');
+    await listarTributos('e1');
+    await listarColaboradores('e1');
+
+    const chamadas = fetch.mock.calls.map(([url, opcoes]) => [url.replace('http://api.teste/espacos/e1', ''), opcoes.method]);
+    expect(chamadas).toEqual([
+      ['/tributos', 'POST'],
+      ['/tributos/t%2F1', 'PUT'],
+      ['/tributos/t1/pagamentos', 'POST'],
+      ['/tributos/t1', 'DELETE'],
+      ['/colaboradores', 'POST'],
+      ['/colaboradores/p%2F1', 'PUT'],
+      ['/folha', 'POST'],
+      ['/colaboradores/p1', 'DELETE'],
+      ['/tributos', 'GET'],
+      ['/colaboradores', 'GET'],
+    ]);
+    expect(JSON.parse(fetch.mock.calls[6][1].body)).toEqual({ competencia: '2026-09', conta_id: 'c' });
+  });
+
+  it('liga a família e cuida das pessoas, com o nome limpo antes de sair', async () => {
+    fetch.mockResolvedValueOnce(resposta(200, { ativa: true, pessoas: [] }));
+    fetch.mockResolvedValueOnce(resposta(201, { id: 'l1', nome: 'Léo', cor: 'coral' }));
+    fetch.mockResolvedValueOnce(resposta(200, { id: 'l1', nome: 'Leo', cor: 'roxo', lancamentos_renomeados: 2 }));
+    fetch.mockResolvedValueOnce(resposta(204, null));
+
+    await ligarFamilia('p1', true);
+    await incluirPessoa('p1', { nome: ' <Léo> ', cor: 'coral' });
+    await editarPessoa('p1', 'l/1', { nome: 'Leo', cor: 'roxo' });
+    await removerPessoa('p1', 'l1');
+
+    const chamadas = fetch.mock.calls.map(([url, opcoes]) => [url, opcoes.method, opcoes.body && JSON.parse(opcoes.body)]);
+    expect(chamadas).toEqual([
+      ['http://api.teste/espacos/p1/familia', 'PUT', { ativa: true }],
+      ['http://api.teste/espacos/p1/familia/pessoas', 'POST', { nome: 'Léo', cor: 'coral' }],
+      ['http://api.teste/espacos/p1/familia/pessoas/l%2F1', 'PUT', { nome: 'Leo', cor: 'roxo' }],
+      ['http://api.teste/espacos/p1/familia/pessoas/l1', 'DELETE', undefined],
+    ]);
   });
 });

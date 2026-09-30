@@ -347,6 +347,27 @@ export const TRACOS = {
       <path d={folha(10.2, 11.3, 3.6, 3.2, 1.3, 0.6)} />
     </>
   ),
+  // Guia de imposto (DAS, DARF, ISS): o boleto deitado, com cantos em
+  // folha, a linha do texto, o código de barras e a moeda do valor.
+  guia: (
+    <>
+      <path d={folha(3, 5.5, 18, 13, 5, 1.8)} />
+      <path d="M6.5 9.8h5.5M6.5 14.2v2.2M8.6 14.2v2.2M10.2 14.2v2.2M12.6 14.2v2.2M14.2 14.2v2.2" />
+      <circle className="seiva" cx="16.6" cy="10.8" r="2.1" />
+      <circle cx="16.6" cy="10.8" r="2.1" />
+    </>
+  ),
+  // Crachá (Pessoal, a folha): o cartão em pé com cantos em folha, a presilha
+  // em cima e a pessoa na foto.
+  cracha: (
+    <>
+      <path d={folha(5, 5.5, 14, 15.5, 4.5, 1.6)} />
+      <path d="M10 3.3h4M12 3.3v2.2" />
+      <circle className="seiva" cx="12" cy="11.4" r="2.5" />
+      <circle cx="12" cy="11.4" r="2.5" />
+      <path d="M8.3 17.8c.7-2 2-3 3.7-3s3 1 3.7 3" />
+    </>
+  ),
   carrinho: (
     <>
       <path d="M2.8 3.8h2.6l2.3 11.1h10.5l2-7.7H6.4" />

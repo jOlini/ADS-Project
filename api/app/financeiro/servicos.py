@@ -14,7 +14,7 @@ from app.financeiro import cartoes, importacao, parcelamento, regras, relatorios
 from app.financeiro.categorizacao import AJUSTE, Categorizador
 from app.financeiro.cartoes import PeriodoDaFatura, Referencia, ResumoDaFatura, ResumoDoCartao
 from app.financeiro.modelos import (
-    MAXIMO_DE_ESPACOS_CRIADOS,
+    MAXIMO_DE_EMPRESAS,
     AtualizacaoCategoria,
     AtualizacaoConta,
     AtualizacaoEspaco,
@@ -23,6 +23,7 @@ from app.financeiro.modelos import (
     Conta,
     CorDoCartao,
     Espaco,
+    FiltroDePessoa,
     Lancamento,
     Membro,
     NovaCategoria,
@@ -54,12 +55,14 @@ LIMITE_DO_CARTAO = 5000
 # na importação (categorizacao.py).
 LIMITE_DO_HISTORICO = 2000
 
-PESSOAL_JA_EXISTE = "O espaço pessoal já existe: ele é criado no primeiro acesso. Escolha família ou empresa."
+PESSOAL_JA_EXISTE = (
+    "O espaço pessoal já existe: ele é criado no primeiro acesso. Aqui entram as empresas do espaço empresarial."
+)
 PESSOAL_FIXO = "O espaço pessoal não muda de nome nem pode ser excluído."
-SO_O_DONO = "Só quem criou o espaço pode renomeá-lo ou excluí-lo."
-ESPACO_COM_DADOS = "Só dá para excluir um espaço vazio. Exclua antes as contas e os lançamentos dele."
-LIMITE_DE_ESPACOS = (
-    f"Você já criou {MAXIMO_DE_ESPACOS_CRIADOS} espaços além do pessoal. Exclua um espaço vazio para criar outro."
+SO_O_DONO = "Só quem cadastrou a empresa pode editá-la ou excluí-la."
+ESPACO_COM_DADOS = "Só dá para excluir uma empresa sem movimento. Exclua antes as contas e os lançamentos dela."
+LIMITE_DE_EMPRESAS = (
+    f"Você já cadastrou {MAXIMO_DE_EMPRESAS} empresas. Exclua uma empresa sem movimento para cadastrar outra."
 )
 
 
@@ -85,18 +88,19 @@ class ServicoLivroCaixa:
         return self.repositorio.listar_espacos_do_membro(uid)
 
     def criar_espaco(self, uid: str, dados: NovoEspaco) -> Espaco:
-        """Espaço de família ou de empresa, com quem criou como dono e as
-        categorias do tipo. Cada um é um livro-caixa separado do pessoal."""
+        """Empresa do espaço empresarial, com quem cadastrou como dono e as
+        categorias de empresa. Cada empresa é um livro-caixa separado do
+        pessoal e das outras empresas."""
         if dados.tipo == TipoEspaco.PF:
             raise ErroValidacao({"tipo": PESSOAL_JA_EXISTE})
         # Garante o pessoal antes (e primeiro na lista, que sai por data).
-        criados = [
+        empresas = [
             espaco
             for espaco in self.espacos_do_cliente(uid)
-            if espaco.tipo != TipoEspaco.PF and espaco.papel_de(uid) == Papel.DONO
+            if espaco.tipo == TipoEspaco.PJ and espaco.papel_de(uid) == Papel.DONO
         ]
-        if len(criados) >= MAXIMO_DE_ESPACOS_CRIADOS:
-            raise ErroConflito(LIMITE_DE_ESPACOS)
+        if len(empresas) >= MAXIMO_DE_EMPRESAS:
+            raise ErroConflito(LIMITE_DE_EMPRESAS)
         instante = agora()
         espaco = self.repositorio.inserir_espaco(
             Espaco(
@@ -106,19 +110,30 @@ class ServicoLivroCaixa:
                 fuso=FUSO_PADRAO,
                 membros=[Membro(uid=uid, papel=Papel.DONO)],
                 criado_em=instante,
+                cnpj=dados.cnpj,
+                regime=dados.regime,
             )
         )
         self._criar_categorias_iniciais(espaco, instante)
         return espaco
 
-    def renomear_espaco(self, espaco: Espaco, uid: str, dados: AtualizacaoEspaco) -> Espaco:
+    def atualizar_espaco(self, espaco: Espaco, uid: str, dados: AtualizacaoEspaco) -> Espaco:
+        """Nome, CNPJ e regime da empresa: só os campos enviados mudam."""
         self._conferir_dono(espaco, uid)
-        espaco.nome = dados.nome
+        enviados = dados.model_fields_set
+        if "nome" in enviados:
+            if dados.nome is None:
+                raise ErroValidacao({"nome": regras.OBRIGATORIO})
+            espaco.nome = dados.nome
+        if "cnpj" in enviados:
+            espaco.cnpj = dados.cnpj
+        if "regime" in enviados:
+            espaco.regime = dados.regime
         return self.repositorio.atualizar_espaco(espaco)
 
     def excluir_espaco(self, espaco: Espaco, uid: str) -> None:
-        """Só o espaço vazio sai (sem contas e sem lançamentos): um clique
-        errado não apaga o histórico de uma família ou de uma empresa."""
+        """Só a empresa sem movimento sai (sem contas e sem lançamentos): um
+        clique errado não apaga o histórico de uma empresa."""
         self._conferir_dono(espaco, uid)
         if self.repositorio.listar_contas(espaco.id) or self.repositorio.listar_lancamentos(espaco.id, None, None, 1):
             raise ErroConflito(ESPACO_COM_DADOS)
@@ -132,12 +147,15 @@ class ServicoLivroCaixa:
             raise ErroPermissao(SO_O_DONO)
 
     def _criar_categorias_iniciais(self, espaco: Espaco, instante: datetime) -> None:
-        self.repositorio.inserir_categorias(
-            [
-                Categoria(espaco.id, nome, tipo, cor, ativa=True, criada_em=instante)
-                for nome, tipo, cor in regras.categorias_iniciais(espaco.tipo)
-            ]
-        )
+        categorias = []
+        for nome, tipo, cor in regras.categorias_iniciais(espaco.tipo):
+            # Na empresa, as iniciais já nascem com a classe de custo e a
+            # função na gestão (aporte, folha, tributo).
+            classe, funcao = regras.gestao_da_categoria(espaco.tipo, nome)
+            categorias.append(
+                Categoria(espaco.id, nome, tipo, cor, True, instante, classe_de_custo=classe, funcao=funcao)
+            )
+        self.repositorio.inserir_categorias(categorias)
 
     def _criar_espaco_pessoal(self, uid: str) -> None:
         instante = agora()
@@ -832,12 +850,19 @@ class ServicoLivroCaixa:
         return inicio, fim
 
     def relatorio_mensal(
-        self, espaco: Espaco, de: relatorios.Mes, ate: relatorios.Mes, conta_id: str | None = None
+        self,
+        espaco: Espaco,
+        de: relatorios.Mes,
+        ate: relatorios.Mes,
+        conta_id: str | None = None,
+        pessoa: FiltroDePessoa | None = None,
     ) -> list[relatorios.ResultadoDoMes]:
         """Receitas, despesas e saldo no fim de cada mês do período. O saldo é
-        o das contas (sem os cartões) ou, com conta_id, o daquela conta."""
+        o das contas (sem os cartões) ou, com conta_id, o daquela conta. Com
+        pessoa, receitas e despesas são só as dela; o saldo continua o das
+        contas, que são da casa inteira."""
         fim = relatorios.ultimo_dia(ate)
-        somas = self.repositorio.somar_categorias_por_mes(espaco.id, relatorios.primeiro_dia(de), fim, conta_id)
+        somas = self.repositorio.somar_categorias_por_mes(espaco.id, relatorios.primeiro_dia(de), fim, conta_id, pessoa)
         todas = self.repositorio.listar_contas(espaco.id)
         # Sem filtro, o saldo em contas: todas menos os cartões, inclusive as
         # desativadas (o dinheiro delas continua existindo).
@@ -847,12 +872,17 @@ class ServicoLivroCaixa:
         return relatorios.resultado_por_mes(relatorios.meses_do_periodo(de, ate), somas, saldo_inicial, somas_das_contas)
 
     def gasto_por_categoria(
-        self, espaco: Espaco, de: relatorios.Mes, ate: relatorios.Mes, conta_id: str | None = None
+        self,
+        espaco: Espaco,
+        de: relatorios.Mes,
+        ate: relatorios.Mes,
+        conta_id: str | None = None,
+        pessoa: FiltroDePessoa | None = None,
     ) -> list[tuple[relatorios.GastoDaCategoria, Categoria | None]]:
         """Gasto de cada categoria no período, com o cadastro dela (None se a
-        categoria não existir mais)."""
+        categoria não existir mais). Com pessoa, só os gastos dela."""
         somas = self.repositorio.somar_categorias_por_mes(
-            espaco.id, relatorios.primeiro_dia(de), relatorios.ultimo_dia(ate), conta_id
+            espaco.id, relatorios.primeiro_dia(de), relatorios.ultimo_dia(ate), conta_id, pessoa
         )
         categorias = {categoria.id: categoria for categoria in self.repositorio.listar_categorias(espaco.id)}
         return [(gasto, categorias.get(gasto.categoria_id)) for gasto in relatorios.gasto_por_categoria(somas)]

@@ -21,7 +21,9 @@ const textoDoRacha = (pessoas) => pessoas.map((parte) => `${parte.pessoa} ${form
 // desliga o "Saldo do dia" quando um filtro ou a busca esconde linhas.
 // acoes(linha), se vier, desenha o menu de ações no fim da linha. selecao
 // (useSelecao), se vier, põe a caixa de marcar no começo de cada linha.
-export default function Extrato({ dias, mostrarSaldo = true, acoes, selecao }) {
+// corDaPessoa(nome), se vier (Modo Família), dá a cor do responsável que é da
+// família: a etiqueta ganha o ponto da cor dela.
+export default function Extrato({ dias, mostrarSaldo = true, acoes, selecao, corDaPessoa }) {
   return dias.map((dia) => (
     <div key={dia.data}>
       <p className="dia">
@@ -60,7 +62,11 @@ export default function Extrato({ dias, mostrarSaldo = true, acoes, selecao }) {
               {lancamento.estornado && <span className="etiqueta">Estornado</span>}
               {lancamento.responsavel && (
                 <span className="etiqueta responsavel" title={`Responsável: ${lancamento.responsavel}`}>
-                  <Icone nome="usuario" tamanho={12} />
+                  {corDaPessoa?.(lancamento.responsavel) ? (
+                    <span className={`ponto-de-pessoa ${corDaPessoa(lancamento.responsavel)}`} aria-hidden="true" />
+                  ) : (
+                    <Icone nome="usuario" tamanho={12} />
+                  )}
                   <span className="apenas-leitor">Responsável: </span>
                   {lancamento.responsavel}
                 </span>

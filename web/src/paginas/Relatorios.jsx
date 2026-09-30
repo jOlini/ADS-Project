@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import Esqueleto from '../componentes/Esqueleto';
+import FiltroDePessoa from '../componentes/FiltroDePessoa';
 import GraficoMensal from '../componentes/GraficoMensal';
 import SimboloDoVazio from '../olifine/componentes/SimboloDoVazio';
 import Icone from '../componentes/Icone';
 import { useCarga } from '../componentes/useCarga';
 import { formatarBRL, formatarComSinal } from '../regras/dinheiro';
 import { hojeIso } from '../regras/datas';
+import { pessoasDaFamilia, TITULAR, TODOS } from '../regras/familia';
 import {
   larguraDaBarra,
   nomeDoMes,
@@ -71,17 +73,31 @@ function Categorias({ dados }) {
 // dinheiro foi, no período escolhido na linha de filtros. Os números vêm da
 // API (agregados no banco, DOCS_API.md parte 7), com as mesmas regras do
 // resumo do mês: compra no cartão conta no mês da parcela, pagamento de
-// fatura e transferência não contam.
+// fatura e transferência não contam. Com o Modo Família, o filtro "de quem"
+// pede à API só os lançamentos de uma pessoa (o saldo continua o da casa).
 export default function Relatorios() {
   const { espaco } = useOutletContext();
   const [filtro, setFiltro] = useState(PERIODO_PADRAO);
+  const [pessoaEscolhida, setPessoa] = useState(TODOS);
   const [hoje] = useState(hojeIso);
   const periodo = periodoDoFiltro(filtro, hoje);
+  const pessoasDaCasa = pessoasDaFamilia(espaco.dados);
+  const pessoa =
+    pessoasDaCasa.length > 0 && (pessoaEscolhida === TITULAR || pessoasDaCasa.some((alvo) => alvo.id === pessoaEscolhida))
+      ? pessoaEscolhida
+      : TODOS;
 
   const espacoId = espaco.dados?.id;
   const buscar = useMemo(
-    () => (apiConfigurada && espacoId ? () => carregarRelatorios(espacoId, periodoDoFiltro(filtro, hoje)) : null),
-    [espacoId, filtro, hoje],
+    () =>
+      apiConfigurada && espacoId
+        ? () =>
+            carregarRelatorios(espacoId, {
+              ...periodoDoFiltro(filtro, hoje),
+              ...(pessoa === TODOS ? {} : { membro: pessoa }),
+            })
+        : null,
+    [espacoId, filtro, hoje, pessoa],
   );
   const relatorios = useCarga(buscar);
 
@@ -132,6 +148,9 @@ export default function Relatorios() {
           <Icone nome="calendario" tamanho={16} />
           <span>{trecho}</span>
         </p>
+        {pessoasDaCasa.length > 0 && (
+          <FiltroDePessoa pessoas={pessoasDaCasa} valor={pessoa} aoMudar={setPessoa} rotulo="Relatórios de quem" />
+        )}
       </div>
 
       {erro && (

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import CompraNoCartao from '../../componentes/CompraNoCartao';
 import Esqueleto from '../../componentes/Esqueleto';
+import FiltroDePessoa from '../../componentes/FiltroDePessoa';
 import FormularioDeCartao from '../../componentes/FormularioDeCartao';
 import FormularioDeConta from '../../componentes/FormularioDeConta';
 import FormularioDeLancamento from '../../componentes/FormularioDeLancamento';
@@ -11,6 +12,7 @@ import { useCarga } from '../../componentes/useCarga';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
 import { formatarData, hojeIso } from '../../regras/datas';
 import { donoDasMetas } from '../../regras/espacos';
+import { comAFamilia, filtrarPorPessoa, gastoPorPessoa, pessoasDaFamilia, TITULAR, TODOS } from '../../regras/familia';
 import { normalizarTexto } from '../../regras/texto';
 import {
   contasBancarias,
@@ -51,10 +53,11 @@ import { calcularSaldoLivre } from '../regras/saldoLivre';
 import { parteInvestida, separarSaldos } from '../regras/saldos';
 import { guardado, porcentagem, progresso, proximaFase, resumoDasMetas, sementeDaMeta } from '../regras/metas';
 import { somarDias } from '../regras/serie';
-import { leituraDaVariacao, textoDaVariacao } from '../regras/tendencia';
+import { leituraDaVariacao, textoDaVariacao, variacaoPercentual } from '../regras/tendencia';
 import { FAIXAS, fatiasDaRosca, montarVisao } from '../regras/visao';
 import { useMetas } from '../useMetas';
 import '../../estilos/cartoes.css';
+import '../estilos/familia.css';
 
 const MES_POR_EXTENSO = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const NOME_DO_MES = new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' });
@@ -99,6 +102,38 @@ async function carregarVisao(espacoId, hoje) {
   return { contas, categorias, lancamentos, relatorio, cartoes, pessoas };
 }
 
+// Gasto de cada pessoa da casa no mês (Modo Família, visão consolidada).
+function GastoPorPessoa({ gastos, mes }) {
+  const maior = gastos[0]?.valor ?? 0;
+  return (
+    <section className="cartao of-painel of-painel-gasto-por-pessoa" aria-labelledby="titulo-gasto-por-pessoa">
+      <div className="of-painel-cabecalho">
+        <h2 id="titulo-gasto-por-pessoa">Gasto por pessoa</h2>
+        <small>{mes}</small>
+      </div>
+      {gastos.length > 0 ? (
+        <ol className="of-gasto-por-pessoa" aria-label="Gasto de cada pessoa da casa, do maior para o menor">
+          {gastos.map((gasto) => (
+            <li key={gasto.id} className={gasto.id === TITULAR ? 'pessoa-titular' : `pessoa-${gasto.cor ?? 'grafite'}`}>
+              <span className="nome">
+                <span className={`ponto-de-pessoa ${gasto.id === TITULAR ? 'titular' : (gasto.cor ?? 'grafite')}`} aria-hidden="true" />
+                <span>{gasto.nome}</span>
+              </span>
+              <b>{formatarBRL(gasto.valor)}</b>
+              <span className="fatia">{gasto.fatia}%</span>
+              <span className="barra" aria-hidden="true">
+                <i style={{ '--largura': `${maior > 0 ? Math.max(2, Math.round((gasto.valor / maior) * 100)) : 0}%` }} />
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="of-discreto">Quando houver despesas no mês, o gasto de cada um aparece aqui.</p>
+      )}
+    </section>
+  );
+}
+
 function SeloDeTendencia({ variacao, maiorEhMelhor = true, referencia }) {
   const leitura = leituraDaVariacao(variacao, { maiorEhMelhor });
   if (!leitura) {
@@ -133,6 +168,8 @@ export default function VisaoGeral() {
   const hoje = exemplo ? HOJE_DE_EXEMPLO : hojeReal;
   const [modal, setModal] = useState(null);
   const [modalOcupado, setModalOcupado] = useState(false);
+  // Modo Família: a casa toda (TODOS), o titular ou uma pessoa da família.
+  const [filtroEscolhido, setFiltroDePessoa] = useState(TODOS);
 
   const espacoId = espaco.dados?.id;
   const buscar = useMemo(
@@ -141,6 +178,21 @@ export default function VisaoGeral() {
   );
   const livro = useCarga(buscar);
   const { metas } = useMetas(donoDasMetas(usuario?.uid, espaco?.dados), { exemplo });
+  const pessoasDaCasa = useMemo(() => pessoasDaFamilia(espaco.dados), [espaco.dados]);
+  // Pessoa tirada da família (ou modo desligado) volta o filtro para a casa toda.
+  const filtroDePessoa =
+    pessoasDaCasa.length > 0 && (filtroEscolhido === TITULAR || pessoasDaCasa.some((alvo) => alvo.id === filtroEscolhido))
+      ? filtroEscolhido
+      : TODOS;
+  // A comparação com o mês anterior de uma pessoa sai do relatório dela.
+  const buscarDaPessoa = useMemo(
+    () =>
+      apiConfigurada && espacoId && filtroDePessoa !== TODOS
+        ? () => relatorioMensal(espacoId, { membro: filtroDePessoa }).catch(() => null)
+        : null,
+    [espacoId, filtroDePessoa],
+  );
+  const relatorioDaPessoa = useCarga(buscarDaPessoa);
 
   const visao = useMemo(() => {
     if (exemplo) {
@@ -169,15 +221,31 @@ export default function VisaoGeral() {
     const mes = mesDe(comoData(hojeReal));
     const dasContas = paraExtrato(lancamentosDasContas(lancamentos, contas), contas, categorias);
     const comCartoes = paraExtrato(lancamentos, contas, categorias);
+    const doMes = comCartoes.filter((linha) => estaNoMes(linha.data, mes) && linha.tipo !== 'pagamento');
+    // Com uma pessoa escolhida, os números do mês, as categorias e as últimas
+    // transações são só dela; o saldo e o gráfico continuam os das contas,
+    // que são da casa toda.
+    const daPessoa = (linhas) => filtrarPorPessoa(linhas, filtroDePessoa, pessoasDaCasa);
+    const base = montarVisao({
+      linhasDasContas: dasContas,
+      linhasDoMes: daPessoa(doMes),
+      linhasRecentes: daPessoa(comCartoes),
+      saldo: saldoTotal(contas),
+      meses: relatorio?.meses ?? null,
+      hoje: hojeReal,
+    });
+    if (filtroDePessoa !== TODOS) {
+      const meses = relatorioDaPessoa.dados?.meses;
+      const anterior = meses && meses.length >= 2 ? meses[meses.length - 2] : null;
+      base.variacao = {
+        ...base.variacao,
+        receitas: anterior ? variacaoPercentual(base.totais.entradas, anterior.receitas_centavos) : null,
+        despesas: anterior ? variacaoPercentual(base.totais.saidas, anterior.despesas_centavos) : null,
+      };
+    }
     return {
-      ...montarVisao({
-        linhasDasContas: dasContas,
-        linhasDoMes: comCartoes.filter((linha) => estaNoMes(linha.data, mes) && linha.tipo !== 'pagamento'),
-        linhasRecentes: comCartoes,
-        saldo: saldoTotal(contas),
-        meses: relatorio?.meses ?? null,
-        hoje: hojeReal,
-      }),
+      ...base,
+      gastoPorPessoa: pessoasDaCasa.length > 0 ? gastoPorPessoa(doMes, pessoasDaCasa) : [],
       // Contas com dinheiro (o cartão é dívida, com painel próprio), para o
       // saldo por conta: separarSaldos tira a desativada zerada.
       contas: contasBancarias(contas).map((conta) => ({
@@ -191,7 +259,7 @@ export default function VisaoGeral() {
       // futuras (a listagem não tem data final) e as faturas dos cartões.
       projecao: { saldo: saldoTotal(contas), linhas: dasContas, cartoes },
     };
-  }, [exemplo, livro.dados, hojeReal]);
+  }, [exemplo, livro.dados, hojeReal, filtroDePessoa, pessoasDaCasa, relatorioDaPessoa.dados]);
 
   const real = apiConfigurada && !exemplo;
   const carregando = real && (espaco.carregando || (Boolean(espacoId) && livro.carregando && !livro.dados));
@@ -311,6 +379,17 @@ export default function VisaoGeral() {
           {cadastros && <Menu texto="Novo" rotulo="Novo: escolher o que criar" itens={opcoesDoNovo} />}
         </div>
       </header>
+
+      {pessoasDaCasa.length > 0 && !exemplo && (
+        <div className="of-filtro-da-familia">
+          <FiltroDePessoa pessoas={pessoasDaCasa} valor={filtroDePessoa} aoMudar={setFiltroDePessoa} rotulo="Números de quem" />
+          <p aria-live="polite">
+            {filtroDePessoa === TODOS
+              ? 'A casa toda.'
+              : `Receitas, despesas e últimas transações de ${filtroDePessoa === TITULAR ? 'você' : pessoasDaCasa.find((alvo) => alvo.id === filtroDePessoa)?.nome}; o saldo é da casa toda.`}
+          </p>
+        </div>
+      )}
 
       {(pessoa.erro || erro) && (
         <div className="cartao painel of-erro">
@@ -477,6 +556,10 @@ export default function VisaoGeral() {
           )}
         </section>
 
+        {comNumeros && pessoasDaCasa.length > 0 && filtroDePessoa === TODOS && !exemplo && (
+          <GastoPorPessoa gastos={visao.gastoPorPessoa} mes={NOME_DO_MES.format(comoData(hoje))} />
+        )}
+
         <section className="cartao of-painel" aria-labelledby="titulo-ultimas">
           <div className="of-painel-cabecalho">
             <h2 id="titulo-ultimas">Últimas transações</h2>
@@ -642,12 +725,12 @@ export default function VisaoGeral() {
           aoFechar={fecharModal} ocupado={modalOcupado}>
           {modal === 'lancamento' && (
             <FormularioDeLancamento espacoId={espacoId} contas={contasAtivas} temCartoes={cartoes.length > 0}
-              categorias={cadastros.categorias} pessoasConhecidas={cadastros.pessoas} aoLancar={aposCriar}
+              categorias={cadastros.categorias} pessoasConhecidas={comAFamilia(cadastros.pessoas, pessoasDaCasa)} aoLancar={aposCriar}
               aoCancelar={fecharModal} aoMudarOcupado={setModalOcupado} />
           )}
           {modal === 'compra' && (
             <CompraNoCartao espacoId={espacoId} cartoes={cartoes} categorias={cadastros.categorias}
-              pessoasConhecidas={cadastros.pessoas} aoComprar={aposCriar} aoCancelar={fecharModal}
+              pessoasConhecidas={comAFamilia(cadastros.pessoas, pessoasDaCasa)} aoComprar={aposCriar} aoCancelar={fecharModal}
               aoMudarOcupado={setModalOcupado} />
           )}
           {modal === 'conta' && (

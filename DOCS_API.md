@@ -2,8 +2,10 @@
 
 API REST do Pessoal Finance. Partes 1 a 5: gestão de usuários do back-office, com autenticação por JWT e
 controle de acesso por perfil (RBAC). Parte 6: livro-caixa do cliente final (contas, categorias e lançamentos),
-acessado com o ID token do Firebase. Parte 7: relatórios do livro-caixa (Dashboard). Parte 8: e-mails da conta
-do cliente (confirmação e senha nova) e o modo de produção. Parte 9: monitoramento, alertas e telemetria.
+acessado com o ID token do Firebase, com o Modo Família do espaço pessoal. Parte 7: relatórios do livro-caixa
+(Dashboard). Parte 8: e-mails da conta do cliente (confirmação e senha nova) e o modo de produção. Parte 9:
+monitoramento, alertas e telemetria. Parte 10: gestão das empresas do espaço empresarial (custos, sociedade e
+aportes, impostos e pessoal).
 
 | Item | Valor |
 |---|---|
@@ -437,16 +439,17 @@ Código: [`api/app/financeiro/`](api/app/financeiro) e [`api/app/firebase.py`](a
 
 ### Endpoints
 
-Todos exigem o ID token do Firebase. Tudo que é do cliente fica sob um **espaço** (o livro-caixa dele): o
-pessoal (`PF`), criado no primeiro acesso, e os de família (`FAMILIA`) e de empresa (`PJ`) que a pessoa criar.
+Todos exigem o ID token do Firebase. Tudo que é do cliente fica sob um **espaço** (um livro-caixa). São dois
+tipos, e só dois: o **pessoal** (`PF`), criado no primeiro acesso, com o Modo Família dentro dele, e o
+**empresarial**, que reúne as empresas da pessoa (`PJ`), cada empresa um livro-caixa próprio.
 
 | Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
 |---|---|---|---|---|
 | `GET` | `/espacos` | Listar meus espaços; no primeiro acesso, cria o espaço pessoal com as categorias iniciais | `200 OK` | `401`, `403` (e-mail não confirmado), `503` |
-| `POST` | `/espacos` | Criar um espaço de família ou de empresa (`tipo`, `nome`), com as categorias do tipo | `201 Created` + `Location` | `400`, `401`, `409` (limite de espaços) |
+| `POST` | `/espacos` | Cadastrar uma empresa no espaço empresarial (`tipo: PJ`, `nome`, `cnpj` e `regime` opcionais), com as categorias de empresa | `201 Created` + `Location` | `400`, `401`, `409` (limite de empresas) |
 | `GET` | `/espacos/{espaco_id}` | Consultar um espaço | `200 OK` | `401`, `404` |
-| `PATCH` | `/espacos/{espaco_id}` | Renomear um espaço de família ou de empresa (`nome`) | `200 OK` | `400`, `401`, `403`, `404`, `409` (pessoal) |
-| `DELETE` | `/espacos/{espaco_id}` | Excluir um espaço vazio (sem contas nem lançamentos), com as categorias dele | `204 No Content` | `401`, `403`, `404`, `409` (pessoal ou com dados) |
+| `PATCH` | `/espacos/{espaco_id}` | Editar o nome, o CNPJ ou o regime de uma empresa (só os campos enviados) | `200 OK` | `400`, `401`, `403`, `404`, `409` (pessoal) |
+| `DELETE` | `/espacos/{espaco_id}` | Excluir uma empresa sem movimento (sem contas nem lançamentos), com as categorias e os cadastros dela | `204 No Content` | `401`, `403`, `404`, `409` (pessoal ou com dados) |
 | `GET` | `/espacos/{espaco_id}/contas` | Listar contas com o saldo de cada uma | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial) ou cartão de crédito (tipo `CARTAO_CREDITO`, com limite, fechamento, vencimento e cor) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/contas/{conta_id}` | Consultar conta e saldo | `200 OK` | `401`, `404` |
@@ -489,17 +492,20 @@ estado válido. Uma linha de extrato importada e depois excluída volta se o mes
 (a chave dela sai junto com o lançamento). Desativar uma conta ou categoria tira ela das escolhas de novos
 lançamentos e mantém o histórico; excluir é outra coisa (seção seguinte).
 
-### Espaços: pessoal, família e empresa
+### Espaços: pessoal e empresarial
 
-Cada espaço é um livro-caixa separado: contas, categorias e lançamentos de um não aparecem no outro, e toda
-consulta filtra pelo `espaco_id` (espaço de outra pessoa responde `404`, como se não existisse).
+São dois tipos de espaço, e só dois. O **pessoal** (`PF`) é um por pessoa e leva o Modo Família dentro dele (a
+família não é um terceiro tipo). O **empresarial** é o conjunto das empresas da pessoa: cada empresa (`PJ`) é um
+livro-caixa próprio, porque contas, caixa e DRE de dois CNPJs nunca se misturam. Contas, categorias e lançamentos
+de um livro não aparecem no outro, e toda consulta filtra pelo `espaco_id` (espaço de outra pessoa responde `404`,
+como se não existisse).
 
 ```http
 POST /espacos
 Authorization: Bearer <ID token do Firebase>
 Content-Type: application/json
 
-{ "tipo": "PJ", "nome": "Ateliê da Ana" }
+{ "tipo": "PJ", "nome": "Ateliê da Ana", "cnpj": "11.222.333/0001-81", "regime": "SIMPLES" }
 ```
 
 ```http
@@ -507,20 +513,50 @@ HTTP/1.1 201 Created
 Location: /espacos/6ab54bfb5b2393fd604e53b1
 
 { "id": "6ab54bfb5b2393fd604e53b1", "tipo": "PJ", "nome": "Ateliê da Ana", "moeda": "BRL",
-  "fuso": "America/Sao_Paulo", "papel": "DONO" }
+  "fuso": "America/Sao_Paulo", "papel": "DONO", "cnpj": "11222333000181", "regime": "SIMPLES", "familia": null }
 ```
 
-- **Tipos:** `FAMILIA` nasce com as categorias da casa (moradia, mercado, educação, mesada, contribuições) e `PJ`
-  com as de um negócio (vendas, serviços prestados, impostos, fornecedores, folha, pró-labore). `PF` não entra
-  pelo `POST` (`400` em `tipo`): o pessoal existe desde o primeiro acesso, e o `POST` o cria antes se faltar.
+- **Empresa:** nasce com as categorias de um negócio (vendas, serviços prestados, aportes dos sócios, impostos,
+  fornecedores, folha, encargos, benefícios, pró-labore, prestadores de serviço, distribuição de lucros...). `PF`
+  não entra pelo `POST` (`400` em `tipo`): o pessoal existe desde o primeiro acesso, e o `POST` o cria antes se
+  faltar. `FAMILIA` também é `400`: a família é um modo do pessoal (seção seguinte).
+- **CNPJ e regime:** opcionais. O CNPJ aceita pontuação e o formato alfanumérico da Receita Federal (12
+  caracteres de 0 a 9 ou A a Z e 2 dígitos verificadores); os dígitos são conferidos (`400` com "CNPJ inválido") e
+  só os 14 caracteres ficam gravados. O `regime` (`MEI`, `SIMPLES`, `PRESUMIDO`, `REAL`) decide os tributos
+  sugeridos na aba Impostos.
 - **Nome:** de 1 a 60 caracteres, limpo como os outros textos livres (sem `<`, `>`, fórmula de planilha nem
   caractere invisível).
-- **Limite:** 5 espaços criados por pessoa, além do pessoal (`409` com a mensagem). Excluir um vazio libera a vaga.
-- **Renomear e excluir:** só quem criou (`403` para outro papel) e nunca o pessoal (`409`). A exclusão só aceita o
-  espaço sem contas e sem lançamentos (`409` com o motivo): um clique errado não apaga o histórico de uma família
-  ou de uma empresa. As categorias saem junto.
-- **Listagem:** `GET /espacos` devolve o pessoal primeiro e os outros na ordem de criação, com o `papel` de quem
-  pediu em cada um.
+- **Limite:** 5 empresas por pessoa (`409` com a mensagem). Excluir uma sem movimento libera a vaga.
+- **Editar e excluir:** só quem cadastrou (`403` para outro papel) e nunca o pessoal (`409`). O `PATCH` muda só os
+  campos enviados (`cnpj: null` tira o CNPJ). A exclusão só aceita a empresa sem contas e sem lançamentos (`409`
+  com o motivo): um clique errado não apaga o histórico. As categorias, os sócios, os tributos e as pessoas da
+  folha saem junto.
+- **Listagem:** `GET /espacos` devolve o pessoal primeiro e as empresas na ordem de cadastro, com o `papel` de
+  quem pediu em cada um. O pessoal traz `familia`; a empresa, `cnpj` e `regime`.
+- **Espaço de família antigo:** o que foi criado quando a família era um tipo à parte (`FAMILIA`) fica fora da
+  lista e responde `404`; o documento continua no banco.
+
+### Modo Família (espaço pessoal)
+
+O titular liga o Modo Família no espaço pessoal e cadastra as pessoas da casa (nome e cor). Elas são perfis
+dentro do pessoal, sem login próprio: um lançamento é de uma delas quando o `responsavel` tem o nome dela (sem
+diferença de caixa nem de acento); sem responsável, é do titular. Os relatórios filtram por pessoa (Parte 7).
+
+| Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
+|---|---|---|---|---|
+| `GET` | `/espacos/{espaco_id}/familia` | Consultar o modo (`ativa`), as pessoas e `maximo_de_pessoas` | `200 OK` | `401`, `404` (empresa) |
+| `PUT` | `/espacos/{espaco_id}/familia` | Ligar ou desligar (`ativa`); desligado, as pessoas ficam guardadas | `200 OK` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/familia/pessoas` | Incluir pessoa (`nome`, `cor`) | `201 Created` + `Location` | `400`, `401`, `404`, `409` (limite) |
+| `PUT` | `/espacos/{espaco_id}/familia/pessoas/{pessoa_id}` | Trocar nome e cor; com o nome novo, os lançamentos dela passam para ele (`lancamentos_renomeados`) | `200 OK` | `400`, `401`, `404` |
+| `DELETE` | `/espacos/{espaco_id}/familia/pessoas/{pessoa_id}` | Tirar da família (os lançamentos ficam, com o nome escrito) | `204 No Content` | `401`, `404` |
+
+- **Assinatura:** uma só, a do titular, cobre a casa inteira: o titular e até 5 pessoas (`maximo_de_pessoas`).
+  Ninguém da família precisa assinar nem ter conta. A sexta pessoa é `409`.
+- **Nome:** único na família (sem caixa e acento; "Léo" e "LEO" são a mesma pessoa) e diferente de "Você" (o
+  titular). **Cor:** `menta`, `azul`, `roxo`, `coral`, `ambar`, `rosa`, `turquesa` ou `grafite`.
+- **Nome novo em cascata:** o `PUT` troca o nome no `responsavel` e nas partes das divisões de todos os
+  lançamentos do espaço (no MongoDB, com a ordenação do português de força 1: sem caixa nem acento).
+- **Só no pessoal:** numa empresa, as rotas da família respondem `404`.
 
 ### Edição, exclusão em lote e remoção de cadastros
 
@@ -1028,8 +1064,8 @@ Swagger).
 
 | Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
 |---|---|---|---|---|
-| `GET` | `/espacos/{espaco_id}/relatorios/mensal?de=&ate=&conta_id=` | Receitas, despesas, sobra e saldo no fim de cada mês do período | `200 OK` | `400`, `401`, `404` |
-| `GET` | `/espacos/{espaco_id}/relatorios/categorias?de=&ate=&conta_id=` | Gasto por categoria no período, do maior para o menor, com a fatia de cada uma | `200 OK` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/relatorios/mensal?de=&ate=&conta_id=&membro=` | Receitas, despesas, sobra e saldo no fim de cada mês do período | `200 OK` | `400`, `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/relatorios/categorias?de=&ate=&conta_id=&membro=` | Gasto por categoria no período, do maior para o menor, com a fatia de cada uma | `200 OK` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/relatorios/cartoes` | Por cartão: dívida de hoje, o que falta pagar das faturas fechadas e a fatura atual e as seguintes, com as parcelas já lançadas | `200 OK` | `401`, `404` |
 
 - **Período em meses** (`de` e `ate`, formato `AAAA-MM`, os dois inclusive). Sem `ate`, vale o mês de hoje no fuso do
@@ -1037,6 +1073,10 @@ Swagger).
   aparecem zerados, para o gráfico não pular mês.
 - **Filtro por conta** (`conta_id`, opcional): só os lançamentos daquela conta ou cartão. Conta de outro espaço (ou
   inexistente) responde `404` com "Conta não encontrada.".
+- **Filtro por pessoa** (`membro`, opcional, Modo Família): o id de uma pessoa da família ou `titular` (os
+  lançamentos sem responsável). Receitas, despesas e o gasto por categoria passam a ser só dela; o
+  `saldo_final_centavos` continua o das contas, que são da casa. Pessoa desconhecida é `400` em `membro`; numa
+  empresa, também.
 
 ### Regras dos números
 
@@ -1281,6 +1321,66 @@ próprio webhook ([`api/app/monitoramento.py`](api/app/monitoramento.py)).
   teste para cada canal, e `python subir-app.py verificar` confere se cada webhook existe (sem mandar mensagem).
   Depois, com o `python subir-app.py dev` no ar, 6 logins errados seguidos no painel geram o alerta de força bruta
   em `#logs-seguranca`.
+
+---
+
+## Parte 10 – Gestão da empresa (espaço empresarial)
+
+Cada empresa do espaço empresarial ganha quatro abas de gestão na área do cliente (Custos, Sociedade & aportes,
+Impostos e Pessoal), sobre o mesmo livro-caixa: tudo o que mexe em dinheiro vira um lançamento comum da empresa,
+com partidas dobradas, na categoria da função certa, e o extrato, o saldo, o DRE e o fluxo de caixa enxergam sem
+regra nova. As rotas só respondem numa empresa (no pessoal, `404` com "Esta parte é das empresas do espaço
+empresarial."), com a mesma barreira da Parte 6.
+
+Código: [`api/app/financeiro/servicos_empresa.py`](api/app/financeiro/servicos_empresa.py),
+[`regras_empresa.py`](api/app/financeiro/regras_empresa.py), [`modelos_empresa.py`](api/app/financeiro/modelos_empresa.py)
+e [`rotas_empresa.py`](api/app/financeiro/rotas_empresa.py) (tag **Gestão da empresa** no Swagger).
+
+| Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
+|---|---|---|---|---|
+| `PUT` | `/espacos/{espaco_id}/custos/classes` | Classe de cada despesa na aba Custos (`{classes: {categoria_id: VARIAVEL \| FIXO \| OPERACIONAL \| FORA \| null}}`); tudo ou nada | `200 OK` (as categorias) | `400`, `401`, `404` |
+| `GET`, `POST` | `/espacos/{espaco_id}/socios` | Quadro societário; incluir sócio (`nome`, `participacao_centesimos`) | `200 OK` / `201 Created` | `400`, `401`, `404`, `409` (limite) |
+| `PUT`, `DELETE` | `/espacos/{espaco_id}/socios/{socio_id}` | Editar (nome novo em cascata nos lançamentos); tirar do quadro | `200 OK` / `204 No Content` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/socios/{socio_id}/movimentos` | Aporte (`APORTE`, entra), distribuição de lucros (`DISTRIBUICAO`) ou pró-labore (`PRO_LABORE`), que saem, na conta indicada | `201 Created` (o lançamento) | `400`, `401`, `404` |
+| `GET`, `POST` | `/espacos/{espaco_id}/tributos` | Tributos recorrentes com as competências pagas; cadastrar tributo | `200 OK` / `201 Created` | `400`, `401`, `404`, `409` (limite) |
+| `PUT`, `DELETE` | `/espacos/{espaco_id}/tributos/{tributo_id}` | Editar (inclusive desativar); excluir (os pagamentos ficam) | `200 OK` / `204 No Content` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/tributos/{tributo_id}/pagamentos` | Pagar a guia de uma competência (`competencia`, `conta_id`, `valor_centavos`, `data`) | `201 Created` (o lançamento) | `400`, `401`, `404`, `409` (já paga) |
+| `GET`, `POST` | `/espacos/{espaco_id}/colaboradores` | Pessoas da folha com as competências lançadas; incluir pessoa | `200 OK` / `201 Created` | `400`, `401`, `404`, `409` (limite) |
+| `PUT`, `DELETE` | `/espacos/{espaco_id}/colaboradores/{colaborador_id}` | Editar (desativar tira da próxima folha); excluir do cadastro | `200 OK` / `204 No Content` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/folha` | Lançar a folha de uma competência (`competencia`, `conta_id`, `data` opcional) | `200 OK` (`lancados`, `ja_lancados`, `total_centavos`) | `400`, `401`, `404` |
+
+- **Porcentagens em centésimos de ponto**, inteiros como o dinheiro: `10000` = 100%, `600` = 6%, `480` = 4,8%.
+- **Categorias com função:** as categorias que a gestão usa sozinha levam `funcao` (`APORTE`, `DISTRIBUICAO`,
+  `PRO_LABORE`, `SALARIOS`, `BENEFICIOS`, `PRESTADORES`, `ENCARGOS`, `IMPOSTOS`) e são achadas por ela, não pelo
+  nome: renomear "Aportes dos sócios" não quebra nada. Empresa cadastrada antes das funções tem a categoria de
+  mesmo nome marcada na primeira vez; sem nenhuma das duas (a pessoa excluiu), a categoria nasce de novo.
+  `classe_de_custo` e `funcao` aparecem em `GET /categorias` (nulos no pessoal).
+- **Custos:** a classe (`VARIAVEL`, `FIXO`, `OPERACIONAL`, `FORA`) fica gravada na categoria; sem ela, a tela
+  sugere pelo nome. Margem de contribuição, lucro, margem de lucro e ponto de equilíbrio são conta da tela.
+- **Sociedade:** as participações somam até 100% (`400` com quanto ainda cabe). Aporte, pró-labore e distribuição
+  levam o sócio como `responsavel` (nas categorias de função `APORTE`, `PRO_LABORE` e `DISTRIBUICAO`); aporte e
+  distribuição ficam fora do DRE e dos custos (são dinheiro entre a empresa e os sócios). Os dividendos de cada
+  sócio (lucro × participação, menos o distribuído) são conta da tela.
+- **Impostos:** base `FATURAMENTO` ou `FOLHA` pede `aliquota_centesimos`; `FIXO`, `valor_fixo_centavos` (os dois
+  juntos é `400`). A guia de uma competência vence no mês seguinte, no `dia_vencimento` (31 vira o último dia);
+  no `TRIMESTRAL`, a competência é o último mês do trimestre (`2026-09`). Pagar grava uma despesa em "Impostos"
+  (ou "Encargos da folha", na base `FOLHA`) com `origem: {tipo: TRIBUTO, id, competencia}`; a mesma competência
+  paga de novo é `409` (índice único no MongoDB). Excluir o lançamento no extrato libera a competência. A
+  provisão (alíquota sobre o faturamento ou os salários CLT da competência) e a agenda (atrasada, vence em até 7
+  dias, a vencer, em curso, paga) são conta da tela; os alertas aparecem no sino.
+- **Pessoal (RH):** vínculo `CLT` (salário em "Folha de pagamento"), `PJ` ("Prestadores de serviço") ou
+  `PRO_LABORE` ("Pró-labore"), com até 10 benefícios por pessoa. `POST /folha` lança, para cada pessoa ativa e já
+  admitida na competência, o salário e os benefícios (em "Benefícios"), com a pessoa como `responsavel` e a
+  `origem` `SALARIO` ou `BENEFICIOS`. Sem `data`, cada pessoa no próprio dia de pagamento, no mês seguinte à competência.
+  Quem já está lançado é pulado (`ja_lancados`): repetir não duplica, nem com dois cliques ao mesmo tempo.
+- **Nome novo em cascata:** editar o nome de um sócio ou de uma pessoa da folha troca o `responsavel` dos
+  lançamentos (`lancamentos_renomeados`), como na família.
+- **Lançamento com origem:** `GET /lancamentos` traz `origem` (`null` nos outros). A edição não mexe nela.
+
+**Como testar:** `api/tests/test_financeiro_empresa.py` (classes, sócios e movimentos, categorias com função,
+tributos e pagamento único por competência, folha sem duplicar, isolamento) e
+`api/tests/test_financeiro_familia.py` (Modo Família). Na área do cliente, `python subir-app.py dev`, cadastre uma
+empresa no seletor do topo (Empresarial) e percorra as abas de Gestão.
 
 ---
 

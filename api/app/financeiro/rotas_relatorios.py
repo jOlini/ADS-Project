@@ -25,6 +25,7 @@ from app.financeiro.modelos import (
 from app.financeiro.relatorios import texto_do_mes
 from app.financeiro.rotas import ERRO_400, ERRO_404, obter_servico
 from app.financeiro.servicos import ServicoLivroCaixa
+from app.financeiro.servicos_familia import ServicoFamilia
 
 # Categoria que sumiu do cadastro continua na soma: o dinheiro foi gasto.
 CATEGORIA_REMOVIDA = "Categoria removida"
@@ -43,6 +44,11 @@ rotas_relatorios = APIRouter(
 PARAMETRO_DE = Query(None, max_length=7, description="Mês inicial (AAAA-MM), inclusive. Padrão: 11 meses antes do final")
 PARAMETRO_ATE = Query(None, max_length=7, description="Mês final (AAAA-MM), inclusive. Padrão: o mês de hoje")
 PARAMETRO_CONTA = Query(None, max_length=64, description="Só os lançamentos desta conta ou cartão")
+PARAMETRO_MEMBRO = Query(
+    None,
+    max_length=64,
+    description="Modo Família: só os lançamentos de uma pessoa da família (id) ou do titular (`titular`)",
+)
 
 
 @rotas_relatorios.get(
@@ -55,19 +61,24 @@ def relatorio_mensal(
     de: str | None = PARAMETRO_DE,
     ate: str | None = PARAMETRO_ATE,
     conta_id: str | None = PARAMETRO_CONTA,
+    membro: str | None = PARAMETRO_MEMBRO,
     espaco: Espaco = Depends(espaco_do_cliente),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
     """Um item por mês do período, inclusive os meses sem lançamento (zerados). A compra no
     cartão conta no mês da parcela; o pagamento da fatura e as transferências não contam; o
     estorno reduz o lado do lançamento original. `saldo_final_centavos` é o saldo das contas
-    (sem os cartões) no último dia do mês ou, com `conta_id`, o daquela conta."""
+    (sem os cartões) no último dia do mês ou, com `conta_id`, o daquela conta. Com `membro`
+    (Modo Família), receitas e despesas são só as daquela pessoa (pelo responsável do
+    lançamento); o saldo continua o das contas, que são da casa."""
     inicio, fim = servico.periodo_do_relatorio(espaco, de, ate, conta_id)
-    meses = servico.relatorio_mensal(espaco, inicio, fim, conta_id)
+    pessoa = ServicoFamilia(servico.repositorio).filtro(espaco, membro)
+    meses = servico.relatorio_mensal(espaco, inicio, fim, conta_id, pessoa)
     return RelatorioMensalResposta(
         de=texto_do_mes(inicio),
         ate=texto_do_mes(fim),
         conta_id=conta_id,
+        membro=membro or None,
         meses=[
             MesDoRelatorioResposta(
                 mes=texto_do_mes(item.mes),
@@ -91,17 +102,21 @@ def gasto_por_categoria(
     de: str | None = PARAMETRO_DE,
     ate: str | None = PARAMETRO_ATE,
     conta_id: str | None = PARAMETRO_CONTA,
+    membro: str | None = PARAMETRO_MEMBRO,
     espaco: Espaco = Depends(espaco_do_cliente),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
     """Só as despesas, da categoria com mais gasto para a com menos, com a fatia de cada
-    uma no total. O estorno devolve o valor à categoria; a que ficou sem gasto sai da lista."""
+    uma no total. O estorno devolve o valor à categoria; a que ficou sem gasto sai da lista.
+    Com `membro` (Modo Família), só os gastos daquela pessoa."""
     inicio, fim = servico.periodo_do_relatorio(espaco, de, ate, conta_id)
-    gastos = servico.gasto_por_categoria(espaco, inicio, fim, conta_id)
+    pessoa = ServicoFamilia(servico.repositorio).filtro(espaco, membro)
+    gastos = servico.gasto_por_categoria(espaco, inicio, fim, conta_id, pessoa)
     return GastoPorCategoriaResposta(
         de=texto_do_mes(inicio),
         ate=texto_do_mes(fim),
         conta_id=conta_id,
+        membro=membro or None,
         total_centavos=sum(gasto.valor for gasto, _ in gastos),
         categorias=[
             GastoDaCategoriaResposta(

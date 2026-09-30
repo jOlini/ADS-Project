@@ -8,11 +8,20 @@ import { hojeIso } from '../../regras/datas';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
 import { ehEmpresa } from '../../regras/espacos';
 import { rotuloDoMes } from '../../regras/relatorios';
-import { apiConfigurada, LIMITE_DE_LANCAMENTOS, listarContas, listarLancamentos } from '../../servicos/livroCaixa';
+import {
+  apiConfigurada,
+  LIMITE_DE_LANCAMENTOS,
+  listarCategorias,
+  listarColaboradores,
+  listarContas,
+  listarLancamentos,
+} from '../../servicos/livroCaixa';
 import SimboloDoVazio from '../componentes/SimboloDoVazio';
 import { fluxoDeCaixa, saldosDaEmpresa, ultimosMeses } from '../regras/empresa';
+import { proximaFolha } from '../regras/folha';
 import { leituraDaVariacao, textoDaVariacao, variacaoPercentual } from '../regras/tendencia';
 import '../../estilos/relatorios.css';
+import '../estilos/gestao.css';
 
 // Meses do gráfico e da tabela.
 const MESES = 6;
@@ -50,8 +59,9 @@ function Tendencia({ atual, anterior, maiorEhMelhor = true }) {
 // Fluxo de caixa operacional do espaço de empresa: o que entrou e saiu do
 // caixa da operação em cada mês (regime de caixa: a compra no cartão entra
 // quando a fatura é paga) separado do que foi para as aplicações e voltou
-// delas. A conta está em regras/empresa.ts; os dados, no livro-caixa do
-// espaço. Em outro espaço, a tela volta à Visão geral.
+// delas e do dinheiro dos sócios (aportes e lucros distribuídos). A conta está
+// em regras/empresa.ts; os dados, no livro-caixa do espaço. Em outro espaço, a
+// tela volta à Visão geral.
 export default function FluxoDeCaixa() {
   const { espaco } = useOutletContext();
   const [hoje] = useState(hojeIso);
@@ -62,9 +72,12 @@ export default function FluxoDeCaixa() {
     () =>
       apiConfigurada && espacoId && daEmpresa
         ? () =>
-            Promise.all([listarContas(espacoId), listarLancamentos(espacoId, { de: `${meses[0]}-01`, ate: hoje })]).then(
-              ([contas, lancamentos]) => ({ contas, lancamentos }),
-            )
+            Promise.all([
+              listarContas(espacoId),
+              listarCategorias(espacoId),
+              listarLancamentos(espacoId, { de: `${meses[0]}-01`, ate: hoje }),
+              listarColaboradores(espacoId).catch(() => []),
+            ]).then(([contas, categorias, lancamentos, colaboradores]) => ({ contas, categorias, lancamentos, colaboradores }))
         : null,
     [espacoId, daEmpresa, meses, hoje],
   );
@@ -79,11 +92,13 @@ export default function FluxoDeCaixa() {
 
   const erro = espaco.erro || livro.erro?.message;
   const dados = livro.dados;
-  const fluxo = dados ? fluxoDeCaixa(dados.lancamentos, dados.contas, { meses, hoje }) : [];
+  const fluxo = dados ? fluxoDeCaixa(dados.lancamentos, dados.contas, { meses, hoje, categorias: dados.categorias }) : [];
   const atual = fluxo.at(-1);
   const anterior = fluxo.at(-2);
   const saldos = dados ? saldosDaEmpresa(dados.contas) : null;
-  const semMovimento = fluxo.every((mes) => mes.entradas === 0 && mes.saidas === 0 && mes.investido === 0);
+  // A folha que ainda não saiu (aba Pessoal): o que vem pela frente no caixa.
+  const folha = dados ? proximaFolha(dados.colaboradores, hoje) : null;
+  const semMovimento = fluxo.every((mes) => mes.entradas === 0 && mes.saidas === 0 && mes.investido === 0 && mes.socios === 0);
   const noLimite = dados && dados.lancamentos.length >= LIMITE_DE_LANCAMENTOS;
   const trecho = meses.length > 0 ? `${rotuloDoMes(meses[0], { comAno: true })} a ${rotuloDoMes(meses.at(-1), { comAno: true })}` : '';
 
@@ -135,6 +150,17 @@ export default function FluxoDeCaixa() {
             }
           />
         </section>
+      )}
+
+      {folha && (
+        <p className="mensagem info of-folha-prevista" role="status">
+          <Icone nome="cracha" tamanho={16} />
+          <span>
+            Folha de {rotuloDoMes(folha.competencia, { comAno: true })} prevista: <b>{formatarBRL(folha.total)}</b> a partir
+            de {folha.data.split('-').reverse().join('/')}, ainda fora do caixa.
+          </span>
+          <Link to="/empresa/pessoal">Lançar a folha</Link>
+        </p>
       )}
 
       {semMovimento ? (
@@ -192,6 +218,7 @@ export default function FluxoDeCaixa() {
                     <th scope="col">Saídas</th>
                     <th scope="col">Geração de caixa</th>
                     <th scope="col">Investimentos</th>
+                    <th scope="col">Sócios</th>
                     <th scope="col">Variação do caixa</th>
                   </tr>
                 </thead>
@@ -205,6 +232,7 @@ export default function FluxoDeCaixa() {
                       <td>
                         {mes.investido === 0 ? '—' : `${mes.investido > 0 ? 'aplicou' : 'resgatou'} ${formatarBRL(Math.abs(mes.investido))}`}
                       </td>
+                      <td className={mes.socios < 0 ? 'negativo' : undefined}>{mes.socios === 0 ? '—' : formatarComSinal(mes.socios)}</td>
                       <td className={mes.variacaoDoCaixa < 0 ? 'negativo' : undefined}>{formatarComSinal(mes.variacaoDoCaixa)}</td>
                     </tr>
                   ))}
@@ -214,7 +242,8 @@ export default function FluxoDeCaixa() {
           </div>
           <p className="of-discreto">
             Operação: receitas e despesas das contas correntes, poupanças e carteiras, com as faturas do cartão pagas.
-            Investimentos: o que foi para as contas de investimento, menos o que voltou delas.
+            Investimentos: o que foi para as contas de investimento, menos o que voltou delas. Sócios: os aportes de
+            capital menos os lucros distribuídos (aba Sociedade & aportes).
             {noLimite && ` Mostrando os ${LIMITE_DE_LANCAMENTOS} lançamentos mais recentes do período.`}
           </p>
         </section>

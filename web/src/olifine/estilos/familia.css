@@ -1,0 +1,209 @@
+/* Modo Família: a página da família (pessoas da casa e como funciona) e o
+   gasto por pessoa da Visão geral. As cores de cada pessoa vêm das variáveis
+   --pessoa-* (tokens.css), pelas classes .pessoa-<cor> (componentes.css). */
+
+.of-familia {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espaco-10);
+  align-content: start;
+}
+
+.of-familia .of-cabecalho-acoes {
+  flex-wrap: wrap;
+}
+
+.of-familia-desligada:not(:empty) {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+}
+
+.of-familia-desligada .icone {
+  flex: none;
+  color: var(--suave);
+}
+
+.of-familia-grade {
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+}
+
+/* Pessoas da casa: a marca com as iniciais na cor da pessoa, o nome e o
+   menu de ações. O titular vem primeiro, sem menu. */
+.of-pessoas {
+  display: grid;
+  gap: var(--espaco-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.of-pessoas li {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: var(--espaco-6);
+  align-items: center;
+  min-height: 56px;
+  padding: var(--espaco-3) var(--espaco-4);
+  border-radius: var(--raio-pequeno);
+}
+
+.of-pessoas li + li {
+  border-top: 1px dashed var(--linha);
+}
+
+.of-pessoa-marca {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--cor-da-amostra) 16%, var(--superficie));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--cor-da-amostra) 55%, transparent);
+  color: var(--texto);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-forte);
+  letter-spacing: 0.02em;
+}
+
+.of-pessoa-textos {
+  display: grid;
+  min-width: 0;
+}
+
+.of-pessoa-textos b {
+  overflow: hidden;
+  font-weight: var(--peso-semi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-pessoa-textos small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-familia-vazio {
+  padding-block: var(--espaco-6);
+}
+
+/* Como funciona: quatro regras curtas, o ícone na menta. */
+.of-familia-regras {
+  display: grid;
+  gap: var(--espaco-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fonte-rotulo);
+}
+
+.of-familia-regras li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: var(--espaco-6);
+  align-items: start;
+}
+
+.of-familia-regras li > .icone {
+  width: 34px;
+  height: 34px;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+  box-sizing: border-box;
+}
+
+.of-familia-regras span {
+  color: var(--suave);
+  line-height: 1.5;
+}
+
+.of-familia-regras b {
+  color: var(--texto);
+  font-weight: var(--peso-semi);
+}
+
+/* Filtro "de quem" na Visão geral: logo abaixo das boas-vindas. */
+.of-filtro-da-familia {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4) var(--espaco-6);
+  align-items: center;
+}
+
+.of-filtro-da-familia > p {
+  color: var(--suave);
+  font-size: var(--fonte-rotulo);
+}
+
+/* Gasto por pessoa: uma faixa na largura da grade, logo abaixo do gráfico e
+   das categorias (os pares de painéis continuam lado a lado). Uma pessoa por
+   bloco, do maior gasto para o menor, com o ponto da cor, o nome, o valor e a
+   fatia; a barra fina embaixo, na cor da pessoa. */
+.of-painel-gasto-por-pessoa {
+  grid-column: 1 / -1;
+}
+
+.of-gasto-por-pessoa {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--espaco-6) var(--espaco-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.of-gasto-por-pessoa li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 3.5ch;
+  gap: var(--espaco-2) var(--espaco-6);
+  align-items: center;
+  font-size: var(--fonte-rotulo);
+}
+
+.of-gasto-por-pessoa .nome {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+  min-width: 0;
+}
+
+.of-gasto-por-pessoa .nome span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-gasto-por-pessoa b {
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-gasto-por-pessoa .fatia {
+  color: var(--suave);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.of-gasto-por-pessoa .barra {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
+  overflow: hidden;
+}
+
+.of-gasto-por-pessoa .barra i {
+  display: block;
+  width: var(--largura);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--cor-da-amostra, var(--pessoa-grafite));
+}
+
+@media (max-width: 1180px) {
+  .of-familia-grade {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

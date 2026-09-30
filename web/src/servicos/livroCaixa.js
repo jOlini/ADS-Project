@@ -82,18 +82,45 @@ export function listarEspacos() {
   return chamar('/espacos');
 }
 
-// Espaço de família ou de empresa: { tipo: 'FAMILIA' | 'PJ', nome }.
-export function criarEspaco(espaco) {
-  return chamar('/espacos', { metodo: 'POST', corpo: espaco });
+// Empresa nova no espaço empresarial: { nome, cnpj (ou null), regime }. Cada
+// empresa é um livro-caixa próprio (tipo PJ na API).
+export function criarEmpresa(empresa) {
+  return chamar('/espacos', { metodo: 'POST', corpo: { tipo: 'PJ', ...empresa } });
 }
 
-export function renomearEspaco(espacoId, nome) {
-  return chamar(doEspaco(espacoId), { metodo: 'PATCH', corpo: { nome } });
+// Nome, CNPJ e regime da empresa: só os campos enviados mudam.
+export function atualizarEmpresa(espacoId, empresa) {
+  return chamar(doEspaco(espacoId), { metodo: 'PATCH', corpo: empresa });
 }
 
-// Só o espaço vazio sai (a API responde 409 com o motivo).
+// Só a empresa sem movimento sai (a API responde 409 com o motivo).
 export function excluirEspaco(espacoId) {
   return chamar(doEspaco(espacoId), { metodo: 'DELETE' });
+}
+
+// ------------------------------------------------------------ Modo Família
+// Só no espaço pessoal. As pessoas da família são perfis dentro dele: um
+// lançamento é de uma delas quando o responsável tem o nome dela.
+
+// Liga ou desliga o modo; devolve { ativa, pessoas, maximo_de_pessoas }.
+export function ligarFamilia(espacoId, ativa) {
+  return chamar(doEspaco(espacoId, '/familia'), { metodo: 'PUT', corpo: { ativa } });
+}
+
+// { nome, cor }: devolve a pessoa com o id.
+export function incluirPessoa(espacoId, pessoa) {
+  return chamar(doEspaco(espacoId, '/familia/pessoas'), { metodo: 'POST', corpo: pessoa });
+}
+
+// Nome e cor novos; os lançamentos da pessoa passam para o nome novo
+// (lancamentos_renomeados na resposta).
+export function editarPessoa(espacoId, pessoaId, pessoa) {
+  return chamar(doEspaco(espacoId, `/familia/pessoas/${encodeURIComponent(pessoaId)}`), { metodo: 'PUT', corpo: pessoa });
+}
+
+// Os lançamentos dela ficam, com o nome escrito como responsável. 204.
+export function removerPessoa(espacoId, pessoaId) {
+  return chamar(doEspaco(espacoId, `/familia/pessoas/${encodeURIComponent(pessoaId)}`), { metodo: 'DELETE' });
 }
 
 export function listarContas(espacoId) {
@@ -239,16 +266,118 @@ export function importarExtrato(espacoId, importacao) {
   return chamar(doEspaco(espacoId, '/importacoes'), { metodo: 'POST', corpo: importacao });
 }
 
+// ------------------------------------------------------- Gestão da empresa
+// Só nas empresas do espaço empresarial (no pessoal, a API responde 404).
+// Tudo o que mexe em dinheiro vira lançamento comum do livro-caixa.
+
+// { [categoria_id]: 'VARIAVEL' | 'FIXO' | 'OPERACIONAL' | 'FORA' | null }:
+// grava a classe de cada despesa na aba Custos. Devolve as categorias.
+export function classificarCustos(espacoId, classes) {
+  return chamar(doEspaco(espacoId, '/custos/classes'), { metodo: 'PUT', corpo: { classes } });
+}
+
+// Quadro societário: [{ id, nome, participacao_centesimos }] (5000 = 50%).
+export function listarSocios(espacoId) {
+  return chamar(doEspaco(espacoId, '/socios'));
+}
+
+export function incluirSocio(espacoId, socio) {
+  return chamar(doEspaco(espacoId, '/socios'), { metodo: 'POST', corpo: socio });
+}
+
+// Com o nome novo, os lançamentos do sócio passam para ele.
+export function editarSocio(espacoId, socioId, socio) {
+  return chamar(doEspaco(espacoId, `/socios/${encodeURIComponent(socioId)}`), { metodo: 'PUT', corpo: socio });
+}
+
+export function removerSocio(espacoId, socioId) {
+  return chamar(doEspaco(espacoId, `/socios/${encodeURIComponent(socioId)}`), { metodo: 'DELETE' });
+}
+
+// { tipo: 'APORTE' | 'DISTRIBUICAO' | 'PRO_LABORE', conta_id, valor_centavos,
+// data, descricao? }: vira um lançamento com o sócio como responsável.
+export function lancarMovimentoDoSocio(espacoId, socioId, movimento) {
+  return chamar(doEspaco(espacoId, `/socios/${encodeURIComponent(socioId)}/movimentos`), { metodo: 'POST', corpo: movimento });
+}
+
+// Avisa que as guias mudaram (pagar, cadastrar, editar, excluir): o sino do
+// topo lê de novo e a guia paga sai dos avisos na hora.
+export const EVENTO_DOS_TRIBUTOS = 'olifine:tributos';
+
+function avisarTributos(resposta) {
+  globalThis.dispatchEvent?.(new Event(EVENTO_DOS_TRIBUTOS));
+  return resposta;
+}
+
+// Tributos recorrentes, cada um com as competências pagas (pagamentos).
+export function listarTributos(espacoId) {
+  return chamar(doEspaco(espacoId, '/tributos'));
+}
+
+// { nome, tipo, base, aliquota_centesimos | valor_fixo_centavos,
+// dia_vencimento, periodicidade, ativo }.
+export function incluirTributo(espacoId, tributo) {
+  return chamar(doEspaco(espacoId, '/tributos'), { metodo: 'POST', corpo: tributo }).then(avisarTributos);
+}
+
+export function editarTributo(espacoId, tributoId, tributo) {
+  return chamar(doEspaco(espacoId, `/tributos/${encodeURIComponent(tributoId)}`), { metodo: 'PUT', corpo: tributo }).then(
+    avisarTributos,
+  );
+}
+
+// Os pagamentos já lançados ficam no extrato. 204.
+export function removerTributo(espacoId, tributoId) {
+  return chamar(doEspaco(espacoId, `/tributos/${encodeURIComponent(tributoId)}`), { metodo: 'DELETE' }).then(avisarTributos);
+}
+
+// { competencia: 'AAAA-MM', conta_id, valor_centavos, data }: a guia paga
+// vira uma despesa; a mesma competência paga de novo é 409.
+export function pagarTributo(espacoId, tributoId, pagamento) {
+  return chamar(doEspaco(espacoId, `/tributos/${encodeURIComponent(tributoId)}/pagamentos`), {
+    metodo: 'POST',
+    corpo: pagamento,
+  }).then(avisarTributos);
+}
+
+// Pessoas da folha, cada uma com as competências já lançadas.
+export function listarColaboradores(espacoId) {
+  return chamar(doEspaco(espacoId, '/colaboradores'));
+}
+
+export function incluirColaborador(espacoId, colaborador) {
+  return chamar(doEspaco(espacoId, '/colaboradores'), { metodo: 'POST', corpo: colaborador });
+}
+
+export function editarColaborador(espacoId, colaboradorId, colaborador) {
+  return chamar(doEspaco(espacoId, `/colaboradores/${encodeURIComponent(colaboradorId)}`), { metodo: 'PUT', corpo: colaborador });
+}
+
+export function removerColaborador(espacoId, colaboradorId) {
+  return chamar(doEspaco(espacoId, `/colaboradores/${encodeURIComponent(colaboradorId)}`), { metodo: 'DELETE' });
+}
+
+// { competencia, conta_id, data? }: salário e benefícios de cada pessoa ativa
+// viram lançamentos (quem já está lançado é pulado). Devolve { lancados,
+// ja_lancados, total_centavos, lancamento_ids }.
+export function lancarFolha(espacoId, folha) {
+  return chamar(doEspaco(espacoId, '/folha'), { metodo: 'POST', corpo: folha });
+}
+
 // Relatórios da release 0.3 (DOCS_API.md, parte 7). Período em meses
 // ({ de, ate } como 'AAAA-MM', opcionais): sem ele, a API usa os 12 meses que
-// terminam no mês de hoje.
-function consultaDoPeriodo({ de, ate } = {}) {
+// terminam no mês de hoje. membro (Modo Família): o id de uma pessoa da
+// família ou 'titular'; sem ele, todos.
+function consultaDoPeriodo({ de, ate, membro } = {}) {
   const periodo = new URLSearchParams();
   if (de) {
     periodo.set('de', de);
   }
   if (ate) {
     periodo.set('ate', ate);
+  }
+  if (membro) {
+    periodo.set('membro', membro);
   }
   return periodo.size > 0 ? `?${periodo}` : '';
 }

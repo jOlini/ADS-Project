@@ -2,8 +2,9 @@
 
 Tudo fica sob /espacos/{espaco_id}: o espaço é o dono dos dados, e a
 dependência espaco_do_cliente barra quem não é membro antes de qualquer
-consulta. Cada pessoa tem o espaço pessoal (criado no primeiro acesso) e pode
-criar espaços de família e de empresa, cada um com o próprio livro-caixa. Lançamento não tem PUT: PATCH muda descrição, data, valor,
+consulta. São dois tipos de espaço: o pessoal (criado no primeiro acesso, com
+o Modo Família dentro dele) e o empresarial, em que cada empresa cadastrada é
+um livro-caixa próprio. Lançamento não tem PUT: PATCH muda descrição, data, valor,
 categoria ou meio, e o estorno desfaz mantendo o histórico; DELETE apaga de
 vez (erro de digitação, duplicata), um por um ou em lote. O extrato do banco
 (CSV) entra por /importacoes, sem duplicar linha já importada. O cartão de
@@ -58,9 +59,9 @@ ERRO_400 = {400: {"description": "Campo inválido ou incoerente (erro de cada ca
 ERRO_404 = {404: {"description": "Espaço (ou recurso dentro dele) não encontrado, ou de outra pessoa"}}
 ERRO_409 = {409: {"description": "Lançamento já estornado, ou estorno de um estorno"}}
 ERRO_409_ESPACO = {
-    409: {"description": "Espaço pessoal (fixo), espaço com contas ou lançamentos, ou limite de espaços atingido"}
+    409: {"description": "Espaço pessoal (fixo), empresa com contas ou lançamentos, ou limite de empresas atingido"}
 }
-ERRO_403_ESPACO = {403: {"description": "Só quem criou o espaço pode renomeá-lo ou excluí-lo"}}
+ERRO_403_ESPACO = {403: {"description": "Só quem cadastrou a empresa pode editá-la ou excluí-la"}}
 REFERENCIA = Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="Ano e mês do vencimento (AAAA-MM)")
 
 rotas_livro_caixa = APIRouter(
@@ -93,7 +94,7 @@ def listar_espacos(
     "",
     response_model=EspacoResposta,
     status_code=status.HTTP_201_CREATED,
-    summary="Criar um espaço de família ou de empresa",
+    summary="Cadastrar uma empresa no espaço empresarial",
     responses={**ERRO_400, 409: ERRO_409_ESPACO[409]},
 )
 def criar_espaco(
@@ -103,9 +104,10 @@ def criar_espaco(
     cliente: ClienteFirebase = Depends(cliente_autenticado),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
-    """Novo livro-caixa (`FAMILIA` ou `PJ`), com quem criou como dono e as
-    categorias do tipo. O pessoal (`PF`) não entra por aqui: já existe desde o
-    primeiro acesso. Cada pessoa cria até 5 espaços além do pessoal."""
+    """Nova empresa (`tipo: PJ`), com livro-caixa próprio, quem cadastrou como dono e as
+    categorias de empresa. `cnpj` (com ou sem pontuação, numérico ou alfanumérico) e
+    `regime` (`MEI`, `SIMPLES`, `PRESUMIDO`, `REAL`) são opcionais. O pessoal (`PF`) não
+    entra por aqui: já existe desde o primeiro acesso. Cada pessoa cadastra até 5 empresas."""
     espaco = servico.criar_espaco(cliente.uid, dados)
     resposta.headers["Location"] = str(requisicao.url_for("buscar_espaco", espaco_id=espaco.id))
     return EspacoResposta.de(espaco, cliente.uid)
@@ -124,22 +126,23 @@ def buscar_espaco(
 @rotas_livro_caixa.patch(
     "/{espaco_id}",
     response_model=EspacoResposta,
-    summary="Renomear um espaço de família ou de empresa",
+    summary="Editar o nome, o CNPJ ou o regime de uma empresa",
     responses={**ERRO_400, **ERRO_403_ESPACO, **ERRO_404, **ERRO_409_ESPACO},
 )
-def renomear_espaco(
+def atualizar_espaco(
     dados: AtualizacaoEspaco,
     espaco: Espaco = Depends(espaco_do_cliente),
     cliente: ClienteFirebase = Depends(cliente_autenticado),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
-    return EspacoResposta.de(servico.renomear_espaco(espaco, cliente.uid, dados), cliente.uid)
+    """Só os campos enviados mudam; `cnpj: null` tira o CNPJ. O espaço pessoal é fixo (`409`)."""
+    return EspacoResposta.de(servico.atualizar_espaco(espaco, cliente.uid, dados), cliente.uid)
 
 
 @rotas_livro_caixa.delete(
     "/{espaco_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Excluir um espaço vazio",
+    summary="Excluir uma empresa sem movimento",
     responses={**ERRO_403_ESPACO, **ERRO_404, **ERRO_409_ESPACO},
 )
 def excluir_espaco(
@@ -147,7 +150,7 @@ def excluir_espaco(
     cliente: ClienteFirebase = Depends(cliente_autenticado),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
-    """Só sai o espaço sem contas e sem lançamentos (as categorias vão
+    """Só sai a empresa sem contas e sem lançamentos (as categorias vão
     junto). O pessoal nunca sai."""
     servico.excluir_espaco(espaco, cliente.uid)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

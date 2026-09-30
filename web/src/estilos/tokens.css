@@ -66,6 +66,19 @@
   --cat-entrada: #49916a;
   --cat-neutro: #737f8f;
 
+  /* Pessoas da família (Modo Família): a cor de cada uma nos filtros, no
+     extrato e no gasto por pessoa. Só marca, sem texto em cima; o nome está
+     sempre escrito ao lado. O titular usa a cor da marca. */
+  --pessoa-titular: var(--of-verde);
+  --pessoa-menta: #5fae86;
+  --pessoa-azul: #4e75af;
+  --pessoa-roxo: #7a64b3;
+  --pessoa-coral: #d0694f;
+  --pessoa-ambar: #c08442;
+  --pessoa-rosa: #b85f80;
+  --pessoa-turquesa: #3e8d9c;
+  --pessoa-grafite: #626e7f;
+
   /* Sombras quase imperceptíveis: separação é a borda de 1px. */
   --sombra: 0 1px 3px rgb(26 36 48 / 0.05), 0 1px 2px rgb(26 36 48 / 0.03);
   --sombra-elevada: 0 2px 4px rgb(26 36 48 / 0.04), 0 10px 22px -12px rgb(26 36 48 / 0.18);
@@ -326,6 +339,15 @@
   --cat-lazer: #a89ad7;
   --cat-entrada: #7fc39b;
   --cat-neutro: #8d9993;
+
+  --pessoa-menta: #84d2a5;
+  --pessoa-azul: #85a6d7;
+  --pessoa-roxo: #a89ad7;
+  --pessoa-coral: #ec9a82;
+  --pessoa-ambar: #e6b374;
+  --pessoa-rosa: #da93aa;
+  --pessoa-turquesa: #7bbdcb;
+  --pessoa-grafite: #9caca4;
 
   --sombra: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 6px 14px -10px rgb(0 0 0 / 0.7);
   --sombra-elevada: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 12px 24px -14px rgb(0 0 0 / 0.8);

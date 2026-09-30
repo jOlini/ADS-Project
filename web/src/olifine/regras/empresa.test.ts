@@ -68,6 +68,15 @@ describe('grupoDaCategoria', () => {
     expect(grupoDaCategoria({ nome: 'Rendimentos da aplicação', tipo: 'RECEITA' })).toBe('FINANCEIRO');
   });
 
+  it('o dinheiro dos sócios fica fora do DRE, pela função ou pelo nome', () => {
+    expect(grupoDaCategoria({ nome: 'Capital', tipo: 'RECEITA', funcao: 'APORTE' })).toBe('FORA');
+    expect(grupoDaCategoria({ nome: 'Retirada', tipo: 'DESPESA', funcao: 'DISTRIBUICAO' })).toBe('FORA');
+    expect(grupoDaCategoria({ nome: 'Aportes dos sócios', tipo: 'RECEITA' })).toBe('FORA');
+    expect(grupoDaCategoria({ nome: 'Distribuição de lucros', tipo: 'DESPESA' })).toBe('FORA');
+    expect(grupoDaCategoria({ nome: 'Guias', tipo: 'DESPESA', funcao: 'IMPOSTOS' })).toBe('DEDUCAO');
+    expect(grupoDaCategoria({ nome: 'Pró-labore', tipo: 'DESPESA', funcao: 'PRO_LABORE' })).toBe('DESPESA_OPERACIONAL');
+  });
+
   it('receita com nome de imposto continua receita; sem categoria, vale o sinal', () => {
     expect(grupoDaCategoria({ nome: 'Devolução de impostos', tipo: 'RECEITA' })).toBe('RECEITA');
     expect(grupoDaCategoria(undefined, 500)).toBe('RECEITA');
@@ -166,6 +175,30 @@ describe('fluxoDeCaixa', () => {
     expect(setembro).toMatchObject({ aplicado: 500_000, resgatado: 200_000, investido: 300_000 });
     expect(setembro?.geracao).toBe(1_140_000);
     expect(setembro?.variacaoDoCaixa).toBe(840_000);
+  });
+
+  it('põe aporte e distribuição de lucros nos sócios, fora da operação', () => {
+    const categorias = [
+      ...CATEGORIAS,
+      { id: 'aportes', nome: 'Aportes dos sócios', tipo: 'RECEITA', funcao: 'APORTE' },
+      { id: 'lucros', nome: 'Distribuição de lucros', tipo: 'DESPESA', funcao: 'DISTRIBUICAO' },
+    ];
+    const [mes] = fluxoDeCaixa(
+      [
+        movimento('RECEITA', '2026-09-02', 500_000, 'aportes'),
+        movimento('DESPESA', '2026-09-20', 120_000, 'lucros'),
+        movimento('RECEITA', '2026-09-05', 300_000, 'vendas'),
+      ],
+      CONTAS,
+      { meses: ['2026-09'], hoje: '2026-09-29', categorias },
+    );
+    expect(mes).toMatchObject({ entradas: 300_000, saidas: 0, geracao: 300_000, socios: 380_000, variacaoDoCaixa: 680_000 });
+    const dre = montarDre(
+      [movimento('RECEITA', '2026-09-02', 500_000, 'aportes'), movimento('RECEITA', '2026-09-05', 300_000, 'vendas')],
+      categorias,
+      { de: '2026-09-01', ate: '2026-09-30' },
+    );
+    expect([dre.receitaBruta, dre.lancamentos]).toEqual([300_000, 1]);
   });
 
   it('devolve todos os meses pedidos, mesmo sem movimento', () => {

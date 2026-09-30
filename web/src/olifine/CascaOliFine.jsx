@@ -1,11 +1,14 @@
-import { Fragment, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCarga } from '../componentes/useCarga';
 import { formatarBRL } from '../regras/dinheiro';
 import { faturasAVencer } from '../regras/cartoes';
+import { hojeIso } from '../regras/datas';
 import { ehEmpresa, nomeDoEspaco } from '../regras/espacos';
+import { familiaAtiva } from '../regras/familia';
 import { guardarLateralRecolhida, lerLateralRecolhida } from '../servicos/lateral';
-import { apiConfigurada, listarCartoes } from '../servicos/livroCaixa';
+import { apiConfigurada, EVENTO_DOS_TRIBUTOS, listarCartoes, listarTributos } from '../servicos/livroCaixa';
+import { alertasDosTributos, textoDaCompetencia } from './regras/impostos';
 import Flutuante from './componentes/Flutuante';
 import AlternadorDeTema from '../componentes/AlternadorDeTema';
 import Icone from '../componentes/Icone';
@@ -22,16 +25,23 @@ const DA_API = [
   { para: '/categorias', icone: 'categorias', rotulo: 'Categorias', versao: '0.2' },
 ];
 
-// Visões do espaço de empresa, logo abaixo da Visão geral, só com ele ativo.
-// Fornecedores e centros de custo aparecem marcados, ainda sem tela.
+// Gestão da empresa, logo abaixo da Visão geral, só no espaço empresarial.
 const DA_EMPRESA = [
-  { grupo: 'Empresa' },
+  { grupo: 'Gestão' },
   { para: '/empresa/fluxo', icone: 'transferencia', rotulo: 'Fluxo de caixa', versao: '0.3' },
   { para: '/empresa/dre', icone: 'documento', rotulo: 'DRE', versao: '0.3' },
-  { para: null, icone: 'pessoas', rotulo: 'Fornecedores e centros', versao: 'em breve' },
+  { para: '/empresa/custos', icone: 'rosca', rotulo: 'Custos', versao: '0.3' },
+  { para: '/empresa/sociedade', icone: 'pessoas', rotulo: 'Sociedade & aportes', versao: '0.3' },
+  { para: '/empresa/impostos', icone: 'guia', rotulo: 'Impostos', versao: '0.3' },
+  { para: '/empresa/pessoal', icone: 'cracha', rotulo: 'Pessoal (RH)', versao: '0.3' },
 ];
 
-function itensDoMenu(empresa) {
+// A família, no fim do menu do espaço pessoal, só com o Modo Família ligado.
+const DA_FAMILIA = [{ grupo: 'Família' }, { para: '/familia', icone: 'casa', rotulo: 'Pessoas da casa' }];
+
+// O menu acompanha o espaço: no empresarial, a gestão da empresa antes do
+// livro-caixa; no pessoal, o livro-caixa e, com o Modo Família, a família.
+function itensDoMenu(empresa, familia) {
   const semApi = (item) => (apiConfigurada || !item.para ? item : { ...item, para: null });
   return [
     { para: '/principal', icone: 'resumo', rotulo: 'Visão geral' },
@@ -39,11 +49,12 @@ function itensDoMenu(empresa) {
     ...DA_API.map(semApi),
     { para: '/metas', icone: 'broto', rotulo: 'Metas' },
     semApi({ para: '/relatorios', icone: 'relatorios', rotulo: 'Relatórios', versao: '0.3' }),
+    ...(familia ? DA_FAMILIA : []),
   ];
 }
 
-// Título de um grupo do menu (só no espaço de empresa). Com a barra
-// recolhida, vira um traço entre os ícones.
+// Título de um grupo do menu. Com a barra recolhida, vira um traço entre os
+// ícones.
 function GrupoDoMenu({ item }) {
   return (
     <p className="of-menu-grupo">
@@ -86,7 +97,7 @@ function ItemDoMenu({ item, aoEscolher, dica }) {
 // logo), um pouco maiores para o alvo ficar bom, com o nome de cada aba num
 // balão ao passar o mouse. A escolha fica no navegador (servicos/lateral.ts).
 export default function CascaOliFine({ contexto }) {
-  const { usuario, pessoa, espaco, espacos, trocarEspaco, recarregarEspacos, sairDaConta } = contexto;
+  const { usuario, pessoa, espaco, espacos, trocarEspaco, trocarContexto, recarregarEspacos, sairDaConta } = contexto;
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [busca, setBusca] = useState('');
@@ -125,12 +136,34 @@ export default function CascaOliFine({ contexto }) {
     ? `${dados.nome[0] ?? ''}${dados.sobrenome[0] ?? ''}`.toUpperCase()
     : (usuario.email ?? '').slice(0, 2).toUpperCase();
 
-  // Avisos: faturas de cartão fechadas e não pagas, com o vencimento.
+  // Avisos: faturas de cartão fechadas e não pagas, com o vencimento, e, na
+  // empresa, as guias de imposto atrasadas ou que vencem em até 7 dias (lidas
+  // de novo a cada tela e quando uma guia muda, para a paga sair do sino).
   const espacoId = espaco.dados?.id;
+  const empresa = ehEmpresa(espaco.dados);
   const buscarCartoes = useMemo(() => (apiConfigurada && espacoId ? () => listarCartoes(espacoId) : null), [espacoId]);
   const cartoes = useCarga(buscarCartoes);
+  const buscarTributos = useMemo(
+    () => (apiConfigurada && espacoId && empresa ? () => listarTributos(espacoId).catch(() => []) : null),
+    [espacoId, empresa],
+  );
+  const tributos = useCarga(buscarTributos);
+  const { recarregar: lerTributosDeNovo } = tributos;
+  const rotaAnterior = useRef(pathname);
+  useEffect(() => {
+    if (rotaAnterior.current !== pathname) {
+      rotaAnterior.current = pathname;
+      lerTributosDeNovo();
+    }
+  }, [pathname, lerTributosDeNovo]);
+  useEffect(() => {
+    globalThis.addEventListener(EVENTO_DOS_TRIBUTOS, lerTributosDeNovo);
+    return () => globalThis.removeEventListener(EVENTO_DOS_TRIBUTOS, lerTributosDeNovo);
+  }, [lerTributosDeNovo]);
   const avisos = cartoes.dados ? faturasAVencer(cartoes.dados) : [];
-  const itens = itensDoMenu(ehEmpresa(espaco.dados));
+  const guias = empresa && tributos.dados ? alertasDosTributos(tributos.dados, hojeIso()) : [];
+  const quantosAvisos = avisos.length + guias.length;
+  const itens = itensDoMenu(empresa, familiaAtiva(espaco.dados));
   const nomeDoAtivo = nomeDoEspaco(espaco.dados);
 
   function buscar(evento) {
@@ -228,8 +261,8 @@ export default function CascaOliFine({ contexto }) {
             <SeletorDeEspaco
               espacos={espacos}
               ativo={espaco.dados}
-              sobrenome={dados?.sobrenome}
               trocarEspaco={trocarEspaco}
+              trocarContexto={trocarContexto}
               recarregarEspacos={recarregarEspacos}
             />
           )}
@@ -250,21 +283,38 @@ export default function CascaOliFine({ contexto }) {
           <div className="of-topo-acoes">
             <AlternadorDeTema />
             <Flutuante
-              rotulo={avisos.length > 0 ? `Avisos: ${avisos.length} fatura(s) a pagar` : 'Avisos'}
+              rotulo={quantosAvisos > 0 ? `Avisos: ${quantosAvisos} conta(s) a pagar` : 'Avisos'}
               className="botao-icone of-sino"
               classeDoPainel="of-avisos"
               botao={
                 <>
                   <Icone nome="sino" />
-                  {avisos.length > 0 && <span className="of-sino-contador">{avisos.length}</span>}
+                  {quantosAvisos > 0 && <span className="of-sino-contador">{quantosAvisos}</span>}
                 </>
               }
             >
               {(fechar) => (
                 <>
                   <p className="of-flutuante-titulo">Avisos</p>
-                  {avisos.length > 0 ? (
+                  {quantosAvisos > 0 ? (
                     <ul>
+                      {guias.map((guia) => (
+                        <li key={`${guia.tributo.id}-${guia.competencia}`}>
+                          <Link to="/empresa/impostos" onClick={fechar}>
+                            <span className={`of-aviso-marca${guia.situacao === 'ATRASADA' ? ' vencida' : ''}`} aria-hidden="true">
+                              <Icone nome="guia" tamanho={16} />
+                            </span>
+                            <span>
+                              <b>
+                                {guia.tributo.nome} de {textoDaCompetencia(guia.competencia, guia.tributo.periodicidade)}
+                              </b>
+                              <small>
+                                {guia.situacao === 'ATRASADA' ? 'Venceu em' : 'Vence em'} {dataCurta(guia.vencimento)}
+                              </small>
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
                       {avisos.map((aviso) => (
                         <li key={aviso.id}>
                           <Link to={`/contas/cartoes/${aviso.id}`} onClick={fechar}>
@@ -283,7 +333,9 @@ export default function CascaOliFine({ contexto }) {
                     </ul>
                   ) : (
                     <p className="of-flutuante-vazio">
-                      Nenhuma fatura a pagar. Faturas de cartão fechadas aparecem aqui com o vencimento.
+                      {empresa
+                        ? 'Nada a pagar agora. Faturas de cartão fechadas e guias de imposto perto do vencimento aparecem aqui.'
+                        : 'Nenhuma fatura a pagar. Faturas de cartão fechadas aparecem aqui com o vencimento.'}
                     </p>
                   )}
                 </>
@@ -301,10 +353,11 @@ export default function CascaOliFine({ contexto }) {
               menu continua e abrir outra rota desenha a tela nova. */}
           <LimiteDeErro chave={pathname}>
             {/* Outro espaço, tela nova: nada do livro anterior (filtros,
-                listas, seleção) sobra no estado da página. */}
-            <Fragment key={espacoId ?? 'sem-espaco'}>
+                listas, seleção) sobra no estado da página. A tela nova
+                chega por opacidade (movimento.css), sem piscar. */}
+            <div key={espacoId ?? 'sem-espaco'} className="of-troca-de-espaco">
               <Outlet context={contexto} />
-            </Fragment>
+            </div>
           </LimiteDeErro>
         </main>
       </div>

@@ -1,13 +1,23 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ConfirmacaoJs from '../../componentes/Confirmacao';
-import FormularioDeEspaco from '../../componentes/FormularioDeEspaco';
+import FormularioDeEmpresa from '../../componentes/FormularioDeEmpresa';
 import Icone from '../../componentes/Icone';
 import ModalJs from '../../componentes/Modal';
 import { semTipos } from '../../componentes/semTipos';
 import { useToast } from '../../componentes/toast/useToast';
-import { nomeCurto, nomeDoEspaco, podeGerenciar, secaoDaRota, TIPOS_DE_ESPACO, type Espaco } from '../../regras/espacos';
+import {
+  empresasDe,
+  nomeDoEspaco,
+  podeGerenciar,
+  REGIMES,
+  secaoDaRota,
+  TIPOS_DE_ESPACO,
+  type Espaco,
+  type TipoDeEspaco,
+} from '../../regras/espacos';
 import { excluirEspaco } from '../../servicos/livroCaixa';
+import ChaveDaFamilia from './ChaveDaFamilia';
 import FlutuanteJs from './Flutuante';
 
 const Confirmacao = semTipos(ConfirmacaoJs);
@@ -17,12 +27,16 @@ const Modal = semTipos(ModalJs);
 interface Props {
   espacos: Espaco[];
   ativo: Espaco | null;
-  sobrenome?: string;
   trocarEspaco: (id: string) => void;
+  // Pessoal ou Empresarial: abre o pessoal ou a última empresa usada. false
+  // quando ainda não há empresa.
+  trocarContexto: (tipo: TipoDeEspaco) => boolean;
   recarregarEspacos: (abrir?: string | null) => Promise<void>;
 }
 
-type Janela = { tipo: 'criar' } | { tipo: 'renomear'; espaco: Espaco } | { tipo: 'excluir'; espaco: Espaco } | null;
+type Janela = { tipo: 'criar' } | { tipo: 'editar'; espaco: Espaco } | { tipo: 'excluir'; espaco: Espaco } | null;
+
+const CONTEXTOS: readonly TipoDeEspaco[] = ['PF', 'PJ'];
 
 function MarcaDoEspaco({ espaco, tamanho = 16 }: { espaco: Pick<Espaco, 'tipo'>; tamanho?: number }) {
   return (
@@ -32,152 +46,199 @@ function MarcaDoEspaco({ espaco, tamanho = 16 }: { espaco: Pick<Espaco, 'tipo'>;
   );
 }
 
-// Seletor de espaço no topo da área logada: mostra em qual livro-caixa a
-// pessoa está (pessoal, família ou empresa, cada um com a sua marca) e troca
-// de um para o outro. Também cria espaço novo e, no espaço criado pela
-// pessoa, renomeia e exclui (só o vazio: a API recusa com o motivo).
-export default function SeletorDeEspaco({ espacos, ativo, sobrenome, trocarEspaco, recarregarEspacos }: Props) {
+const rotuloDoRegime = (espaco: Espaco) =>
+  REGIMES.find((opcao) => opcao.valor === espaco.regime)?.rotulo ?? 'Regime não informado';
+
+// Seletor do topo da área logada. São dois espaços, e só dois: Pessoal e
+// Empresarial, lado a lado como abas (a troca é instantânea: o livro-caixa já
+// está na memória e a tela só remonta). No Pessoal, ao lado, a chave do Modo
+// Família. No Empresarial, o seletor da empresa: cada empresa é um
+// livro-caixa próprio, com cadastro (nome, CNPJ, regime), edição e exclusão
+// (só a sem movimento: a API recusa com o motivo). Sem empresa ainda,
+// "Empresarial" abre o cadastro da primeira.
+export default function SeletorDeEspaco({ espacos, ativo, trocarEspaco, trocarContexto, recarregarEspacos }: Props) {
   const toast = useToast();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [janela, setJanela] = useState<Janela>(null);
   const [ocupado, setOcupado] = useState(false);
-  const nome = nomeDoEspaco(ativo);
+  const empresas = empresasDe(espacos);
+  const contexto: TipoDeEspaco = ativo?.tipo ?? 'PF';
 
   // Troca o livro e volta ao começo da seção: o cartão ou a busca abertos
   // eram do espaço anterior.
-  function abrir(espaco: Espaco) {
-    trocarEspaco(espaco.id);
+  function voltarAoComecoDaSecao() {
     const secao = secaoDaRota(pathname);
     if (secao !== pathname) {
       navigate(secao);
     }
   }
 
-  async function aoSalvar(espaco: Espaco) {
-    const criado = janela?.tipo === 'criar';
+  function escolherContexto(tipo: TipoDeEspaco) {
+    if (tipo === contexto) {
+      return;
+    }
+    if (trocarContexto(tipo)) {
+      voltarAoComecoDaSecao();
+    } else {
+      setJanela({ tipo: 'criar' });
+    }
+  }
+
+  function abrirEmpresa(empresa: Espaco) {
+    trocarEspaco(empresa.id);
+    voltarAoComecoDaSecao();
+  }
+
+  async function aoSalvar(empresa: Espaco) {
+    const criada = janela?.tipo === 'criar';
     setJanela(null);
     setOcupado(false);
-    await recarregarEspacos(espaco.id);
-    if (criado) {
+    await recarregarEspacos(empresa.id);
+    if (criada) {
       navigate('/principal');
     }
   }
 
-  async function confirmarExclusao(espaco: Espaco) {
+  async function confirmarExclusao(empresa: Espaco) {
     setOcupado(true);
     try {
-      await excluirEspaco(espaco.id);
-      toast.sucesso('Você voltou ao espaço pessoal.', { titulo: `Espaço "${espaco.nome}" excluído` });
+      await excluirEspaco(empresa.id);
+      const restantes = empresas.filter((outra) => outra.id !== empresa.id);
+      toast.sucesso(restantes.length > 0 ? `Você está em "${restantes[0]?.nome}".` : 'Você voltou ao espaço pessoal.', {
+        titulo: `Empresa "${empresa.nome}" excluída`,
+      });
       setJanela(null);
-      await recarregarEspacos(null);
+      await recarregarEspacos(restantes[0]?.id ?? null);
       navigate('/principal');
     } catch (falha) {
-      toast.erro((falha as Error).message, { titulo: 'Espaço não excluído' });
+      toast.erro((falha as Error).message, { titulo: 'Empresa não excluída' });
     } finally {
       setOcupado(false);
     }
   }
 
   return (
-    <>
-      <Flutuante
-        rotulo={`Espaço: ${nome}. Trocar de espaço`}
-        className="of-espaco-botao"
-        classeDoPainel="of-espacos"
-        alinhar="inicio"
-        botao={
-          <>
-            {ativo && <MarcaDoEspaco espaco={ativo} />}
-            <span className="of-espaco-nome">{nomeCurto(ativo)}</span>
-            <Icone nome="seta" tamanho={14} />
-          </>
-        }
-      >
-        {(fechar: () => void) => (
-          <>
-            <p className="of-flutuante-titulo">Espaços</p>
-            <ul>
-              {espacos.map((espaco) => {
-                const atual = espaco.id === ativo?.id;
-                return (
-                  <li key={espaco.id}>
+    <div className="of-espaco">
+      <div className="abas of-alternador-de-espaco" role="group" aria-label="Espaço">
+        {CONTEXTOS.map((tipo) => (
+          <button
+            key={tipo}
+            type="button"
+            aria-pressed={contexto === tipo}
+            title={tipo === 'PF' ? 'Espaço pessoal' : 'Espaço empresarial'}
+            onClick={() => escolherContexto(tipo)}
+          >
+            <Icone nome={TIPOS_DE_ESPACO[tipo].icone} tamanho={16} />
+            <span className="of-alternador-rotulo">{TIPOS_DE_ESPACO[tipo].rotulo}</span>
+          </button>
+        ))}
+      </div>
+
+      {ativo?.tipo === 'PF' && <ChaveDaFamilia espaco={ativo} recarregarEspacos={recarregarEspacos} />}
+
+      {ativo?.tipo === 'PJ' && (
+        <Flutuante
+          rotulo={`Empresa: ${ativo.nome}. Trocar de empresa`}
+          className="of-espaco-botao"
+          classeDoPainel="of-espacos"
+          alinhar="inicio"
+          botao={
+            <>
+              <MarcaDoEspaco espaco={ativo} />
+              <span className="of-espaco-nome">{nomeDoEspaco(ativo)}</span>
+              <Icone nome="seta" tamanho={14} />
+            </>
+          }
+        >
+          {(fechar: () => void) => (
+            <>
+              <p className="of-flutuante-titulo">Empresas</p>
+              <ul>
+                {empresas.map((empresa) => {
+                  const atual = empresa.id === ativo.id;
+                  return (
+                    <li key={empresa.id}>
+                      <button
+                        type="button"
+                        className="of-espaco-opcao"
+                        aria-current={atual ? 'true' : undefined}
+                        onClick={() => {
+                          fechar();
+                          if (!atual) {
+                            abrirEmpresa(empresa);
+                          }
+                        }}
+                      >
+                        <MarcaDoEspaco espaco={empresa} tamanho={18} />
+                        <span>
+                          <b>{empresa.nome}</b>
+                          <small>{rotuloDoRegime(empresa)}</small>
+                        </span>
+                        {atual && <Icone nome="certo" tamanho={16} />}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="of-espacos-acoes">
+                <button
+                  type="button"
+                  className="of-conta-acao"
+                  onClick={() => {
+                    fechar();
+                    setJanela({ tipo: 'criar' });
+                  }}
+                >
+                  <Icone nome="mais" />
+                  Nova empresa
+                </button>
+                {podeGerenciar(ativo) && (
+                  <>
                     <button
                       type="button"
-                      className="of-espaco-opcao"
-                      aria-current={atual ? 'true' : undefined}
+                      className="of-conta-acao"
                       onClick={() => {
                         fechar();
-                        if (!atual) {
-                          abrir(espaco);
-                        }
+                        setJanela({ tipo: 'editar', espaco: ativo });
                       }}
                     >
-                      <MarcaDoEspaco espaco={espaco} tamanho={18} />
-                      <span>
-                        <b>{nomeDoEspaco(espaco)}</b>
-                        <small>{TIPOS_DE_ESPACO[espaco.tipo].rotulo}</small>
-                      </span>
-                      {atual && <Icone nome="certo" tamanho={16} />}
+                      <Icone nome="editar" />
+                      Editar esta empresa
                     </button>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="of-espacos-acoes">
-              <button
-                type="button"
-                className="of-conta-acao"
-                onClick={() => {
-                  fechar();
-                  setJanela({ tipo: 'criar' });
-                }}
-              >
-                <Icone nome="mais" />
-                Novo espaço
-              </button>
-              {ativo && podeGerenciar(ativo) && (
-                <>
-                  <button
-                    type="button"
-                    className="of-conta-acao"
-                    onClick={() => {
-                      fechar();
-                      setJanela({ tipo: 'renomear', espaco: ativo });
-                    }}
-                  >
-                    <Icone nome="editar" />
-                    Renomear este espaço
-                  </button>
-                  <button
-                    type="button"
-                    className="of-conta-acao of-espaco-excluir"
-                    onClick={() => {
-                      fechar();
-                      setJanela({ tipo: 'excluir', espaco: ativo });
-                    }}
-                  >
-                    <Icone nome="excluir" />
-                    Excluir este espaço
-                  </button>
-                </>
-              )}
-            </div>
-          </>
-        )}
-      </Flutuante>
+                    <button
+                      type="button"
+                      className="of-conta-acao of-espaco-excluir"
+                      onClick={() => {
+                        fechar();
+                        setJanela({ tipo: 'excluir', espaco: ativo });
+                      }}
+                    >
+                      <Icone nome="excluir" />
+                      Excluir esta empresa
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </Flutuante>
+      )}
 
       <Modal
-        aberta={janela?.tipo === 'criar' || janela?.tipo === 'renomear'}
-        titulo={janela?.tipo === 'renomear' ? 'Renomear espaço' : 'Novo espaço'}
-        descricao={janela?.tipo === 'renomear' ? janela.espaco.nome : 'Família ou empresa, com o próprio livro-caixa.'}
+        aberta={janela?.tipo === 'criar' || janela?.tipo === 'editar'}
+        titulo={janela?.tipo === 'editar' ? 'Editar empresa' : empresas.length === 0 ? 'Sua primeira empresa' : 'Nova empresa'}
+        descricao={
+          janela?.tipo === 'editar'
+            ? janela.espaco.nome
+            : 'O espaço empresarial reúne as suas empresas, cada uma com o próprio caixa.'
+        }
         ocupado={ocupado}
         aoFechar={() => setJanela(null)}
       >
-        {(janela?.tipo === 'criar' || janela?.tipo === 'renomear') && (
-          <FormularioDeEspaco
-            emEdicao={janela.tipo === 'renomear' ? janela.espaco : null}
-            sobrenome={sobrenome}
+        {(janela?.tipo === 'criar' || janela?.tipo === 'editar') && (
+          <FormularioDeEmpresa
+            emEdicao={janela.tipo === 'editar' ? janela.espaco : null}
             aoSalvar={aoSalvar}
             aoCancelar={() => setJanela(null)}
             aoMudarOcupado={setOcupado}
@@ -188,15 +249,15 @@ export default function SeletorDeEspaco({ espacos, ativo, sobrenome, trocarEspac
       <Confirmacao
         aberta={janela?.tipo === 'excluir'}
         titulo={janela?.tipo === 'excluir' ? `Excluir "${janela.espaco.nome}"?` : ''}
-        rotuloDeConfirmar="Excluir espaço"
+        rotuloDeConfirmar="Excluir empresa"
         perigo
         ocupado={ocupado}
         aoConfirmar={() => janela?.tipo === 'excluir' && confirmarExclusao(janela.espaco)}
         aoCancelar={() => !ocupado && setJanela(null)}
       >
-        Só dá para excluir um espaço vazio, sem contas nem lançamentos. As categorias dele saem junto, e o app volta ao
-        espaço pessoal.
+        Só dá para excluir uma empresa sem movimento, sem contas nem lançamentos. As categorias, os sócios, os tributos e a
+        folha dela saem junto.
       </Confirmacao>
-    </>
+    </div>
   );
 }

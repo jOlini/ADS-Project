@@ -3,19 +3,29 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { useToast } from './toast/useToast';
 import { firebaseConfigurado } from '../firebase';
 import { mensagemDeErro } from '../regras/erros';
-import { escolherEspacoAtivo } from '../regras/espacos';
+import { escolherEspacoAtivo, espacoDoContexto } from '../regras/espacos';
 import { emailConfirmado } from '../regras/sessao';
 import { buscarDadosPessoais, conferirConfirmacao, observarSessao, sair } from '../servicos/contas';
-import { guardarEspacoAtivo, lerEspacoAtivo } from '../servicos/espacoAtivo';
+import { guardarEspacoAtivo, guardarUltimaEmpresa, lerEspacoAtivo, lerUltimaEmpresa } from '../servicos/espacoAtivo';
 import { apiConfigurada, listarEspacos } from '../servicos/livroCaixa';
 
 const CARREGANDO = { carregando: true, dados: null, erro: '' };
 
+// O espaço aberto fica guardado para a próxima visita; a empresa, também como
+// a última usada, para a volta de Pessoal a Empresarial.
+function guardar(uid, espaco) {
+  guardarEspacoAtivo(uid, espaco.id);
+  if (espaco.tipo === 'PJ') {
+    guardarUltimaEmpresa(uid, espaco.id);
+  }
+}
+
 // Moldura de todas as rotas, sem nada visível. A sessão, os dados pessoais
 // (Firestore) e os espaços do livro-caixa (API) são buscados aqui uma vez e
 // chegam às páginas pelo contexto da rota: "espaco" é o espaço ativo (o
-// pessoal, a família ou a empresa escolhidos no topo), "espacos" a lista, e
-// trocarEspaco e recarregarEspacos mudam os dois. A barra lateral não mora aqui: fica
+// pessoal ou uma empresa do espaço empresarial, escolhidos no topo), "espacos"
+// a lista, e trocarEspaco, trocarContexto e recarregarEspacos mudam os dois. A
+// barra lateral não mora aqui: fica
 // na AreaDoCliente, que só a monta com a sessão confirmada, e o login e o
 // cadastro ocupam a tela inteira (cada página desenha a sua vitrine).
 export default function Layout() {
@@ -37,7 +47,7 @@ export default function Layout() {
     setEspacos({ carregando: false, dados: lista, erro: '' });
     setAtivoId(ativo?.id ?? null);
     if (ativo) {
-      guardarEspacoAtivo(uid, ativo.id);
+      guardar(uid, ativo);
     }
   }, []);
 
@@ -107,7 +117,17 @@ export default function Layout() {
 
   function trocarEspaco(id) {
     setAtivoId(id);
-    guardarEspacoAtivo(usuario.uid, id);
+    guardar(usuario.uid, espacos.dados?.find((item) => item.id === id) ?? { id });
+  }
+
+  // Pessoal ou Empresarial (o seletor do topo): abre o espaço pessoal ou a
+  // última empresa usada. Sem empresa ainda, devolve false e nada muda.
+  function trocarContexto(tipo) {
+    const alvo = espacoDoContexto(espacos.dados ?? [], tipo, lerUltimaEmpresa(usuario.uid));
+    if (alvo) {
+      trocarEspaco(alvo.id);
+    }
+    return Boolean(alvo);
   }
 
   // Depois de criar, renomear ou excluir: busca a lista de novo e abre o
@@ -124,6 +144,7 @@ export default function Layout() {
     espaco,
     espacos: espacos.dados ?? [],
     trocarEspaco,
+    trocarContexto,
     recarregarEspacos,
     sairDaConta,
     conferirEmail,
