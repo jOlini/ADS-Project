@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCarga } from '../componentes/useCarga';
 import { formatarBRL } from '../regras/dinheiro';
@@ -22,15 +22,15 @@ const DA_API = [
   { para: '/categorias', icone: 'categorias', rotulo: 'Categorias', versao: '0.2' },
 ];
 
-// Visões do espaço de empresa, logo abaixo da Visão geral, só com ele ativo.
-// Fornecedores e centros de custo aparecem marcados, ainda sem tela.
+// Gestão da empresa, logo abaixo da Visão geral, só no espaço empresarial.
 const DA_EMPRESA = [
-  { grupo: 'Empresa' },
+  { grupo: 'Gestão' },
   { para: '/empresa/fluxo', icone: 'transferencia', rotulo: 'Fluxo de caixa', versao: '0.3' },
   { para: '/empresa/dre', icone: 'documento', rotulo: 'DRE', versao: '0.3' },
-  { para: null, icone: 'pessoas', rotulo: 'Fornecedores e centros', versao: 'em breve' },
 ];
 
+// O menu acompanha o espaço: no empresarial, a gestão da empresa antes do
+// livro-caixa; no pessoal, só o livro-caixa.
 function itensDoMenu(empresa) {
   const semApi = (item) => (apiConfigurada || !item.para ? item : { ...item, para: null });
   return [
@@ -42,8 +42,8 @@ function itensDoMenu(empresa) {
   ];
 }
 
-// Título de um grupo do menu (só no espaço de empresa). Com a barra
-// recolhida, vira um traço entre os ícones.
+// Título de um grupo do menu. Com a barra recolhida, vira um traço entre os
+// ícones.
 function GrupoDoMenu({ item }) {
   return (
     <p className="of-menu-grupo">
@@ -86,7 +86,7 @@ function ItemDoMenu({ item, aoEscolher, dica }) {
 // logo), um pouco maiores para o alvo ficar bom, com o nome de cada aba num
 // balão ao passar o mouse. A escolha fica no navegador (servicos/lateral.ts).
 export default function CascaOliFine({ contexto }) {
-  const { usuario, pessoa, espaco, espacos, trocarEspaco, recarregarEspacos, sairDaConta } = contexto;
+  const { usuario, pessoa, espaco, espacos, trocarEspaco, trocarContexto, recarregarEspacos, sairDaConta } = contexto;
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [busca, setBusca] = useState('');
@@ -228,8 +228,8 @@ export default function CascaOliFine({ contexto }) {
             <SeletorDeEspaco
               espacos={espacos}
               ativo={espaco.dados}
-              sobrenome={dados?.sobrenome}
               trocarEspaco={trocarEspaco}
+              trocarContexto={trocarContexto}
               recarregarEspacos={recarregarEspacos}
             />
           )}
@@ -301,10 +301,11 @@ export default function CascaOliFine({ contexto }) {
               menu continua e abrir outra rota desenha a tela nova. */}
           <LimiteDeErro chave={pathname}>
             {/* Outro espaço, tela nova: nada do livro anterior (filtros,
-                listas, seleção) sobra no estado da página. */}
-            <Fragment key={espacoId ?? 'sem-espaco'}>
+                listas, seleção) sobra no estado da página. A tela nova
+                chega por opacidade (movimento.css), sem piscar. */}
+            <div key={espacoId ?? 'sem-espaco'} className="of-troca-de-espaco">
               <Outlet context={contexto} />
-            </Fragment>
+            </div>
           </LimiteDeErro>
         </main>
       </div>

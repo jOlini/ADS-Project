@@ -406,9 +406,17 @@ button.item-do-menu,
 
 /* A página nova aparece por opacidade (transformar a página inteira
    deslocaria as listas e os menus presos à janela). Os cartões dos números e
-   os painéis sobem um passo, um depois do outro, com o atraso limitado. */
-.of-area > * {
+   os painéis sobem um passo, um depois do outro, com o atraso limitado. A
+   página mora dentro da moldura da troca de espaço (display: contents, sem
+   caixa própria): trocar de Pessoal para Empresarial, ou de empresa, remonta
+   a página e a chegada toca de novo. */
+.of-area > *,
+.of-troca-de-espaco > * {
   animation: surgir var(--tempo-longo) var(--curva) backwards;
+}
+
+.of-troca-de-espaco {
+  display: contents;
 }
 
 :is(.of-kpis, .of-grade, .rel-numeros, .rel-grade) > * {
@@ -481,6 +489,7 @@ button.item-do-menu,
 
   :is(.of-kpis, .of-grade, .rel-numeros, .rel-grade) > *,
   .of-area > *,
+  .of-troca-de-espaco > *,
   .carregando {
     animation-name: surgir;
   }

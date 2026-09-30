@@ -2,7 +2,14 @@
 // sem quebrar quando o navegador recusa o armazenamento.
 import { describe, expect, it } from 'vitest';
 import { chavesParaApagar } from '../regras/dadosLocais';
-import { chaveDoEspacoAtivo, guardarEspacoAtivo, lerEspacoAtivo } from './espacoAtivo';
+import {
+  chaveDaUltimaEmpresa,
+  chaveDoEspacoAtivo,
+  guardarEspacoAtivo,
+  guardarUltimaEmpresa,
+  lerEspacoAtivo,
+  lerUltimaEmpresa,
+} from './espacoAtivo';
 
 function memoria() {
   const dados = new Map<string, string>();
@@ -30,8 +37,21 @@ describe('espaço ativo no navegador', () => {
     expect(lerEspacoAtivo('uid-bruno', armazenamento)).toBeNull();
   });
 
+  it('guarda a última empresa à parte, para a volta ao Empresarial', () => {
+    const armazenamento = memoria();
+    guardarEspacoAtivo('uid-ana', 'p1', armazenamento);
+    guardarUltimaEmpresa('uid-ana', 'e1', armazenamento);
+
+    expect(lerUltimaEmpresa('uid-ana', armazenamento)).toBe('e1');
+    expect(lerEspacoAtivo('uid-ana', armazenamento)).toBe('p1');
+    expect(lerUltimaEmpresa('uid-ana', recusa)).toBeNull();
+  });
+
   it('sai no logout junto com as outras chaves do app', () => {
-    expect(chavesParaApagar([chaveDoEspacoAtivo('uid-ana')])).toEqual(['olifine:espaco:uid-ana']);
+    expect(chavesParaApagar([chaveDoEspacoAtivo('uid-ana'), chaveDaUltimaEmpresa('uid-ana')])).toEqual([
+      'olifine:espaco:uid-ana',
+      'olifine:empresa:uid-ana',
+    ]);
   });
 
   it('navegador que recusa o armazenamento não quebra a tela', () => {

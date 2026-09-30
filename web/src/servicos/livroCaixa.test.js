@@ -16,7 +16,8 @@ const {
   MENSAGEM_SEM_API,
   MENSAGEM_SESSAO_ENCERRADA,
   apiConfigurada,
-  criarEspaco,
+  atualizarEmpresa,
+  criarEmpresa,
   estornar,
   excluirEspaco,
   estruturaDoExtrato,
@@ -27,7 +28,6 @@ const {
   listarPessoas,
   relatorioCategorias,
   relatorioMensal,
-  renomearEspaco,
 } = await import('./livroCaixa');
 
 function resposta(status, corpo) {
@@ -88,27 +88,27 @@ describe('API do livro-caixa', () => {
     expect(JSON.parse(opcoes.body)).toEqual({ tipo: 'DESPESA', valor_centavos: 21437 });
   });
 
-  it('cria, renomeia e exclui espaço, com o nome limpo antes de sair', async () => {
-    fetch.mockResolvedValueOnce(resposta(201, { id: 'f1', tipo: 'FAMILIA' }));
-    fetch.mockResolvedValueOnce(resposta(200, { id: 'f1', nome: 'Casa' }));
+  it('cadastra, edita e exclui empresa, com o nome limpo antes de sair', async () => {
+    fetch.mockResolvedValueOnce(resposta(201, { id: 'e1', tipo: 'PJ' }));
+    fetch.mockResolvedValueOnce(resposta(200, { id: 'e1', nome: 'Oficina' }));
     fetch.mockResolvedValueOnce(resposta(204, null));
 
-    await criarEspaco({ tipo: 'FAMILIA', nome: ' <b>Casa</b> ' });
-    await renomearEspaco('f/1', 'Casa');
-    const excluido = await excluirEspaco('f1');
+    await criarEmpresa({ nome: ' <b>Oficina</b> ', cnpj: null, regime: 'MEI' });
+    await atualizarEmpresa('e/1', { nome: 'Oficina', regime: 'SIMPLES' });
+    const excluido = await excluirEspaco('e1');
 
-    const [[urlCriar, criar], [urlRenomear, renomear], [urlExcluir, excluir]] = fetch.mock.calls;
+    const [[urlCriar, criar], [urlEditar, editar], [urlExcluir, excluir]] = fetch.mock.calls;
     expect([urlCriar, criar.method, JSON.parse(criar.body)]).toEqual([
       'http://api.teste/espacos',
       'POST',
-      { tipo: 'FAMILIA', nome: 'bCasa/b' },
+      { tipo: 'PJ', nome: 'bOficina/b', cnpj: null, regime: 'MEI' },
     ]);
-    expect([urlRenomear, renomear.method, JSON.parse(renomear.body)]).toEqual([
-      'http://api.teste/espacos/f%2F1',
+    expect([urlEditar, editar.method, JSON.parse(editar.body)]).toEqual([
+      'http://api.teste/espacos/e%2F1',
       'PATCH',
-      { nome: 'Casa' },
+      { nome: 'Oficina', regime: 'SIMPLES' },
     ]);
-    expect([urlExcluir, excluir.method, excluido]).toEqual(['http://api.teste/espacos/f1', 'DELETE', null]);
+    expect([urlExcluir, excluir.method, excluido]).toEqual(['http://api.teste/espacos/e1', 'DELETE', null]);
   });
 
   it('monta o filtro de período e codifica os ids na URL', async () => {

@@ -82,16 +82,18 @@ export function listarEspacos() {
   return chamar('/espacos');
 }
 
-// Espaço de família ou de empresa: { tipo: 'FAMILIA' | 'PJ', nome }.
-export function criarEspaco(espaco) {
-  return chamar('/espacos', { metodo: 'POST', corpo: espaco });
+// Empresa nova no espaço empresarial: { nome, cnpj (ou null), regime }. Cada
+// empresa é um livro-caixa próprio (tipo PJ na API).
+export function criarEmpresa(empresa) {
+  return chamar('/espacos', { metodo: 'POST', corpo: { tipo: 'PJ', ...empresa } });
 }
 
-export function renomearEspaco(espacoId, nome) {
-  return chamar(doEspaco(espacoId), { metodo: 'PATCH', corpo: { nome } });
+// Nome, CNPJ e regime da empresa: só os campos enviados mudam.
+export function atualizarEmpresa(espacoId, empresa) {
+  return chamar(doEspaco(espacoId), { metodo: 'PATCH', corpo: empresa });
 }
 
-// Só o espaço vazio sai (a API responde 409 com o motivo).
+// Só a empresa sem movimento sai (a API responde 409 com o motivo).
 export function excluirEspaco(espacoId) {
   return chamar(doEspaco(espacoId), { metodo: 'DELETE' });
 }

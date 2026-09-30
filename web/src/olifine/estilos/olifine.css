@@ -296,6 +296,8 @@ button.of-lateral-sair {
   flex: 1;
   gap: var(--espaco-4);
   align-items: center;
+  /* Encolhe antes de empurrar os botões para fora do topo. */
+  min-width: 0;
   max-width: 420px;
   height: 42px;
   padding: 0 var(--espaco-7);
@@ -559,8 +561,42 @@ button.of-conta-acao:hover:not(:disabled) {
 
 /* ----------------------------------------------------- Seletor de espaço */
 
-/* No topo, à esquerda da busca: a marca do tipo e o nome do espaço ativo.
-   Mesma altura e moldura da busca, para as duas lerem como uma faixa só. */
+/* No topo, à esquerda da busca: Pessoal e Empresarial como abas (a de agora
+   na menta, "aqui") e, no empresarial, o seletor da empresa. Mesma altura da
+   busca, para tudo ler como uma faixa só. */
+.of-espaco {
+  display: flex;
+  flex: none;
+  gap: var(--espaco-4);
+  align-items: center;
+  min-width: 0;
+}
+
+.abas.of-alternador-de-espaco {
+  flex: none;
+  height: 42px;
+  padding: 3px;
+  border-radius: var(--raio);
+  background: var(--superficie);
+  box-shadow: inset 0 0 0 var(--espessura) var(--linha);
+}
+
+.of-alternador-de-espaco button {
+  gap: var(--espaco-3);
+  height: 100%;
+  min-height: 0;
+  padding: 0 var(--espaco-6);
+  border-radius: var(--raio-pequeno);
+  font-size: var(--fonte-rotulo);
+}
+
+.of-alternador-de-espaco button[aria-pressed='true'],
+.of-alternador-de-espaco button[aria-pressed='true']:hover:not(:disabled) {
+  color: var(--of-sobre-menta);
+  background: var(--of-menta);
+  box-shadow: inset 0 0 0 1.5px var(--marca);
+}
+
 button.of-espaco-botao {
   flex: none;
   gap: var(--espaco-4);
@@ -693,9 +729,13 @@ button.of-espaco-excluir .icone {
   }
 
   /* Sem a busca, o seletor divide o topo com a marca e os botões. */
+  .of-espaco {
+    flex: 0 1 auto;
+  }
+
   button.of-espaco-botao {
     min-width: 0;
-    max-width: 46vw;
+    max-width: 34vw;
     flex: 0 1 auto;
   }
 
@@ -753,11 +793,55 @@ button.of-espaco-excluir .icone {
   }
 }
 
-/* Celular estreito: com o seletor de espaço no topo, a marca fica só no
-   monograma, e o nome do espaço (o que diz em que livro se está) cabe. */
+/* Tela média (notebook pequeno, tablet): Pessoal e Empresarial só no ícone
+   (o nome continua no botão para o leitor de tela e no balão do mouse), e a
+   busca e o nome da empresa cabem ao lado. */
+@media (max-width: 1180px) {
+  .of-alternador-de-espaco button {
+    padding: 0 var(--espaco-5);
+  }
+
+  .of-alternador-rotulo {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  button.of-espaco-botao {
+    max-width: min(200px, 34vw);
+  }
+}
+
+/* Celular estreito: Pessoal e Empresarial (e o nome da empresa, o que diz em
+   que livro se está) descem para uma segunda linha do topo, na largura toda; a
+   marca e os botões ficam na primeira. */
 @media (max-width: 520px) {
-  .of-topo:has(.of-espaco-botao) .of-topo-marca .of-logo-textos {
-    display: none;
+  .of-topo:has(.of-espaco) {
+    flex-wrap: wrap;
+    row-gap: var(--espaco-4);
+  }
+
+  .of-topo .of-espaco {
+    order: 5;
+    flex: 1 1 100%;
+  }
+
+  .of-topo .of-espaco button.of-espaco-botao {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+
+  /* Na linha própria, os nomes voltam ao lado dos ícones; na empresa, as
+     abas ficam só no ícone para o nome da empresa caber. */
+  .of-topo .of-espaco:not(:has(.of-espaco-botao)) .of-alternador-rotulo {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
   }
 }
 
