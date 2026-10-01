@@ -1185,8 +1185,14 @@
 .lp-laptop-tela {
   display: grid;
   grid-template-columns: 21% minmax(0, 1fr);
+  /* A linha tem a altura da tela (aspect-ratio), não a do conteúdo: o que
+     não cabe encolhe dentro dela em vez de passar da borda. */
+  grid-template-rows: minmax(0, 1fr);
   width: 100%;
   aspect-ratio: 16 / 10;
+  /* Contêiner de tamanho: a lista de lançamentos mostra só as linhas que
+     cabem na altura da tela (consulta no fim do arquivo). */
+  container: tela-do-notebook / size;
   overflow: hidden;
   border-radius: 8px 8px 2px 2px;
   background: var(--fundo);
@@ -1353,12 +1359,24 @@
 }
 
 .lp-mini-conteudo {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 9px;
-  align-content: start;
   min-width: 0;
+  min-height: 0;
   padding: 14px;
   overflow: hidden;
+}
+
+/* Título e números com a altura deles; o último bloco (os painéis ou o
+   cartão da tela escolhida) encolhe até caber no que sobra da tela. */
+.lp-mini-conteudo > * {
+  flex: none;
+}
+
+.lp-mini-conteudo > :last-child {
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 .lp-mini-ola {
@@ -1373,6 +1391,8 @@
   gap: 8px;
 }
 
+/* Cada cartão da miniatura corta o que passar da borda: um rótulo comprido
+   nunca escapa do cartão nem da tela do notebook. */
 .lp-mini-kpis > div,
 .lp-mini-painel {
   display: grid;
@@ -1380,6 +1400,7 @@
   align-content: start;
   min-width: 0;
   padding: 8px 10px;
+  overflow: hidden;
   border: var(--borda);
   border-radius: 8px;
   background: var(--superficie);
@@ -1401,9 +1422,13 @@
   font-size: 9px;
 }
 
+/* Gráfico e rosca dividem a largura por igual: com 1,4 para o gráfico, a
+   legenda da rosca ficava com 59 px e "Contas da casa" (85 px) saía do
+   cartão. */
 .lp-mini-paineis {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -1447,10 +1472,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* O gráfico é o que estica: pede 150 px e cede altura quando a tela do
+   notebook é baixa (o desenho não tem proporção fixa). */
+.lp-mini-evolucao {
+  display: flex;
+  flex-direction: column;
+}
+
 .lp-mini-evolucao svg {
   display: block;
+  flex: 0 1 150px;
   width: 100%;
-  height: 150px;
+  min-height: 40px;
   cursor: crosshair;
   touch-action: pan-y;
 }
@@ -1460,20 +1493,26 @@
   stroke-dasharray: 3 3;
 }
 
+/* A legenda fica com a largura do nome mais comprido e a rosca com o resto
+   (até 100 px, sem passar de 64 px para baixo). Só sem espaço nenhum a
+   legenda aperta, e aí o nome termina em reticências. */
 .lp-mini-rosca-corpo {
   display: grid;
-  grid-template-columns: 100px minmax(0, 1fr);
+  grid-template-columns: minmax(64px, 1fr) minmax(0, max-content);
   gap: 8px;
   align-items: center;
 }
 
 .lp-mini-rosca-palco {
   position: relative;
+  width: 100%;
+  max-width: 100px;
+  container-type: inline-size;
 }
 
 .lp-mini-rosca {
   display: block;
-  width: 100px;
+  width: 100%;
 }
 
 .lp-mini-rosca circle {
@@ -1494,17 +1533,20 @@
 }
 
 .lp-mini-rosca-centro b {
-  font-size: 9px;
+  /* O valor acompanha o tamanho da rosca e cabe no furo dela. */
+  font-size: max(7px, 9cqi);
   font-variant-numeric: tabular-nums;
 }
 
 .lp-mini-rosca-centro small {
-  font-size: 8px;
+  font-size: max(6.5px, 8cqi);
 }
 
 .lp-mini-legenda {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1px;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1523,6 +1565,14 @@
   font-size: 9px;
   font-weight: var(--peso-medio);
   white-space: nowrap;
+}
+
+/* Sem espaço, o nome termina em reticências dentro do botão (o nome inteiro
+   segue no aria-label). */
+.lp-mini-legenda button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .lp-mini-legenda button:hover:not(:disabled),
@@ -2971,7 +3021,7 @@ button.lp-comparativo-alternar:hover .lp-comparativo-alternar-estado {
   }
 
   .lp-mini-evolucao svg {
-    height: 110px;
+    flex-basis: 110px;
   }
 
   .lp-mini-lateral {
@@ -3008,5 +3058,19 @@ button.lp-comparativo-alternar:hover .lp-comparativo-alternar-estado {
 
   .lp-nav .lp-botao {
     padding: 0 var(--espaco-8);
+  }
+}
+
+/* Tela do notebook baixa (notebook estreito): a lista de lançamentos mostra
+   só as linhas que cabem inteiras, sem uma linha cortada no pé da tela. */
+@container tela-do-notebook (max-height: 340px) {
+  .lp-mini-lista li:nth-child(n + 6) {
+    display: none;
+  }
+}
+
+@container tela-do-notebook (max-height: 280px) {
+  .lp-mini-lista li:nth-child(n + 5) {
+    display: none;
   }
 }
