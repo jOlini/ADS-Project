@@ -463,20 +463,17 @@ button.item-do-menu,
    aperto voltam a valer. */
 /* -------------------------------------------------------- Troca de tema */
 
-/* Entre claro e escuro, as cores passam de um tema ao outro em vez de saltar:
-   servicos/tema.js põe a classe no <html> só durante a troca (400ms). O
-   !important vence as transições de cada componente só nesse intervalo. Com
-   "reduzir movimento" no sistema, a classe nem entra. */
-.trocando-tema,
-.trocando-tema *,
-.trocando-tema *::before,
-.trocando-tema *::after {
-  transition:
-    background-color var(--tempo-longo) var(--curva),
-    border-color var(--tempo-longo) var(--curva),
-    color var(--tempo-longo) var(--curva),
-    fill var(--tempo-longo) var(--curva),
-    stroke var(--tempo-longo) var(--curva) !important;
+/* Entre claro e escuro, a página passa de um tema ao outro num esmaecimento
+   só (View Transitions, em servicos/tema.js): o navegador fotografa a tela
+   antes e depois e cruza as duas imagens na placa de vídeo. Antes, cada
+   elemento ganhava a própria transição de cor durante a troca, e a página
+   inteira era repintada a cada quadro (quadros de 200 a 400 ms na landing).
+   Sem a API (navegador antigo) ou pedindo menos movimento, o tema troca na
+   hora. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--tempo-longo);
+  animation-timing-function: var(--curva);
 }
 
 /* ------------------------------------------------ Borda viva */
