@@ -87,7 +87,8 @@ def incluir_pessoa(
 ):
     """Nome (único na família, sem diferença de caixa e acento) e cor. A pessoa é um perfil
     dentro do espaço pessoal, sem login: um lançamento é dela quando o `responsavel` tem o
-    nome dela. Cabem até 5 pessoas além do titular (uma assinatura cobre a casa). Pede o Plano
+    nome dela. Cabem até 4 convidados além do titular, 5 pessoas no total (uma assinatura cobre a
+    casa). Pede o Plano
     Família ou o Empresarial (no Free, 403)."""
     pessoa = servico.incluir(espaco, dados)
     resposta.headers["Location"] = str(requisicao.url_for("consultar_familia", espaco_id=espaco.id))

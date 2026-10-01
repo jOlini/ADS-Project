@@ -7,7 +7,7 @@ próprio (o titular lança por elas), e um lançamento é de uma delas quando o
 já existem passam a separar por pessoa sem mudar o livro-caixa.
 
 Assinatura: uma só, a do titular, cobre a casa inteira (o titular e até
-MAXIMO_DE_MEMBROS_DA_FAMILIA pessoas). Ninguém da família precisa assinar.
+MAXIMO_DE_MEMBROS_DA_FAMILIA convidados, 5 pessoas no total). Ninguém da família precisa assinar.
 
 Trava do plano: ligar o modo, incluir ou editar pessoas e filtrar relatórios
 por pessoa pedem o Plano Família (ou o Empresarial, que inclui o Família). No
@@ -35,7 +35,7 @@ from app.financeiro.repositorio import RepositorioLivroCaixa
 SO_NO_PESSOAL = "O Modo Família fica no espaço pessoal."
 PESSOA_NAO_ENCONTRADA = "Pessoa da família não encontrada."
 LIMITE_DA_FAMILIA = (
-    f"A família já tem {MAXIMO_DE_MEMBROS_DA_FAMILIA} pessoas além de você, o que a assinatura da família cobre. "
+    f"A família já tem {MAXIMO_DE_MEMBROS_DA_FAMILIA} convidados além de você, o que a assinatura da família cobre. "
     "Remova alguém para incluir outra pessoa."
 )
 NOME_REPETIDO = "Já existe uma pessoa com este nome na família."

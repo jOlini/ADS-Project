@@ -26,9 +26,9 @@ MAXIMO_DE_PESSOAS = 20
 # Empresas que uma pessoa cadastra no espaço empresarial. Barra quem criaria
 # livros-caixa vazios sem fim com a mesma conta.
 MAXIMO_DE_EMPRESAS = 5
-# Pessoas da família além do titular no Modo Família. É o que uma assinatura
-# da família cobre: o titular assina e a casa inteira (até 6 pessoas) entra.
-MAXIMO_DE_MEMBROS_DA_FAMILIA = 5
+# Convidados da família além do titular no Modo Família. É o que uma
+# assinatura da família cobre: "eu + 4 convidados", até 5 pessoas no total.
+MAXIMO_DE_MEMBROS_DA_FAMILIA = 4
 # Parcelas de uma compra no cartão de crédito (4 anos).
 MAXIMO_DE_PARCELAS = 48
 # Lançamentos numa exclusão em lote (o teto de uma consulta do extrato).

@@ -47,7 +47,7 @@ export default function Familia() {
     return <Navigate to="/principal" replace />;
   }
 
-  const familia = pessoal.familia ?? { ativa: false, pessoas: [], maximo_de_pessoas: 5 };
+  const familia = pessoal.familia ?? { ativa: false, pessoas: [], maximo_de_pessoas: 4 };
   const pessoas = familia.pessoas;
   const liberada = familiaLiberada(planoDoEspaco(pessoal));
   const cabe = liberada && pessoas.length < familia.maximo_de_pessoas;
@@ -102,8 +102,9 @@ export default function Familia() {
           <div>
             <h2 id="titulo-plano-familia">O Modo Família faz parte do Plano Família</h2>
             <p>
-              No Free, o espaço pessoal é só seu. Com o Plano Família, você inclui até {familia.maximo_de_pessoas} pessoas da
-              casa, vê quanto cada uma gastou e divide um gasto com o nome e a parte de cada pessoa.
+              No Free, o espaço pessoal é só seu. Com o Plano Família, você inclui até {familia.maximo_de_pessoas} convidados
+              da casa ({familia.maximo_de_pessoas + 1} pessoas com você), vê quanto cada um gastou e divide um gasto com o
+              nome e a parte de cada pessoa.
             </p>
           </div>
           <Link to="/#planos" className="botao">
@@ -125,7 +126,7 @@ export default function Familia() {
           <div className="of-painel-cabecalho">
             <h2 id="titulo-pessoas">Pessoas da casa</h2>
             <small>
-              {pessoas.length} de {familia.maximo_de_pessoas} além de você
+              {pessoas.length} de {familia.maximo_de_pessoas} convidados
             </small>
           </div>
           <ul className="of-pessoas">
@@ -179,7 +180,7 @@ export default function Familia() {
           )}
           {liberada && !cabe && (
             <p className="of-discreto">
-              A família está completa: a assinatura cobre você e mais {familia.maximo_de_pessoas} pessoas.
+              A família está completa: a assinatura cobre você e mais {familia.maximo_de_pessoas} convidados.
             </p>
           )}
         </section>
@@ -192,7 +193,8 @@ export default function Familia() {
             <li>
               <Icone nome="escudo" tamanho={18} />
               <span>
-                <b>Uma assinatura só, a sua.</b> Ela cobre a casa inteira: você e até {familia.maximo_de_pessoas} pessoas.
+                <b>Uma assinatura só, a sua.</b> Ela cobre a casa inteira: você e até {familia.maximo_de_pessoas} convidados,
+                {familia.maximo_de_pessoas + 1} pessoas no total.
                 Ninguém da família precisa assinar nem criar conta.
               </span>
             </li>

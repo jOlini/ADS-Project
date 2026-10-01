@@ -145,7 +145,7 @@ def test_voltar_ao_free_esconde_a_familia_sem_apagar_ninguem(api, ana, cabecalho
     assert resposta.status_code == 204
 
     trocar_plano(api, admin)
-    assert pessoal(ana)["familia"] == {"ativa": False, "pessoas": [], "maximo_de_pessoas": 5}
+    assert pessoal(ana)["familia"] == {"ativa": False, "pessoas": [], "maximo_de_pessoas": 4}
 
 
 def test_o_modo_gravado_volta_com_o_plano(api, ana, cabecalho_de):
