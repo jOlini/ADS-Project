@@ -786,17 +786,21 @@
   font-size: var(--fonte-botao);
 }
 
-/* Parágrafos dos cartões justificados, sem os buracos entre palavras: a
-   hifenização (lang="pt-BR" no <html>) quebra as palavras longas na sílaba,
-   e a última linha fica alinhada à esquerda. */
+/* Parágrafos dos cartões alinhados à esquerda. O justificado abria buracos
+   entre as palavras e partia palavras com hífen nos textos curtos; o
+   text-wrap: pretty reparte as linhas sem deixar uma palavra sozinha na
+   última, e a entrelinha e o respiro entre as letras deixam a leitura leve
+   no corpo pequeno dos cartões. */
 .lp-beneficio p,
 .lp-seguranca-grade p,
 .lp-plano-apoio,
 .lp-plano-nota,
 .lp-simulador-leitura {
-  text-align: justify;
-  hyphens: auto;
+  text-align: left;
+  hyphens: manual;
   text-wrap: pretty;
+  line-height: 1.6;
+  letter-spacing: 0.005em;
 }
 
 .lp-demo-lista {
