@@ -1,13 +1,17 @@
-// A cena WebGL do topo da landing: o campo de folhas, pontos e moedas que
-// sobe da esquerda para a direita como a curva do saldo, ondula devagar e se
-// levanta sob o ponteiro. Só o hover mexe no campo: clicar não faz nada (os
+// A cena WebGL do topo da landing: o campo de folhas, pontos, moedas e
+// cédulas que sobe da esquerda para a direita como a curva do saldo, ondula
+// devagar e se levanta sob o ponteiro. As folhas são a maioria (70/10/20,
+// regras/pomar.ts); a moeda 3D e a cédula são as mesmas do céu do resto da
+// página (dinheiroNoShader.ts). O dinheiro é desenhado antes e um pouco mais
+// baixo que a folhagem: fica sob e entre as folhas, sem cobrir o campo. Só o hover mexe no campo: clicar não faz nada (os
 // anéis de "rega" no toque saíram).
-// WebGL 1 puro, sem biblioteca: um programa, dois buffers e um desenho de
-// pontos por quadro. A conta de câmera, ponteiro e distribuição das folhas
+// WebGL 1 puro, sem biblioteca e sem textura: um programa, dois buffers e
+// dois desenhos de pontos por quadro (o dinheiro, depois a folhagem). A conta de câmera, ponteiro e distribuição das folhas
 // está em regras/pomar.ts; o relevo e a cor são calculados aqui, no shader,
 // para cada folha.
 
-import { CAMPO, TIPO, pixelsPorUnidade, type Matriz4, type Pomar } from '../regras/pomar';
+import { CAMPO, TIPO, pixelsPorUnidade, quantoDesenhar, type Matriz4, type Pomar } from '../regras/pomar';
+import { GLSL_DO_DINHEIRO } from './dinheiroNoShader';
 import { abrirContexto, enviarAtributo, liberarContexto, montarPrograma } from './webgl';
 
 export interface QuadroDaCena {
@@ -20,7 +24,8 @@ export interface QuadroDaCena {
   mascara: [number, number, number, number];
   // 1 no tema claro; menos no escuro, onde a esmeralda é mais funda.
   intensidade: number;
-  // Quantas folhas desenhar (as primeiras da lista, que já vem embaralhada).
+  // Quantas peças desenhar no total (folhagem e dinheiro): a cena corta os
+  // dois grupos na mesma proporção (quantoDesenhar), e os 70/10/20 ficam.
   folhas: number;
 }
 
@@ -42,9 +47,10 @@ uniform vec3 u_ponteiro;
 uniform vec4 u_mascara;
 varying float v_tipo;
 varying float v_giro;
+varying float v_virada;
 varying float v_tamanho;
 varying float v_alfa;
-varying float v_fase;
+varying float v_brilho;
 varying vec3 v_cor;
 
 // Relevo do campo: três ondas largas que andam devagar (as faixas orgânicas
@@ -68,6 +74,10 @@ void main() {
   float distancia = distance(p, u_ponteiro.xy);
   float brilho = u_ponteiro.z * exp(-distancia * distancia * 0.22);
   h += brilho * 0.8;
+  // Moeda e cédula ficam um pouco abaixo da folhagem (TIPO.moeda e acima):
+  // as folhas em volta passam na frente, e o dinheiro aparece entre elas.
+  float dinheiro = step(${TIPO.moeda}.0 - 0.5, a_atributo.x);
+  h -= dinheiro * 0.06;
 
   // Profundidade do campo é o z negativo do mundo (regras/pomar.ts).
   vec4 posicao = u_matriz * vec4(p.x, h, -p.y, 1.0);
@@ -77,8 +87,16 @@ void main() {
   gl_PointSize = clamp(tamanho, 1.0, 40.0);
   v_tamanho = gl_PointSize;
   v_tipo = a_atributo.x;
-  v_giro = a_atributo.y + sin(u_tempo * 0.8 + fase * 6.2832) * 0.3;
-  v_fase = fase;
+  float balancoDoGiro = sin(u_tempo * 0.8 + fase * 6.2832) * 0.3;
+  // A moeda fica quase de pé (o cifrão se lê); folha, ponto e cédula giram.
+  float ehMoeda = step(${TIPO.moeda}.0 - 0.5, a_atributo.x) * step(a_atributo.x, ${TIPO.moeda}.0 + 0.5);
+  v_giro = mix(a_atributo.y + balancoDoGiro, balancoDoGiro, ehMoeda);
+  // Moeda e cédula viram devagar em volta do eixo vertical, cada uma no seu
+  // tempo: o brilho da face acende e apaga no meio das folhas.
+  // Volta a 0 a cada giro: no fragmento (precisão média) um ângulo grande,
+  // depois de minutos na página, perderia a casa decimal.
+  v_virada = mod(u_tempo * (0.5 + fase * 0.6) + fase * 6.2832, 6.2832);
+  v_brilho = min(brilho, 1.0);
 
   // Névoa no fundo e perto da câmera; folha menor que um pixel apaga em vez
   // de cintilar.
@@ -105,17 +123,16 @@ void main() {
 
 const SOMBREADOR_DE_FRAGMENTOS = `
 precision mediump float;
-// Mesma precisão do u_tempo do shader de vértices: uniforme com precisões
-// diferentes nos dois lados não liga.
-uniform highp float u_tempo;
 uniform float u_intensidade;
 varying float v_tipo;
 varying float v_giro;
+varying float v_virada;
 varying float v_tamanho;
 varying float v_alfa;
-varying float v_fase;
+varying float v_brilho;
 varying vec3 v_cor;
 
+${GLSL_DO_DINHEIRO}
 void main() {
   vec2 p = gl_PointCoord * 2.0 - 1.0;
   float c = cos(v_giro);
@@ -136,13 +153,24 @@ void main() {
     borda = 1.0 - length(p);
     opacidade = 0.5;
   } else {
-    // Moeda dourada com aro e um reflexo que acende e apaga.
-    float r = length(p);
-    borda = 1.0 - r;
-    cor = mix(vec3(0.890, 0.733, 0.373), vec3(0.690, 0.529, 0.231), smoothstep(0.6, 0.72, r));
-    cor += vec3(0.16) * smoothstep(0.55, 0.0, length(p - vec2(-0.3, -0.3)));
-    cor += vec3(0.12) * max(0.0, sin(u_tempo * 1.7 + v_fase * 40.0));
-    opacidade = 0.95;
+    // Moeda 3D ou cédula (dinheiroNoShader.ts), com a luz da face e o mesmo
+    // clarão das folhas sob o ponteiro.
+    vec4 peca;
+    if (v_tipo < ${TIPO.nota}.0 - 0.5) {
+      peca = moeda3d(p, v_virada, suave, v_tamanho);
+    } else {
+      peca = cedula(p, v_virada, suave, v_tamanho);
+    }
+    cor = peca.rgb * (0.8 + 0.2 * abs(cos(v_virada)));
+    // Longe (ponto pequeno), o dinheiro puxa a cor do campo e fica mais
+    // transparente: o ouro não vira um pontilhado amarelo no horizonte, e as
+    // folhas seguem mandando no campo. De perto, a moeda e a cédula aparecem
+    // inteiras.
+    float perto = smoothstep(6.0, 16.0, v_tamanho);
+    cor = mix(mix(cor, v_cor, 0.55), cor, perto);
+    cor = mix(cor, vec3(0.925, 0.961, 0.941), v_brilho * 0.35);
+    borda = peca.a;
+    opacidade = mix(0.55, 0.9, perto);
   }
   float alfa = smoothstep(0.0, suave, borda) * v_alfa * opacidade * u_intensidade;
   if (alfa < 0.004) {
@@ -206,10 +234,29 @@ export function criarCenaDoPomar(canvas: HTMLCanvasElement, pomar: Pomar): CenaD
       gl.uniform4fv(u.mascara, quadro.mascara);
       gl.uniform1f(u.intensidade, quadro.intensidade);
       gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.drawArrays(gl.POINTS, 0, Math.min(pomar.quantidade, Math.max(0, Math.floor(quadro.folhas))));
+      // Sem teste de profundidade, quem vem depois pinta por cima: o dinheiro
+      // primeiro, a folhagem depois. O corte da máquina lenta é proporcional
+      // nos dois grupos (70/10/20 mantido).
+      const desenho = quantoDesenhar(pomar, quadro.folhas);
+      if (desenho.dinheiro > 0) {
+        gl.drawArrays(gl.POINTS, pomar.dinheiro.inicio, desenho.dinheiro);
+      }
+      if (desenho.folhagem > 0) {
+        gl.drawArrays(gl.POINTS, pomar.folhagem.inicio, desenho.folhagem);
+      }
     },
+    // Limpeza ao desmontar: solta os atributos, apaga os dois buffers e o
+    // programa e devolve o contexto (o navegador limita quantos ficam abertos).
     destruir() {
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      ['a_posicao', 'a_atributo'].forEach((nome) => {
+        const local = gl.getAttribLocation(programa, nome);
+        if (local >= 0) {
+          gl.disableVertexAttribArray(local);
+        }
+      });
       buffers.forEach((buffer) => gl.deleteBuffer(buffer));
+      gl.useProgram(null);
       gl.deleteProgram(programa);
       liberarContexto(gl);
     },

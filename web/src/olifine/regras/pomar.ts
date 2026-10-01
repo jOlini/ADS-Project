@@ -1,5 +1,5 @@
 // O pomar da landing, sem interface: a conta 3D por trás da cena WebGL do
-// topo (pomar/cenaDoPomar.ts). Folhas, pontos e moedas espalhados num campo,
+// topo (pomar/cenaDoPomar.ts). Folhas, pontos, moedas e cédulas espalhados num campo,
 // a câmera que olha para ele e segue o ponteiro, o ponto do chão sob o
 // ponteiro (onde as folhas se levantam) e quantas folhas cabem em cada tela. Tudo determinístico e testado em
 // pomar.test.ts; o relevo e a cor de cada folha são feitos na placa de vídeo
@@ -21,12 +21,30 @@ export const CAMPO = { largura: 26, profundidade: 22 } as const;
 // topo e o campo por baixo do texto e do celular.
 export const LENTE = { fovY: (46 * Math.PI) / 180, perto: 0.1, longe: 80 } as const;
 
-export const TIPO = { folha: 0, ponto: 1, moeda: 2 } as const;
+export const TIPO = { folha: 0, ponto: 1, moeda: 2, nota: 3 } as const;
+export type TipoNoPomar = (typeof TIPO)[keyof typeof TIPO];
 
-// Moedas são raras: o dinheiro que brota no meio das folhas (a moeda dourada
-// é a mesma da árvore completa das metas).
-const PARTE_DE_MOEDAS = 0.008;
-const PARTE_DE_PONTOS = 0.3;
+// Proporção 70/10/20 do pomar: aqui as folhas mandam e o dinheiro brota no
+// meio delas, no inverso do céu do resto da página (regras/folhasAoVento.ts,
+// 40% moedas, 40% cédulas e 20% folhas), onde o dinheiro é o assunto. Começou
+// em 60/20/20; o dourado da moeda pesa mais que o verde da cédula no campo, e
+// as moedas caíram para 10% a pedido do usuário (a folhagem ficou com a sobra).
+export const FOLHAS_RATIO = 0.7;
+export const MOEDAS_RATIO = 0.1;
+export const NOTAS_RATIO = 0.2;
+// Dentro dos 70% de folhagem, parte são os pontinhos de luz do campo (o
+// desenho de antes): continuam folhagem, não dinheiro.
+const PONTOS_NA_FOLHAGEM = 0.3;
+
+// Tamanho de cada peça em unidades do mundo (o shader divide pela distância).
+// Moeda e cédula ficam no tamanho das folhas menores: aparecem entre elas
+// sem tomar a frente do campo.
+export const TAMANHOS_NO_POMAR: Record<keyof typeof TIPO, { menor: number; maior: number }> = {
+  folha: { menor: 0.08, maior: 0.15 },
+  ponto: { menor: 0.03, maior: 0.055 },
+  moeda: { menor: 0.07, maior: 0.085 },
+  nota: { menor: 0.09, maior: 0.12 },
+};
 
 // --- Vetores e matrizes --------------------------------------------------------
 
@@ -189,50 +207,127 @@ export function quantidadeDeFolhas(larguraCss: number, alturaCss: number, memori
   return Math.min(teto, Math.max(4500, pelaArea));
 }
 
-export interface Pomar {
+// Um trecho contínuo do buffer: o dinheiro vem antes da folhagem.
+export interface Faixa {
+  inicio: number;
   quantidade: number;
-  // x, z e uma fase (0 a 1) por folha: onde nasce e em que tempo balança.
-  posicoes: Float32Array;
-  // tipo (TIPO), giro inicial (rad) e tamanho (unidades do mundo) por folha.
-  atributos: Float32Array;
 }
 
-// Espalha as folhas numa grade com sorteio dentro de cada casa (cobre o campo
-// sem buracos nem montinhos) e embaralha a ordem: qualquer começo da lista é
-// uma amostra do campo inteiro, então desenhar menos folhas (tela menor,
-// máquina lenta) só deixa o campo mais ralo, sem cortar um pedaço.
-export function gerarPomar(quantidade: number, semente = 2026): Pomar {
-  const sorte = gerador(semente);
+export interface Pomar {
+  quantidade: number;
+  // x, z e uma fase (0 a 1) por peça: onde nasce e em que tempo balança.
+  posicoes: Float32Array;
+  // tipo (TIPO), giro inicial (rad) e tamanho (unidades do mundo) por peça.
+  atributos: Float32Array;
+  // Moedas e cédulas primeiro, a folhagem depois: a cena desenha o dinheiro
+  // antes, e as folhas pintam por cima dele (o dinheiro fica sob e entre as
+  // folhas, sem cobrir o campo).
+  dinheiro: Faixa;
+  folhagem: Faixa;
+}
+
+export interface PartesDoPomar {
+  folhagem: number;
+  moedas: number;
+  notas: number;
+}
+
+// Quantas peças de cada grupo, pela proporção 70/10/20 (MOEDAS_RATIO e
+// NOTAS_RATIO arredondados; a folhagem fica com o resto, então a soma é
+// sempre o total).
+export function partesDoPomar(total: number): PartesDoPomar {
+  const inteiro = Math.max(0, Math.floor(total));
+  const moedas = Math.round(inteiro * MOEDAS_RATIO);
+  const notas = Math.round(inteiro * NOTAS_RATIO);
+  return { folhagem: Math.max(0, inteiro - moedas - notas), moedas, notas };
+}
+
+// Embaralha no lugar (Fisher-Yates) com o sorteio da semente.
+function embaralhar<T>(lista: T[], sorte: () => number): T[] {
+  for (let indice = lista.length - 1; indice > 0; indice -= 1) {
+    const outro = Math.floor(sorte() * (indice + 1));
+    [lista[indice], lista[outro]] = [lista[outro] as T, lista[indice] as T];
+  }
+  return lista;
+}
+
+// Espalha `quantidade` pontos no campo numa grade com sorteio dentro de cada
+// casa (cobre o campo sem buracos nem montinhos) e embaralha a ordem: qualquer
+// começo da lista é uma amostra do campo inteiro. Devolve x, z e fase por
+// ponto. Folhagem e dinheiro usam grades próprias, desencontradas: as moedas e
+// as cédulas caem entre as folhas, não em fila com elas.
+export function espalharNoCampo(quantidade: number, sorte: () => number): Float32Array {
   const total = Math.max(0, Math.floor(quantidade));
   const colunas = Math.max(1, Math.round(Math.sqrt((total * CAMPO.largura) / CAMPO.profundidade)));
   const linhas = Math.max(1, Math.ceil(total / colunas));
   const casaX = CAMPO.largura / colunas;
   const casaZ = CAMPO.profundidade / linhas;
-
-  const ordem = Array.from({ length: colunas * linhas }, (_, indice) => indice);
-  for (let indice = ordem.length - 1; indice > 0; indice -= 1) {
-    const outro = Math.floor(sorte() * (indice + 1));
-    [ordem[indice], ordem[outro]] = [ordem[outro] ?? 0, ordem[indice] ?? 0];
-  }
+  const ordem = embaralhar(Array.from({ length: colunas * linhas }, (_, indice) => indice), sorte);
 
   const posicoes = new Float32Array(total * 3);
-  const atributos = new Float32Array(total * 3);
   for (let indice = 0; indice < total; indice += 1) {
     const casa = ordem[indice] ?? 0;
-    const coluna = casa % colunas;
-    const linha = Math.floor(casa / colunas);
-    posicoes[indice * 3] = -CAMPO.largura / 2 + (coluna + sorte()) * casaX;
-    posicoes[indice * 3 + 1] = (linha + sorte()) * casaZ;
+    posicoes[indice * 3] = -CAMPO.largura / 2 + ((casa % colunas) + sorte()) * casaX;
+    posicoes[indice * 3 + 1] = (Math.floor(casa / colunas) + sorte()) * casaZ;
     posicoes[indice * 3 + 2] = sorte();
-
-    const dado = sorte();
-    const tipo = dado < PARTE_DE_MOEDAS ? TIPO.moeda : dado < PARTE_DE_MOEDAS + PARTE_DE_PONTOS ? TIPO.ponto : TIPO.folha;
-    atributos[indice * 3] = tipo;
-    atributos[indice * 3 + 1] = sorte() * Math.PI * 2;
-    atributos[indice * 3 + 2] =
-      tipo === TIPO.moeda ? 0.07 + sorte() * 0.015 : tipo === TIPO.ponto ? 0.03 + sorte() * 0.025 : 0.08 + sorte() * 0.07;
   }
-  return { quantidade: total, posicoes, atributos };
+  return posicoes;
+}
+
+function sortearTamanho(tipo: keyof typeof TIPO, sorte: () => number): number {
+  const { menor, maior } = TAMANHOS_NO_POMAR[tipo];
+  return menor + (maior - menor) * sorte();
+}
+
+// Monta o pomar: a proporção 70/10/20 decide quantas peças vão para cada
+// grupo (partesDoPomar), cada grupo é espalhado no campo inteiro e o dinheiro
+// entra no buffer antes da folhagem. Moedas e cédulas são embaralhadas entre
+// si: desenhar só o começo do grupo mantém as duas na mesma conta.
+export function gerarPomar(quantidade: number, semente = 2026): Pomar {
+  const sorte = gerador(semente);
+  const partes = partesDoPomar(quantidade);
+  const noDinheiro = partes.moedas + partes.notas;
+  const total = noDinheiro + partes.folhagem;
+  const posicoes = new Float32Array(total * 3);
+  const atributos = new Float32Array(total * 3);
+
+  const tiposDoDinheiro = embaralhar<'moeda' | 'nota'>(
+    [...Array<'moeda'>(partes.moedas).fill('moeda'), ...Array<'nota'>(partes.notas).fill('nota')],
+    sorte,
+  );
+  posicoes.set(espalharNoCampo(noDinheiro, sorte), 0);
+  tiposDoDinheiro.forEach((tipo, indice) => {
+    atributos[indice * 3] = TIPO[tipo];
+    atributos[indice * 3 + 1] = sorte() * Math.PI * 2;
+    atributos[indice * 3 + 2] = sortearTamanho(tipo, sorte);
+  });
+
+  posicoes.set(espalharNoCampo(partes.folhagem, sorte), noDinheiro * 3);
+  for (let indice = noDinheiro; indice < total; indice += 1) {
+    const tipo = sorte() < PONTOS_NA_FOLHAGEM ? 'ponto' : 'folha';
+    atributos[indice * 3] = TIPO[tipo];
+    atributos[indice * 3 + 1] = sorte() * Math.PI * 2;
+    atributos[indice * 3 + 2] = sortearTamanho(tipo, sorte);
+  }
+
+  return {
+    quantidade: total,
+    posicoes,
+    atributos,
+    dinheiro: { inicio: 0, quantidade: noDinheiro },
+    folhagem: { inicio: noDinheiro, quantidade: partes.folhagem },
+  };
+}
+
+// Quantas peças de cada grupo desenhar quando a tela pede `pecas` (máquina
+// lenta, tela menor): o corte é proporcional nos dois grupos, então o campo
+// fica mais ralo sem mudar os 70/10/20.
+export function quantoDesenhar(pomar: Pomar, pecas: number): { dinheiro: number; folhagem: number } {
+  const fracao = pomar.quantidade > 0 ? Math.min(1, Math.max(0, pecas) / pomar.quantidade) : 0;
+  return {
+    dinheiro: Math.round(pomar.dinheiro.quantidade * fracao),
+    folhagem: Math.round(pomar.folhagem.quantidade * fracao),
+  };
 }
 
 // --- Máscara do texto ----------------------------------------------------------

@@ -1,5 +1,6 @@
 // Testes da conta 3D do pomar da landing: câmera, toque no chão, movimento
-// suave, quantas folhas e onde elas nascem.
+// suave, quantas folhas e onde elas nascem, e a proporção 70/10/20 de
+// folhagem, moedas e cédulas (70/10/20).
 import { describe, expect, it } from 'vitest';
 import {
   aproximar,
@@ -7,13 +8,21 @@ import {
   CAMPO,
   caixaNaTela,
   enquadramento,
+  espalharNoCampo,
+  FOLHAS_RATIO,
   gerarPomar,
   matrizDaCena,
+  MOEDAS_RATIO,
+  NOTAS_RATIO,
+  partesDoPomar,
   pontoNoChao,
   projetar,
   quantidadeDeFolhas,
+  quantoDesenhar,
+  TAMANHOS_NO_POMAR,
   TIPO,
 } from './pomar';
+import { gerador } from './arvore';
 
 const ASPECTO = 16 / 10;
 const PARADO = enquadramento({ x: 0, y: 0 }, 0);
@@ -163,26 +172,100 @@ describe('gerarPomar', () => {
     }
   });
 
-  it('moedas são raras e as folhas são a maioria', () => {
-    const { quantidade, atributos } = gerarPomar(10000);
-    const tipos = Array.from({ length: quantidade }, (_, indice) => atributos[indice * 3]);
-    const moedas = tipos.filter((tipo) => tipo === TIPO.moeda).length;
-    const folhas = tipos.filter((tipo) => tipo === TIPO.folha).length;
-    expect(moedas).toBeGreaterThan(0);
-    expect(moedas / quantidade).toBeLessThan(0.02);
-    expect(folhas / quantidade).toBeGreaterThan(0.6);
+  it('70% de folhagem, 10% de moedas e 20% de cédulas, com o dinheiro antes no buffer', () => {
+    const pomar = gerarPomar(10000);
+    const tipos = Array.from({ length: pomar.quantidade }, (_, indice) => pomar.atributos[indice * 3]);
+    const parte = (...procurados: number[]) =>
+      tipos.filter((tipo) => procurados.includes(tipo ?? -1)).length / pomar.quantidade;
+
+    expect(parte(TIPO.folha, TIPO.ponto)).toBeCloseTo(FOLHAS_RATIO, 2);
+    expect(parte(TIPO.moeda)).toBeCloseTo(MOEDAS_RATIO, 2);
+    expect(parte(TIPO.nota)).toBeCloseTo(NOTAS_RATIO, 2);
+    // As folhas (sem contar os pontinhos) ainda passam cada tipo de dinheiro.
+    expect(parte(TIPO.folha)).toBeGreaterThan(parte(TIPO.moeda));
+    expect(parte(TIPO.folha)).toBeGreaterThan(parte(TIPO.nota));
+
+    expect(pomar.dinheiro).toEqual({ inicio: 0, quantidade: 3000 });
+    expect(pomar.folhagem).toEqual({ inicio: 3000, quantidade: 7000 });
+    expect(tipos.slice(0, 3000).every((tipo) => tipo === TIPO.moeda || tipo === TIPO.nota)).toBe(true);
+    expect(tipos.slice(3000).every((tipo) => tipo === TIPO.folha || tipo === TIPO.ponto)).toBe(true);
   });
 
-  it('qualquer começo da lista cobre o campo inteiro (desenhar menos só deixa mais ralo)', () => {
-    const { posicoes } = gerarPomar(8000);
-    const metade = 4000;
-    const quadrantes = new Set<string>();
-    for (let indice = 0; indice < metade; indice += 1) {
-      const x = posicoes[indice * 3] ?? 0;
-      const z = posicoes[indice * 3 + 1] ?? 0;
-      quadrantes.add(`${Math.floor(((x + CAMPO.largura / 2) / CAMPO.largura) * 4)}:${Math.floor((z / CAMPO.profundidade) * 4)}`);
+  it('dá a cada tipo o tamanho dele, com o dinheiro no tamanho das folhas menores', () => {
+    const { quantidade, atributos } = gerarPomar(4000);
+    const nome = Object.fromEntries(Object.entries(TIPO).map(([chave, valor]) => [valor, chave])) as Record<
+      number,
+      keyof typeof TIPO
+    >;
+    for (let indice = 0; indice < quantidade; indice += 1) {
+      const faixa = TAMANHOS_NO_POMAR[nome[atributos[indice * 3] ?? 0] ?? 'folha'];
+      const tamanho = atributos[indice * 3 + 2] ?? 0;
+      expect(tamanho).toBeGreaterThanOrEqual(faixa.menor);
+      expect(tamanho).toBeLessThanOrEqual(faixa.maior);
     }
-    expect(quadrantes.size).toBe(16);
+    expect(TAMANHOS_NO_POMAR.moeda.maior).toBeLessThan(TAMANHOS_NO_POMAR.folha.maior);
+    expect(TAMANHOS_NO_POMAR.nota.maior).toBeLessThan(TAMANHOS_NO_POMAR.folha.maior);
+  });
+
+  it('o começo de cada grupo cobre o campo inteiro (desenhar menos só deixa mais ralo)', () => {
+    const pomar = gerarPomar(8000);
+    const quadrantesDoComeco = (faixa: { inicio: number; quantidade: number }) => {
+      const quadrantes = new Set<string>();
+      for (let indice = faixa.inicio; indice < faixa.inicio + faixa.quantidade / 2; indice += 1) {
+        const x = pomar.posicoes[indice * 3] ?? 0;
+        const z = pomar.posicoes[indice * 3 + 1] ?? 0;
+        quadrantes.add(`${Math.floor(((x + CAMPO.largura / 2) / CAMPO.largura) * 4)}:${Math.floor((z / CAMPO.profundidade) * 4)}`);
+      }
+      return quadrantes.size;
+    };
+    expect(quadrantesDoComeco(pomar.folhagem)).toBe(16);
+    expect(quadrantesDoComeco(pomar.dinheiro)).toBe(16);
+  });
+
+  it('mistura moedas e cédulas no começo do grupo do dinheiro', () => {
+    const pomar = gerarPomar(5000);
+    const comeco = Array.from({ length: 200 }, (_, indice) => pomar.atributos[indice * 3]);
+    const moedas = comeco.filter((tipo) => tipo === TIPO.moeda).length;
+    // Um terço do dinheiro é moeda (10 de 30).
+    expect(moedas).toBeGreaterThan(40);
+    expect(moedas).toBeLessThan(95);
+  });
+});
+
+describe('partesDoPomar', () => {
+  it('reparte pelos 70/10/20 e soma sempre o total', () => {
+    expect(partesDoPomar(10000)).toEqual({ folhagem: 7000, moedas: 1000, notas: 2000 });
+    for (const total of [0, 1, 2, 7, 4501, 13999]) {
+      const partes = partesDoPomar(total);
+      expect(partes.folhagem + partes.moedas + partes.notas).toBe(total);
+      expect(partes.folhagem).toBeGreaterThanOrEqual(partes.moedas);
+    }
+    expect(partesDoPomar(-5)).toEqual({ folhagem: 0, moedas: 0, notas: 0 });
+  });
+});
+
+describe('espalharNoCampo', () => {
+  it('põe cada ponto dentro do campo, com a fase entre 0 e 1', () => {
+    const posicoes = espalharNoCampo(900, gerador(3));
+    expect(posicoes).toHaveLength(2700);
+    for (let indice = 0; indice < 900; indice += 1) {
+      expect(Math.abs(posicoes[indice * 3] ?? NaN)).toBeLessThanOrEqual(CAMPO.largura / 2);
+      expect(posicoes[indice * 3 + 1]).toBeGreaterThanOrEqual(0);
+      expect(posicoes[indice * 3 + 1]).toBeLessThanOrEqual(CAMPO.profundidade);
+      expect(posicoes[indice * 3 + 2]).toBeGreaterThanOrEqual(0);
+      expect(posicoes[indice * 3 + 2]).toBeLessThan(1);
+    }
+  });
+});
+
+describe('quantoDesenhar', () => {
+  it('corta folhagem e dinheiro na mesma proporção', () => {
+    const pomar = gerarPomar(10000);
+    expect(quantoDesenhar(pomar, 10000)).toEqual({ dinheiro: 3000, folhagem: 7000 });
+    expect(quantoDesenhar(pomar, 5500)).toEqual({ dinheiro: 1650, folhagem: 3850 });
+    expect(quantoDesenhar(pomar, 99999)).toEqual({ dinheiro: 3000, folhagem: 7000 });
+    expect(quantoDesenhar(pomar, -1)).toEqual({ dinheiro: 0, folhagem: 0 });
+    expect(quantoDesenhar(gerarPomar(0), 100)).toEqual({ dinheiro: 0, folhagem: 0 });
   });
 });
 
