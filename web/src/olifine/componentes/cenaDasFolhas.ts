@@ -17,6 +17,7 @@
 // A distribuição e a paralaxe estão em regras/folhasAoVento.ts.
 
 import { TIPO_NO_AR, type FolhasAoVento } from '../regras/folhasAoVento';
+import { GLSL_DO_DINHEIRO } from './dinheiroNoShader';
 import { abrirContexto, enviarAtributo, liberarContexto, montarPrograma } from './webgl';
 
 export interface QuadroDasFolhas {
@@ -81,7 +82,9 @@ void main() {
   float ehMoeda = step(0.5, a_atributo.x) * step(a_atributo.x, 1.5);
   float balancoDoGiro = sin(u_tempo * 0.45 + fase * 6.2832);
   v_giro = mix(a_atributo.w + balancoDoGiro * 0.7, balancoDoGiro * 0.35, ehMoeda);
-  v_virada = u_tempo * (0.45 + velocidade * 0.8) + fase * 6.2832;
+  // Volta a 0 a cada giro: no fragmento (precisão média) um ângulo grande,
+  // depois de minutos na página, perderia a casa decimal.
+  v_virada = mod(u_tempo * (0.45 + velocidade * 0.8) + fase * 6.2832, 6.2832);
   v_fundo = fundo;
   // O fundo apaga (névoa); a de perto, grande, também não pesa sobre o texto.
   v_alfa = mix(0.72, 0.2, fundo) * smoothstep(0.02, 0.18, fundo);
@@ -98,29 +101,7 @@ varying float v_tamanho;
 varying float v_alfa;
 varying float v_fundo;
 
-// Um traço de arco (anel de raio r e meia espessura w em volta de c), sem o
-// pedaço entre os ângulos a0 e a1 (radianos, de -pi a pi). s é a borda suave.
-float arco(vec2 p, vec2 c, float r, float w, float a0, float a1, float s) {
-  vec2 d = p - c;
-  float tracado = 1.0 - smoothstep(w - s, w + s, abs(length(d) - r));
-  float angulo = atan(d.y, d.x);
-  float corte = step(a0, angulo) * step(angulo, a1);
-  return tracado * (1.0 - corte);
-}
-
-// O cifrão ($) no quadrado de -1 a 1, com y para baixo (gl_PointCoord): o S de
-// dois arcos (o de baixo é o de cima girado meia volta) e a barra que o
-// atravessa. Devolve 0 fora e 1 dentro.
-float cifrao(vec2 p, float s) {
-  p.y = -p.y;
-  float r = 0.36;
-  float w = 0.13;
-  float cima = arco(p, vec2(0.0, r), r, w, -1.5708, 0.45, s);
-  float baixo = arco(-p, vec2(0.0, r), r, w, -1.5708, 0.45, s);
-  float barra = (1.0 - smoothstep(w * 0.7 - s, w * 0.7 + s, abs(p.x))) * step(abs(p.y), 1.0);
-  return max(max(cima, baixo), barra);
-}
-
+${GLSL_DO_DINHEIRO}
 void main() {
   vec2 p = gl_PointCoord * 2.0 - 1.0;
   float c = cos(v_giro);
@@ -146,56 +127,17 @@ void main() {
     cor *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 0.08, abs(q.y))) * step(abs(q.x), 0.7);
     opacidade = 0.9;
   } else if (v_tipo < ${TIPO_NO_AR.nota}.0 - 0.5) {
-    // Moeda em 3D: o corpo é a face "arrastada" pela espessura, que aparece
-    // quando a moeda vira de lado; a face fica na frente desse corpo.
-    vec2 q = p * 1.12;
-    float lado = sin(v_virada);
-    float espessura = 0.18 * abs(lado);
-    float dx = q.x - clamp(q.x, -espessura, espessura);
-    borda = (1.0 - length(vec2(dx / largura, q.y))) / 1.12;
-    vec2 f = vec2((q.x + espessura * sign(lado)) / largura, q.y);
-    // O cifrão é desenhado no plano da tela (só achatado pela virada): lido
-    // do jeito certo na frente e no verso, sem espelhar.
-    float rf = length(f);
-    float naFace = 1.0 - smoothstep(0.98, 1.0, rf);
-    // A espessura: ouro escuro com a serrilha da borda.
-    vec3 lateral = vec3(0.62, 0.44, 0.15) * (0.82 + 0.18 * step(0.5, fract(q.y * 7.0)));
-    // A face: ouro que clareia para o alto à esquerda, o aro em relevo e o
-    // cifrão em baixo relevo (escuro, com a luz na borda de baixo).
-    vec3 ouro = mix(vec3(0.99, 0.83, 0.40), vec3(0.86, 0.62, 0.20), smoothstep(0.0, 1.3, length(f - vec2(-0.4, -0.45))));
-    float aro = smoothstep(0.68, 0.72, rf) * (1.0 - smoothstep(0.80, 0.84, rf));
-    ouro = mix(ouro, ouro * 0.8, aro);
-    float simbolo = cifrao(f / 0.6, suave * 2.0);
-    float luzDoSimbolo = cifrao((f - vec2(0.0, 0.035)) / 0.6, suave * 2.0);
-    ouro = mix(ouro, vec3(1.0, 0.93, 0.66), luzDoSimbolo * (1.0 - simbolo) * 0.8);
-    ouro = mix(ouro, vec3(0.55, 0.35, 0.07), simbolo);
-    // O brilho que acende quando a face olha para a luz.
-    ouro += vec3(0.2) * smoothstep(0.4, 0.0, length(f - vec2(-0.4, -0.45))) * abs(virada);
-    cor = mix(lateral, ouro, naFace);
-    // O contorno de desenho animado.
-    cor = mix(vec3(0.38, 0.25, 0.07), cor, smoothstep(0.0, 0.06, borda));
+    // Moeda 3D (componentes/dinheiroNoShader.ts).
+    vec4 moeda = moeda3d(p, v_virada, suave, v_tamanho);
+    cor = moeda.rgb;
+    borda = moeda.a;
     // Mais firme que as folhas: a moeda é o destaque do céu.
     opacidade = 1.3;
   } else {
-    // Cédula: retângulo deitado de cantos redondos (0,86 × 0,48 de meia
-    // medida, para os cantos não saírem do quadrado do ponto quando ela
-    // gira), que ondula um pouco ao vento.
-    vec2 q = vec2(p.x / largura, p.y);
-    q.y += sin(q.x * 3.0 + v_virada) * 0.04;
-    vec2 d = abs(q) - vec2(0.86, 0.48) + 0.1;
-    borda = -(length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - 0.1);
-    // Verde-dinheiro, a moldura fina por dentro da borda, os dois selos nas
-    // pontas e o medalhão claro com o cifrão no meio.
-    cor = vec3(0.50, 0.72, 0.44);
-    float moldura = smoothstep(0.05, 0.08, borda) * (1.0 - smoothstep(0.1, 0.13, borda));
-    cor = mix(cor, vec3(0.30, 0.52, 0.30), moldura);
-    float selos = 1.0 - smoothstep(0.09, 0.12, length(vec2(abs(q.x) - 0.6, q.y)));
-    cor = mix(cor, vec3(0.36, 0.58, 0.34), selos);
-    float medalhao = 1.0 - smoothstep(0.27, 0.3, length(q));
-    cor = mix(cor, vec3(0.80, 0.90, 0.72), medalhao);
-    cor = mix(cor, vec3(0.20, 0.42, 0.24), cifrao(q / 0.22, suave * 4.0) * medalhao);
-    // O verso, virado para a tela, é mais claro.
-    cor = mix(cor, cor * 0.78 + vec3(0.12), step(virada, 0.0) * 0.5);
+    // Cédula (componentes/dinheiroNoShader.ts).
+    vec4 nota = cedula(p, v_virada, suave, v_tamanho);
+    cor = nota.rgb;
+    borda = nota.a;
     opacidade = 0.92;
   }
   // Luz de cima: a face de frente para ela clareia, a de lado escurece.
