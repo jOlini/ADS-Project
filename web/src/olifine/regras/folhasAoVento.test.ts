@@ -1,7 +1,15 @@
 // Testes das folhas ao vento da landing: quantas cabem em cada tela, como se
 // espalham e a paralaxe de cada profundidade.
 import { describe, expect, it } from 'vitest';
-import { divisorDaProfundidade, gerarFolhasAoVento, paralaxe, quantidadeNoAr, TAMANHOS, TIPO_NO_AR } from './folhasAoVento';
+import {
+  divisorDaProfundidade,
+  gerarFolhasAoVento,
+  paralaxe,
+  PARTES_NO_AR,
+  quantidadeNoAr,
+  TAMANHOS,
+  TIPO_NO_AR,
+} from './folhasAoVento';
 
 describe('quantidadeNoAr', () => {
   it('põe mais folhas na tela grande e menos no celular', () => {
@@ -51,19 +59,24 @@ describe('gerarFolhasAoVento', () => {
     expect(TAMANHOS.nota.maior).toBeGreaterThan(TAMANHOS.folha.maior);
   });
 
-  it('deixa a maior parte nas margens e mistura moedas e cédulas às folhas', () => {
+  it('deixa a maior parte nas margens', () => {
     const nasMargens = coluna(folhas.posicoes, 0).filter((x) => Math.abs(x) >= 0.42).length;
-    const tipos = coluna(folhas.atributos, 0);
-    const moedas = tipos.filter((tipo) => tipo === TIPO_NO_AR.moeda).length;
-    const notas = tipos.filter((tipo) => tipo === TIPO_NO_AR.nota).length;
-    const soFolhas = tipos.filter((tipo) => tipo === TIPO_NO_AR.folha).length;
 
     expect(nasMargens / folhas.quantidade).toBeGreaterThan(0.8);
-    expect(moedas).toBeGreaterThan(10);
-    expect(moedas).toBeLessThan(60);
-    expect(notas).toBeGreaterThan(20);
-    expect(notas).toBeLessThan(70);
-    expect(soFolhas).toBeGreaterThan(folhas.quantidade / 2);
+  });
+
+  it('sorteia 40% de moedas, 40% de cédulas e 20% de folhas', () => {
+    expect(PARTES_NO_AR.moeda + PARTES_NO_AR.nota + PARTES_NO_AR.folha).toBeCloseTo(1);
+    // Mil peças: a proporção sorteada fica a poucos pontos da pedida.
+    const muitas = gerarFolhasAoVento(1000);
+    const tipos = Array.from({ length: muitas.quantidade }, (_, indice) => muitas.atributos[indice * 4]);
+    const parte = (tipo: number) => tipos.filter((cada) => cada === tipo).length / muitas.quantidade;
+
+    expect(parte(TIPO_NO_AR.moeda)).toBeCloseTo(PARTES_NO_AR.moeda, 1);
+    expect(parte(TIPO_NO_AR.nota)).toBeCloseTo(PARTES_NO_AR.nota, 1);
+    expect(parte(TIPO_NO_AR.folha)).toBeCloseTo(PARTES_NO_AR.folha, 1);
+    expect(parte(TIPO_NO_AR.moeda)).toBeGreaterThan(parte(TIPO_NO_AR.folha));
+    expect(parte(TIPO_NO_AR.nota)).toBeGreaterThan(parte(TIPO_NO_AR.folha));
   });
 
   it('espalha a altura por igual: cada quinto da coluna tem folhas', () => {

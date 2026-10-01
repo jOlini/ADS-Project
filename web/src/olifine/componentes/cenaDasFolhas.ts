@@ -1,4 +1,4 @@
-// A cena WebGL das folhas ao vento: folhas e moedas soltas no ar atrás de toda
+// A cena WebGL das folhas ao vento: folhas, moedas e cédulas soltas no ar atrás de toda
 // a página abaixo do topo. Cada uma sobe devagar, balança, gira no plano da
 // tela e vira em volta do próprio eixo (mostra o verso, mais claro, e fica de
 // lado, fininha): é o que dá volume a um ponto desenhado. As de perto andam
@@ -7,9 +7,10 @@
 //
 // A moeda é uma caricatura 3D: a face dourada com o aro em relevo e o cifrão
 // ($) no centro, a espessura serrilhada que aparece quando ela vira de lado e
-// o contorno escuro de desenho animado. A folha do tipo "nota" vira cédula aos
-// poucos enquanto sobe: embaixo da tela é folha, no alto já é dinheiro (a
-// forma, a cor e o cifrão no medalhão mudam juntos).
+// o contorno escuro de desenho animado. A cédula é um retângulo deitado, de
+// cantos redondos, com a moldura, os selos nas pontas e o medalhão do cifrão.
+// Nenhuma peça vira outra: cada uma sobe com a forma com que nasceu (a troca
+// de folha para cédula não fechava, as duas formas não combinam).
 //
 // WebGL 1 puro, um desenho de pontos por quadro e nada alocado depois de
 // criada. Carregada só quando a página chega perto dela (FolhasAoVento.tsx).
@@ -52,7 +53,6 @@ varying float v_virada;
 varying float v_tamanho;
 varying float v_alfa;
 varying float v_fundo;
-varying float v_mudanca;
 
 void main() {
   float fundo = a_posicao.z;
@@ -83,8 +83,6 @@ void main() {
   v_giro = mix(a_atributo.w + balancoDoGiro * 0.7, balancoDoGiro * 0.35, ehMoeda);
   v_virada = u_tempo * (0.45 + velocidade * 0.8) + fase * 6.2832;
   v_fundo = fundo;
-  // Folha que vira cédula: 0 no terço de baixo da tela, 1 no terço de cima.
-  v_mudanca = 1.0 - smoothstep(0.3 * u_tela.y, 0.7 * u_tela.y, y);
   // O fundo apaga (névoa); a de perto, grande, também não pesa sobre o texto.
   v_alfa = mix(0.72, 0.2, fundo) * smoothstep(0.02, 0.18, fundo);
 }
@@ -99,7 +97,6 @@ varying float v_virada;
 varying float v_tamanho;
 varying float v_alfa;
 varying float v_fundo;
-varying float v_mudanca;
 
 // Um traço de arco (anel de raio r e meia espessura w em volta de c), sem o
 // pedaço entre os ângulos a0 e a1 (radianos, de -pi a pi). s é a borda suave.
@@ -180,31 +177,25 @@ void main() {
     // Mais firme que as folhas: a moeda é o destaque do céu.
     opacidade = 1.3;
   } else {
-    // Folha que vira cédula: a forma passa da lente para o retângulo de
-    // cantos redondos (em pé, como a folha), a cor vai do verde da folha ao
-    // verde do dinheiro, e no meio aparece o medalhão com o cifrão.
-    float m = v_mudanca;
+    // Cédula: retângulo deitado de cantos redondos (0,86 × 0,48 de meia
+    // medida, para os cantos não saírem do quadrado do ponto quando ela
+    // gira), que ondula um pouco ao vento.
     vec2 q = vec2(p.x / largura, p.y);
-    float bordaDaFolha = 1.0 - max(length(q - vec2(0.0, 0.58)), length(q + vec2(0.0, 0.58)));
-    // O papel ondula um pouco ao vento.
-    vec2 n = q;
-    n.x += sin(n.y * 3.2 + v_virada) * 0.05 * m;
-    vec2 d = abs(n) - vec2(0.5, 0.92) + 0.1;
-    float bordaDaNota = -(length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - 0.1);
-    borda = mix(bordaDaFolha, bordaDaNota, m);
-    vec3 folha = mix(vec3(0.169, 0.471, 0.341), vec3(0.392, 0.749, 0.553), smoothstep(0.1, 0.6, v_fundo));
-    folha *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 0.08, abs(q.y))) * step(abs(q.x), 0.7);
-    // A cédula: verde-dinheiro, a moldura fina por dentro da borda e o
-    // medalhão claro com o cifrão.
-    vec3 nota = vec3(0.50, 0.72, 0.44);
-    float moldura = smoothstep(0.05, 0.08, bordaDaNota) * (1.0 - smoothstep(0.1, 0.13, bordaDaNota));
-    nota = mix(nota, vec3(0.30, 0.52, 0.30), moldura);
-    vec2 centro = n / vec2(0.34, 0.42);
-    float medalhao = 1.0 - smoothstep(0.95, 1.05, length(centro));
-    nota = mix(nota, vec3(0.80, 0.90, 0.72), medalhao);
-    nota = mix(nota, vec3(0.20, 0.42, 0.24), cifrao(n / 0.3, suave * 3.0) * medalhao);
-    nota = mix(nota, nota * 0.78 + vec3(0.12), step(virada, 0.0) * 0.5);
-    cor = mix(folha, nota, smoothstep(0.15, 0.85, m));
+    q.y += sin(q.x * 3.0 + v_virada) * 0.04;
+    vec2 d = abs(q) - vec2(0.86, 0.48) + 0.1;
+    borda = -(length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - 0.1);
+    // Verde-dinheiro, a moldura fina por dentro da borda, os dois selos nas
+    // pontas e o medalhão claro com o cifrão no meio.
+    cor = vec3(0.50, 0.72, 0.44);
+    float moldura = smoothstep(0.05, 0.08, borda) * (1.0 - smoothstep(0.1, 0.13, borda));
+    cor = mix(cor, vec3(0.30, 0.52, 0.30), moldura);
+    float selos = 1.0 - smoothstep(0.09, 0.12, length(vec2(abs(q.x) - 0.6, q.y)));
+    cor = mix(cor, vec3(0.36, 0.58, 0.34), selos);
+    float medalhao = 1.0 - smoothstep(0.27, 0.3, length(q));
+    cor = mix(cor, vec3(0.80, 0.90, 0.72), medalhao);
+    cor = mix(cor, vec3(0.20, 0.42, 0.24), cifrao(q / 0.22, suave * 4.0) * medalhao);
+    // O verso, virado para a tela, é mais claro.
+    cor = mix(cor, cor * 0.78 + vec3(0.12), step(virada, 0.0) * 0.5);
     opacidade = 0.92;
   }
   // Luz de cima: a face de frente para ela clareia, a de lado escurece.
