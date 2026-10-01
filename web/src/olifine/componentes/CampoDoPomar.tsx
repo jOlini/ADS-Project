@@ -8,6 +8,7 @@ import {
   matrizDaCena,
   pontoNoChao,
   quantidadeDeFolhas,
+  type Pomar,
   type Ponteiro,
 } from '../regras/pomar';
 import type { CenaDoPomar } from './cenaDoPomar';
@@ -34,8 +35,10 @@ function poucoMovimento(): MediaQueryList | null {
 // O campo 3D do topo da landing (a cena em cenaDoPomar.ts) e a inclinação do
 // celular. Um laço só de requestAnimationFrame cuida dos dois, e só roda com
 // o topo na tela e a aba à vista. A interação é só de hover: com o mouse por
-// perto, as folhas e as moedas sob ele se levantam e clareiam devagar, e
-// voltam ao sair; clicar no campo não faz nada. Sem WebGL, a inclinação continua e o topo
+// perto, as folhas, as moedas e as cédulas sob ele se levantam e clareiam
+// devagar, e voltam ao sair; clicar no campo não faz nada. O pomar sai de
+// gerarPomar na proporção 70/10/20 (folhas, moedas, cédulas), e a cena desenha
+// o dinheiro sob a folhagem. Sem WebGL, a inclinação continua e o topo
 // fica com os contornos em SVG; pedindo menos movimento, o campo é desenhado
 // uma vez e nada se mexe.
 export default function CampoDoPomar({ palco, texto }: Props) {
@@ -50,7 +53,9 @@ export default function CampoDoPomar({ palco, texto }: Props) {
     const topo: HTMLElement = palco.current;
     let desmontado = false;
     let cena: CenaDoPomar | null = null;
-    let pomar = gerarPomar(0);
+    let pomar: Pomar = gerarPomar(0);
+    // Peças a desenhar por quadro (folhagem e dinheiro juntos; a cena reparte
+    // pelos 70/10/20).
     let folhas = 0;
     let densidade = Math.min(globalThis.devicePixelRatio || 1, 1.75);
     let mascara: [number, number, number, number] = [2, 2, 2, 2];
@@ -240,7 +245,11 @@ export default function CampoDoPomar({ palco, texto }: Props) {
       observadorDeTela.disconnect();
       observadorDeTamanho.disconnect();
       observadorDeTema.disconnect();
+      // Libera na placa de vídeo os buffers e o programa (não há textura nem
+      // geometria: moeda e cédula são calculadas no shader) e devolve o
+      // contexto. Sem a cena, nenhum quadro atrasado desenha de novo.
       cena?.destruir();
+      cena = null;
       delete topo.dataset.pomar;
       topo.style.removeProperty('--pomar-x');
       topo.style.removeProperty('--pomar-y');

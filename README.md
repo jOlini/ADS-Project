@@ -453,7 +453,7 @@ http://localhost:5173/ADS-Project/ (`npm run dev` sobe o mesmo servidor sem abri
 do cliente: [`web/README.md`](web/README.md).
 
 A raiz (`/`) mostra a página de apresentação, com o simulador "Quanto sobra no seu mês?": o pomar 3D do topo
-reage ao mouse (as folhas sob ele se levantam) e segue pela página como folhas e moedas ao vento atrás das seções
+(folhas, com moedas e cédulas entre elas: 70/10/20) reage ao mouse (as peças sob ele se levantam) e segue pela página como folhas e moedas ao vento atrás das seções
 (WebGL, carregado só ao rolar): moedas (caricaturas 3D com o cifrão no centro), cédulas e folhas
 sobem juntas, cada uma com a própria forma (duas moedas ou cédulas para cada folha). Cada bloco entra ao rolar e os cartões giram com o mouse. Na seção do notebook, a
 página fica presa enquanto a rolagem abre a tampa e só volta a descer com ela aberta; aberta, a tela é o app de
