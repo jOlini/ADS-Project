@@ -1,23 +1,21 @@
 // As folhas ao vento da landing, sem interface: a conta por trás da cena WebGL
 // que acompanha a página inteira abaixo do topo (componentes/cenaDasFolhas.ts).
-// Poucas folhas e moedas soltas no ar, cada uma numa profundidade: as de perto
-// são maiores, mais nítidas e andam mais com a rolagem (paralaxe); as do fundo,
-// pequenas e apagadas. As moedas são caricaturas 3D, com o cifrão no meio e a
-// espessura à mostra quando viram; parte das folhas vira cédula aos poucos
-// enquanto sobe (o dinheiro que cresce). Tudo determinístico e testado em
-// folhasAoVento.test.ts; o movimento de cada quadro e a transformação são
-// feitos no shader, a partir do que sai daqui.
+// Folhas, moedas e cédulas soltas no ar, cada uma numa profundidade: as de
+// perto são maiores, mais nítidas e andam mais com a rolagem (paralaxe); as do
+// fundo, pequenas e apagadas. Cada peça nasce e fica com a própria forma (sem
+// uma virar a outra): a moeda é uma caricatura 3D, com o cifrão no meio e a
+// espessura à mostra quando vira; a cédula, um retângulo deitado com o
+// medalhão do cifrão. Tudo determinístico e testado em folhasAoVento.test.ts;
+// o movimento de cada quadro é feito no shader, a partir do que sai daqui.
 
 import { gerador } from './arvore';
 
-// nota: a folha que vira cédula enquanto sobe pela tela.
+// nota: a cédula de dinheiro.
 export const TIPO_NO_AR = { folha: 0, moeda: 1, nota: 2 } as const;
 
-// Moedas são poucas: o dinheiro que voa junto com as folhas.
-const PARTE_DE_MOEDAS = 0.16;
-// Folhas que viram cédula: um quinto do céu, para a troca chamar a atenção
-// sem tirar o lugar das folhas.
-const PARTE_DE_NOTAS = 0.2;
+// O dinheiro é o assunto do céu: 40% de moedas, 40% de cédulas e 20% de
+// folhas (a folha fica como a marca do pomar no meio delas).
+export const PARTES_NO_AR = { moeda: 0.4, nota: 0.4, folha: 0.2 } as const;
 // Parte das folhas que pode passar pelo meio da tela (atrás do texto). As
 // outras ficam nas margens, onde a página tem respiro.
 const PARTE_NO_MEIO = 0.14;
@@ -88,10 +86,11 @@ export function gerarFolhasAoVento(quantidade: number, semente = 2026): FolhasAo
     posicoes[indice * 4 + 2] = 0.08 + 0.92 * sorte() ** 1.1;
     posicoes[indice * 4 + 3] = sorte();
 
-    // Um sorteio só para o tipo: a sequência da semente segue a mesma de
-    // antes da cédula, e as posições não mudam.
+    // Um sorteio só para o tipo: a sequência da semente não muda com as
+    // proporções, e as posições continuam as mesmas.
     const sorteio = sorte();
-    const tipo = sorteio < PARTE_DE_MOEDAS ? 'moeda' : sorteio < PARTE_DE_MOEDAS + PARTE_DE_NOTAS ? 'nota' : 'folha';
+    const tipo =
+      sorteio < PARTES_NO_AR.moeda ? 'moeda' : sorteio < PARTES_NO_AR.moeda + PARTES_NO_AR.nota ? 'nota' : 'folha';
     const tamanhos = TAMANHOS[tipo];
     atributos[indice * 4] = TIPO_NO_AR[tipo];
     atributos[indice * 4 + 1] = tamanhos.menor + (tamanhos.maior - tamanhos.menor) * sorte();

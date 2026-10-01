@@ -454,8 +454,8 @@ do cliente: [`web/README.md`](web/README.md).
 
 A raiz (`/`) mostra a página de apresentação, com o simulador "Quanto sobra no seu mês?": o pomar 3D do topo
 reage ao mouse (as folhas sob ele se levantam) e segue pela página como folhas e moedas ao vento atrás das seções
-(WebGL, carregado só ao rolar): as moedas são caricaturas 3D com o cifrão no centro, e parte das folhas vira cédula
-aos poucos enquanto sobe. Cada bloco entra ao rolar e os cartões giram com o mouse. Na seção do notebook, a
+(WebGL, carregado só ao rolar): moedas (caricaturas 3D com o cifrão no centro), cédulas e folhas
+sobem juntas, cada uma com a própria forma (duas moedas ou cédulas para cada folha). Cada bloco entra ao rolar e os cartões giram com o mouse. Na seção do notebook, a
 página fica presa enquanto a rolagem abre a tampa e só volta a descer com ela aberta; aberta, a tela é o app de
 exemplo e responde ao mouse (telas, gráfico, categorias, contas e a meta que cresce a cada rega). Pedindo menos
 movimento ao sistema, tudo fica parado e o notebook já aparece aberto. Os planos sobem de nível da esquerda para

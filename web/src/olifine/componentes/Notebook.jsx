@@ -136,7 +136,7 @@ function MiniRosca({ categorias }) {
                 onPointerLeave={() => setFoco(null)} onFocus={() => setFoco(indice)} onBlur={() => setFoco(null)}
                 aria-label={`${fatia.categoria}: ${formatarBRL(fatia.valor)}, ${fatia.fatia}%`}>
                 <i style={{ background: `var(--cat-${fatia.cor})` }} />
-                {fatia.categoria}
+                <span>{fatia.categoria}</span>
               </button>
             </li>
           ))}
