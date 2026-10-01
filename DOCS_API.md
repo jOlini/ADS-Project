@@ -552,8 +552,8 @@ diferença de caixa nem de acento); sem responsável, é do titular. Os relatór
 | `PUT` | `/espacos/{espaco_id}/familia/pessoas/{pessoa_id}` | Trocar nome e cor; com o nome novo, os lançamentos dela passam para ele (`lancamentos_renomeados`) | `200 OK` | `400`, `401`, `403` (Free), `404` |
 | `DELETE` | `/espacos/{espaco_id}/familia/pessoas/{pessoa_id}` | Tirar da família (os lançamentos ficam, com o nome escrito) | `204 No Content` | `401`, `404` |
 
-- **Assinatura:** uma só, a do titular, cobre a casa inteira: o titular e até 5 pessoas (`maximo_de_pessoas`).
-  Ninguém da família precisa assinar nem ter conta. A sexta pessoa é `409`.
+- **Assinatura:** uma só, a do titular, cobre a casa inteira: o titular e até 4 convidados (`maximo_de_pessoas`),
+  5 pessoas no total. Ninguém da família precisa assinar nem ter conta. O quinto convidado é `409`.
 - **Nome:** único na família (sem caixa e acento; "Léo" e "LEO" são a mesma pessoa) e diferente de "Você" (o
   titular). **Cor:** `menta`, `azul`, `roxo`, `coral`, `ambar`, `rosa`, `turquesa` ou `grafite`.
 - **Nome novo em cascata:** o `PUT` troca o nome no `responsavel` e nas partes das divisões de todos os
