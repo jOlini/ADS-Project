@@ -287,6 +287,15 @@ export default function Notebook({ demo, aberto }) {
   return (
     <div className="lp-laptop">
       <div className="lp-laptop-corpo">
+      {/* A base deitada, com o teclado e o touchpad: a tampa fecha sobre ela.
+          Vem antes da tampa no DOM: o Firefox pinta as peças do mesmo espaço
+          3D na ordem do código, e a tampa fechada precisa ficar por cima. */}
+      <div className="lp-laptop-teclado" aria-hidden="true">
+        <span className="lp-laptop-dobradica" />
+        <span className="lp-laptop-teclas" />
+        <span className="lp-laptop-touchpad" />
+        <span className="lp-laptop-frente" />
+      </div>
       <div className="lp-laptop-tampa">
         <div className="lp-laptop-costas" aria-hidden="true">
           <MarcaOliFine tamanho={44} />
@@ -313,13 +322,6 @@ export default function Notebook({ demo, aberto }) {
           </div>
         </div>
         </div>
-      </div>
-      {/* A base deitada, com o teclado e o touchpad: a tampa fecha sobre ela. */}
-      <div className="lp-laptop-teclado" aria-hidden="true">
-        <span className="lp-laptop-dobradica" />
-        <span className="lp-laptop-teclas" />
-        <span className="lp-laptop-touchpad" />
-        <span className="lp-laptop-frente" />
       </div>
       </div>
     </div>

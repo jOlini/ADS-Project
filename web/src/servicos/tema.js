@@ -4,11 +4,11 @@
 import { CHAVE_DO_TEMA } from '../regras/dadosLocais';
 import { COR_DA_BARRA, outroTema, temaInicial, temaValido } from '../regras/tema';
 
-// Enquanto dura, a troca de cor anima (estilos/movimento.css).
-const DURACAO_DA_TROCA = 400;
-
 const ouvintes = new Set();
-let fimDaTroca = 0;
+// O tema pedido por último. Com animação, o atributo só muda no quadro
+// seguinte (dentro da View Transition): dois cliques rápidos leem daqui, e não
+// do <html>, para não pedirem o mesmo tema duas vezes.
+let temaPedido = null;
 
 const sistemaEscuro = () => globalThis.matchMedia?.('(prefers-color-scheme: dark)');
 
@@ -25,14 +25,10 @@ export function temaAtual() {
   return temaValido(aplicado) ? aplicado : temaInicial(lerEscolha(), sistemaEscuro()?.matches ?? false);
 }
 
-function aplicar(tema, { animar = false } = {}) {
-  const raiz = document.documentElement;
-  if (animar && !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-    raiz.classList.add('trocando-tema');
-    clearTimeout(fimDaTroca);
-    fimDaTroca = setTimeout(() => raiz.classList.remove('trocando-tema'), DURACAO_DA_TROCA);
-  }
-  raiz.dataset.tema = tema;
+// Troca o atributo, a cor da barra e avisa quem acompanha (o botão). Uma
+// escrita só no <html>: os tokens de cor mudam todos num recálculo de estilo.
+function trocar(tema) {
+  document.documentElement.dataset.tema = tema;
   for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
     meta.content = COR_DA_BARRA[tema];
   }
@@ -41,8 +37,25 @@ function aplicar(tema, { animar = false } = {}) {
   }
 }
 
+// Com animação, a troca vai dentro de uma View Transition: o navegador cruza
+// a foto de antes com a de depois no compositor (estilos/movimento.css), sem
+// transição de cor em cada elemento. Uma troca nova no meio da anterior pula
+// para o fim dela; não precisa de debounce.
+function aplicar(tema, { animar = false } = {}) {
+  temaPedido = tema;
+  const podeAnimar =
+    animar &&
+    typeof document.startViewTransition === 'function' &&
+    !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (podeAnimar) {
+    document.startViewTransition(() => trocar(tema));
+  } else {
+    trocar(tema);
+  }
+}
+
 export function alternarTema() {
-  const novo = outroTema(temaAtual());
+  const novo = outroTema(temaPedido ?? temaAtual());
   try {
     globalThis.localStorage?.setItem(CHAVE_DO_TEMA, novo);
   } catch {

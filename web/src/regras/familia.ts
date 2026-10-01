@@ -6,7 +6,7 @@
 // quem" das telas e o gasto por pessoa. Testado em familia.test.ts.
 //
 // Assinatura: uma só, a do titular, cobre a casa inteira (o titular e até
-// maximo_de_pessoas pessoas). Ninguém da família precisa assinar. O modo só
+// maximo_de_pessoas convidados: "eu + 4", 5 pessoas no total). Ninguém da família precisa assinar. O modo só
 // vale com o Plano Família ou o Empresarial (regras/planos.ts); no Free, as
 // pessoas não aparecem mesmo com o modo gravado ligado.
 

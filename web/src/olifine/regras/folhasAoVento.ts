@@ -2,15 +2,22 @@
 // que acompanha a página inteira abaixo do topo (componentes/cenaDasFolhas.ts).
 // Poucas folhas e moedas soltas no ar, cada uma numa profundidade: as de perto
 // são maiores, mais nítidas e andam mais com a rolagem (paralaxe); as do fundo,
-// pequenas e apagadas. Tudo determinístico e testado em folhasAoVento.test.ts;
-// o movimento de cada quadro é feito no shader, a partir do que sai daqui.
+// pequenas e apagadas. As moedas são caricaturas 3D, com o cifrão no meio e a
+// espessura à mostra quando viram; parte das folhas vira cédula aos poucos
+// enquanto sobe (o dinheiro que cresce). Tudo determinístico e testado em
+// folhasAoVento.test.ts; o movimento de cada quadro e a transformação são
+// feitos no shader, a partir do que sai daqui.
 
 import { gerador } from './arvore';
 
-export const TIPO_NO_AR = { folha: 0, moeda: 1 } as const;
+// nota: a folha que vira cédula enquanto sobe pela tela.
+export const TIPO_NO_AR = { folha: 0, moeda: 1, nota: 2 } as const;
 
 // Moedas são poucas: o dinheiro que voa junto com as folhas.
 const PARTE_DE_MOEDAS = 0.16;
+// Folhas que viram cédula: um quinto do céu, para a troca chamar a atenção
+// sem tirar o lugar das folhas.
+const PARTE_DE_NOTAS = 0.2;
 // Parte das folhas que pode passar pelo meio da tela (atrás do texto). As
 // outras ficam nas margens, onde a página tem respiro.
 const PARTE_NO_MEIO = 0.14;
@@ -19,7 +26,10 @@ const PARTE_NO_MEIO = 0.14;
 // profundidade.
 export const TAMANHOS = {
   folha: { menor: 30, maior: 60 },
-  moeda: { menor: 18, maior: 30 },
+  // Maiores que antes: o cifrão precisa de tamanho para ser lido.
+  moeda: { menor: 26, maior: 46 },
+  // A cédula é mais comprida que a folha: o tamanho é o do lado maior.
+  nota: { menor: 44, maior: 72 },
 } as const;
 
 export interface FolhasAoVento {
@@ -78,9 +88,12 @@ export function gerarFolhasAoVento(quantidade: number, semente = 2026): FolhasAo
     posicoes[indice * 4 + 2] = 0.08 + 0.92 * sorte() ** 1.1;
     posicoes[indice * 4 + 3] = sorte();
 
-    const moeda = sorte() < PARTE_DE_MOEDAS;
-    const tamanhos = moeda ? TAMANHOS.moeda : TAMANHOS.folha;
-    atributos[indice * 4] = moeda ? TIPO_NO_AR.moeda : TIPO_NO_AR.folha;
+    // Um sorteio só para o tipo: a sequência da semente segue a mesma de
+    // antes da cédula, e as posições não mudam.
+    const sorteio = sorte();
+    const tipo = sorteio < PARTE_DE_MOEDAS ? 'moeda' : sorteio < PARTE_DE_MOEDAS + PARTE_DE_NOTAS ? 'nota' : 'folha';
+    const tamanhos = TAMANHOS[tipo];
+    atributos[indice * 4] = TIPO_NO_AR[tipo];
     atributos[indice * 4 + 1] = tamanhos.menor + (tamanhos.maior - tamanhos.menor) * sorte();
     atributos[indice * 4 + 2] = 0.4 + 0.6 * sorte();
     atributos[indice * 4 + 3] = sorte() * Math.PI * 2;

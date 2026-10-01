@@ -36,16 +36,34 @@ describe('gerarFolhasAoVento', () => {
     expect(coluna(folhas.posicoes, 0).every((x) => x >= -1 && x <= 1)).toBe(true);
     expect(coluna(folhas.posicoes, 1).every((y) => y >= 0 && y <= 1)).toBe(true);
     expect(coluna(folhas.posicoes, 2).every((z) => z >= 0.08 && z <= 1)).toBe(true);
-    expect(coluna(folhas.atributos, 1).every((tamanho) => tamanho >= TAMANHOS.moeda.menor && tamanho <= TAMANHOS.folha.maior)).toBe(true);
+    expect(coluna(folhas.atributos, 0).every((tipo) => Object.values(TIPO_NO_AR).includes(tipo as 0 | 1 | 2))).toBe(true);
   });
 
-  it('deixa a maior parte nas margens e mistura moedas às folhas', () => {
+  it('dá a cada tipo o tamanho dele: a moeda cabe o cifrão e a cédula é a maior', () => {
+    const nome = { [TIPO_NO_AR.folha]: 'folha', [TIPO_NO_AR.moeda]: 'moeda', [TIPO_NO_AR.nota]: 'nota' } as const;
+    for (let indice = 0; indice < folhas.quantidade; indice += 1) {
+      const tipo = nome[(folhas.atributos[indice * 4] ?? 0) as 0 | 1 | 2];
+      const tamanho = folhas.atributos[indice * 4 + 1] ?? 0;
+      expect(tamanho).toBeGreaterThanOrEqual(TAMANHOS[tipo].menor);
+      expect(tamanho).toBeLessThanOrEqual(TAMANHOS[tipo].maior);
+    }
+    expect(TAMANHOS.moeda.menor).toBeGreaterThanOrEqual(24);
+    expect(TAMANHOS.nota.maior).toBeGreaterThan(TAMANHOS.folha.maior);
+  });
+
+  it('deixa a maior parte nas margens e mistura moedas e cédulas às folhas', () => {
     const nasMargens = coluna(folhas.posicoes, 0).filter((x) => Math.abs(x) >= 0.42).length;
-    const moedas = coluna(folhas.atributos, 0).filter((tipo) => tipo === TIPO_NO_AR.moeda).length;
+    const tipos = coluna(folhas.atributos, 0);
+    const moedas = tipos.filter((tipo) => tipo === TIPO_NO_AR.moeda).length;
+    const notas = tipos.filter((tipo) => tipo === TIPO_NO_AR.nota).length;
+    const soFolhas = tipos.filter((tipo) => tipo === TIPO_NO_AR.folha).length;
 
     expect(nasMargens / folhas.quantidade).toBeGreaterThan(0.8);
     expect(moedas).toBeGreaterThan(10);
     expect(moedas).toBeLessThan(60);
+    expect(notas).toBeGreaterThan(20);
+    expect(notas).toBeLessThan(70);
+    expect(soFolhas).toBeGreaterThan(folhas.quantidade / 2);
   });
 
   it('espalha a altura por igual: cada quinto da coluna tem folhas', () => {

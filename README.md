@@ -13,6 +13,46 @@ teste e entrega.
 | **Documentação da API** | [`DOCS_API.md`](DOCS_API.md): endpoints, códigos de resposta, perfis, JWT, OAuth 2.0 e análise de segurança |
 | **Licença** | Proprietária, todos os direitos reservados ([`LICENSE`](LICENSE)) |
 
+### Central da documentação
+
+| Quero... | Onde |
+|---|---|
+| Rodar o projeto pela primeira vez | [Comece aqui](#comece-aqui) e, com detalhes, [Como instalar](#como-instalar) e [Como executar](#como-executar) |
+| Rodar os testes, o lint e o build | [Comandos do dia a dia](#comandos-do-dia-a-dia) e [Como testar](#como-testar) |
+| Entender a arquitetura e a infraestrutura | [`ARCHITECTURE.md`](ARCHITECTURE.md): visão geral, diagrama de infraestrutura, API, front-end, segurança em camadas |
+| Configurar variáveis de ambiente e implantar | [`ARCHITECTURE.md`, seções 6 e 7](ARCHITECTURE.md#6-variáveis-de-ambiente) |
+| Consultar os endpoints da API | [`DOCS_API.md`](DOCS_API.md) e o Swagger em http://localhost:8081/docs |
+| Rodar só a área do cliente | [`web/README.md`](web/README.md) |
+| Entender o pipeline | [CI/CD](#cicd) e [`ARCHITECTURE.md`, seção 8](ARCHITECTURE.md#8-cicd) |
+
+### Comece aqui
+
+Com Docker, Python 3.11+ e Node.js 20.19+ instalados ([pré-requisitos](#pré-requisitos)):
+
+```bash
+git clone https://github.com/jOlini/ADS-Project.git
+cd ADS-Project
+python subir-app.py dev
+```
+
+O script cria o `api/.env` a partir do modelo, prepara o `api/.venv`, instala as dependências do front-end, sobe
+MongoDB e API no Docker e o Vite em segundo plano, e mostra os endereços: área do cliente em
+http://localhost:5173/ADS-Project/, API em http://localhost:8081 e painel em http://localhost:8081/painel/. Para a
+área do cliente logar, preencha o `web/.env` ([passo 3](#3-configurar-a-área-do-cliente-opcional)).
+
+### Comandos do dia a dia
+
+| O quê | Comando (na raiz, salvo indicação) |
+|---|---|
+| Subir tudo (desenvolvimento, recarga ao salvar) | `python subir-app.py dev` |
+| Subir como em produção (build no nginx) | `python subir-app.py prod` |
+| Ver o estado, parar, apagar os dados | `python subir-app.py status` · `python subir-app.py down` · `python subir-app.py down --apagar-dados` |
+| Conferir a configuração | `python subir-app.py verificar` |
+| Todos os testes (front-end e API) | `python subir-app.py testes` |
+| Front-end: servidor, testes, lint, tipos, build | em `web/`: `npm run dev` · `npm test -- --run` · `npm run lint` · `npm run typecheck` · `npm run build` |
+| API: testes e servidor sem Docker | em `api/`: `.venv\Scripts\python -m pytest` · `.venv\Scripts\uvicorn app.main:criar_app --factory --port 8081 --reload` |
+| Só API + MongoDB, sem o script | `docker compose up --build` |
+
 **Tudo no ar com um comando:** `python subir-app.py dev` (API, MongoDB e área do cliente com recarga ao salvar)
 ou `python subir-app.py prod` (o build otimizado servido pelo nginx, como em produção); sem argumentos, o script
 abre um menu. Detalhes em [Como executar](#como-executar).
@@ -414,11 +454,13 @@ do cliente: [`web/README.md`](web/README.md).
 
 A raiz (`/`) mostra a página de apresentação, com o simulador "Quanto sobra no seu mês?": o pomar 3D do topo
 reage ao mouse (as folhas sob ele se levantam) e segue pela página como folhas e moedas ao vento atrás das seções
-(WebGL, carregado só ao rolar), cada bloco entra ao rolar e os cartões giram com o mouse. Na seção do notebook, a
+(WebGL, carregado só ao rolar): as moedas são caricaturas 3D com o cifrão no centro, e parte das folhas vira cédula
+aos poucos enquanto sobe. Cada bloco entra ao rolar e os cartões giram com o mouse. Na seção do notebook, a
 página fica presa enquanto a rolagem abre a tampa e só volta a descer com ela aberta; aberta, a tela é o app de
 exemplo e responde ao mouse (telas, gráfico, categorias, contas e a meta que cresce a cada rega). Pedindo menos
 movimento ao sistema, tudo fica parado e o notebook já aparece aberto. Os planos sobem de nível da esquerda para
-a direita (Free, Família e o Empresarial em destaque), e o botão "Comparar todos os planos" abre e recolhe a tabela
+a direita (Free, Família e o Empresarial em destaque), em cartões da mesma altura, cada um com a lista curta do
+que inclui (o Família cobre você e mais 4 convidados, até 5 pessoas), e o botão "Comparar todos os planos" abre e recolhe a tabela
 comparativa (começa aberta; folhas sobem da linha sob o mouse). A área logada tem a Visão geral (o saldo
 livre em destaque, com o patrimônio total, o investido, o fechamento e quanto do mês já tem destino, números do mês,
 evolução do saldo, despesas por categoria, últimas transações, metas, o saldo de cada conta em cards, o total das
@@ -449,31 +491,9 @@ resto funciona normalmente.
 
 ### Variáveis de ambiente
 
-| Variável | Módulo | Descrição |
-|---|---|---|
-| `MONGODB_URI` | api | String de conexão do MongoDB (no Docker Compose, aponta para o container) |
-| `JWT_SECRET` | api | Chave de assinatura do token (mínimo 32 bytes) |
-| `JWT_EXPIRATION` | api | Validade do token, em minutos (padrão 15) |
-| `CORS_ORIGENS` | api | Origens de navegador autorizadas, separadas por vírgula (sem a variável: nenhuma; o `.env.example` libera a área do cliente local, portas 5173 e 8080) |
-| `CORS_ORIGENS_REDE` | api | Origens da área do cliente aberta pela rede local, somadas ao `CORS_ORIGENS`. Não vai no `.env`: o `subir-app.py` passa pelo Docker Compose a cada subida |
-| `FIREBASE_PROJECT_ID` | api | Projeto Firebase cujos ID tokens abrem o livro-caixa (o mesmo `VITE_FIREBASE_PROJECT_ID`). Vazio: `/espacos` responde `503` |
-| `ADMIN_NOME`, `ADMIN_EMAIL`, `ADMIN_SENHA` | api | Administrador criado na primeira subida, com o banco vazio |
-| `AMBIENTE` | api | `desenvolvimento` (padrão) ou `producao`: em produção, a API recusa configuração insegura e tira o Swagger do ar |
-| `FORWARDED_ALLOW_IPS` | api | Só atrás de um proxy reverso: o IP do proxy, para o limite de tentativas ver o IP real de quem chama |
-| `EMAIL_PROVEDOR` | api | E-mails da conta pela API: `resend`, `smtp` ou `pasta` (desenvolvimento). Vazio: `/conta` responde `503` e o Firebase manda |
-| `APP_URL` | api | Endereço da área do cliente usado nos links dos e-mails (em produção, `https://`) |
-| `EMAIL_REMETENTE`, `EMAIL_RESPONDER_PARA` | api | Remetente (`Nome <endereco>`, com o domínio verificado no provedor) e resposta |
-| `FIREBASE_CONTA_DE_SERVICO` | api | Chave JSON da conta de serviço (caminho ou conteúdo), só para gerar os códigos dos links |
-| `RESEND_API_KEY` | api | Chave do Resend (`EMAIL_PROVEDOR=resend`) |
-| `SMTP_HOST`, `SMTP_PORTA`, `SMTP_USUARIO`, `SMTP_SENHA` | api | Servidor SMTP (`EMAIL_PROVEDOR=smtp`): 465 com SSL ou 587 com STARTTLS |
-| `EMAIL_PASTA` | api | Pasta dos e-mails gravados com `EMAIL_PROVEDOR=pasta` (padrão `emails-enviados`) |
-| `EMAIL_COTA_DIARIA` | api | Cota diária de e-mails do provedor (padrão 100, a do Resend grátis): a telemetria avisa em 80% e em 100%. `0` desliga o aviso |
-| `DISCORD_WEBHOOK_SISTEMA`, `DISCORD_WEBHOOK_SEGURANCA`, `DISCORD_WEBHOOK_TELEMETRIA` | api | Webhook de cada canal de alertas (`#alertas-sistema`, `#logs-seguranca`, `#telemetria-custos`). Vazio: canal desligado. Endereço fora do Discord: a API não sobe |
-| `TELEMETRIA_INTERVALO_HORAS` | api | A cada quantas horas o resumo de uso vai para a telemetria (padrão 24) |
-| `VITE_FIREBASE_*` | web | Configuração pública do app Web do Firebase |
-| `VITE_FIREBASE_EMULADOR` | web | `true` para usar os emuladores locais do Firebase |
-| `VITE_API_URL` | web | Endereço da API (ex.: `http://localhost:8081`; `/api` com a API atrás do mesmo domínio). Vazio: telas do livro-caixa desligadas, como no GitHub Pages |
-| `VITE_BASE` | web | Caminho onde o build é publicado. Vazio: `/ADS-Project/` (GitHub Pages); `/` num domínio próprio (o Dockerfile já usa `/`). Só no build e no `npm run preview` |
+O guia completo (o mínimo para subir, cada variável da API e da área do cliente, o que é segredo e onde fica) está
+em [`ARCHITECTURE.md`, seção 6](ARCHITECTURE.md#6-variáveis-de-ambiente). Os modelos são
+[`api/.env.example`](api/.env.example) e [`web/.env.example`](web/.env.example).
 
 ---
 
@@ -531,9 +551,9 @@ poucos.
 | Front-end | `web/src/regras/mascaras.test.ts` e `sanitizacao.test.ts` | Máscara de valor (milhar, vírgula, dois decimais, sinal, cursor, colar) e de inteiro, teclas barradas por tipo de campo, e a limpeza do texto antes de ir à API |
 | Front-end | `web/src/regras/arquivoDoExtrato.test.ts` e `conferenciaDaImportacao.test.ts` | Arquivo do extrato (extensão, tipo, planilha ou PDF renomeado, binário, UTF-8, Windows-1252 e UTF-16) e a edição de descrição e categoria na conferência |
 | Front-end | `web/src/regras/*.test.js` e `responsavel.test.ts` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, responsável e racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |
-| Front-end | `web/src/regras/espacos.test.ts`, `familia.test.ts`, `planos.test.ts`, `servicos/espacoAtivo.test.ts` e `servicos/lateral.test.ts` | Planos (o plano de cada espaço, o que libera a família, a tabela da landing com dica e oferta nos três); espaços: só pessoal e empresarial, qual livro abre em cada um, a última empresa usada, o CNPJ (numérico e alfanumérico), o formulário da empresa, a seção depois da troca e as metas de cada espaço; o Modo Família (de quem é cada lançamento, o filtro, o gasto por pessoa, o cadastro); a barra lateral recolhida (fica depois do logout, como o tema) |
+| Front-end | `web/src/regras/espacos.test.ts`, `familia.test.ts`, `planos.test.ts`, `servicos/espacoAtivo.test.ts` e `servicos/lateral.test.ts` | Planos (o plano de cada espaço, o que libera a família, o limite de 4 convidados, a lista curta de cada cartão e a tabela da landing com dica e oferta nos três); espaços: só pessoal e empresarial, qual livro abre em cada um, a última empresa usada, o CNPJ (numérico e alfanumérico), o formulário da empresa, a seção depois da troca e as metas de cada espaço; o Modo Família (de quem é cada lançamento, o filtro, o gasto por pessoa, o cadastro); a barra lateral recolhida (fica depois do logout, como o tema) |
 | Front-end | `web/src/servicos/livroCaixa.test.js` e `enderecoDaApi.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar, token que não renova e endereço pela rede local |
-| Front-end | `web/src/olifine/regras/*.test.js` e `*.test.ts` | OliFine: tendência, séries do gráfico de saldo, Visão geral, saldo livre do mês (datas futuras, faturas, falsa folga e a frase de cada estado: positivo, neutro e negativo), metas, a árvore que cresce, o simulador de orçamento, o pomar 3D da landing (câmera, ponto do chão sob o ponteiro, movimento suave, quantas folhas e onde nascem), as folhas ao vento (quantas por tela, margens e paralaxe), o notebook preso na rolagem (progresso, abertura só completa antes de soltar), as folhas e moedas em 3D do app (cabeçalho, estado vazio e colheita) e a gestão da empresa (grupo de cada categoria no DRE, com o dinheiro dos sócios fora; fluxo de caixa com investimentos e sócios; classes de custo, margens e ponto de equilíbrio; apuração de dividendos; agenda, provisão e alertas dos impostos; folha e o que falta lançar) |
+| Front-end | `web/src/olifine/regras/*.test.js` e `*.test.ts` | OliFine: tendência, séries do gráfico de saldo, Visão geral, saldo livre do mês (datas futuras, faturas, falsa folga e a frase de cada estado: positivo, neutro e negativo), metas, a árvore que cresce, o simulador de orçamento, o pomar 3D da landing (câmera, ponto do chão sob o ponteiro, movimento suave, quantas folhas e onde nascem), as folhas ao vento (quantas por tela, margens, paralaxe e o tamanho de cada tipo: folha, moeda e cédula), o notebook preso na rolagem (progresso, abertura só completa antes de soltar), as folhas e moedas em 3D do app (cabeçalho, estado vazio e colheita) e a gestão da empresa (grupo de cada categoria no DRE, com o dinheiro dos sócios fora; fluxo de caixa com investimentos e sócios; classes de custo, margens e ponto de equilíbrio; apuração de dividendos; agenda, provisão e alertas dos impostos; folha e o que falta lançar) |
 | Front-end | `web/src/componentes/*.test.js` | Error Boundary, avisos (toasts) e todo nome de ícone usado nas telas com desenho na família própria |
 
 Os mesmos testes rodam no GitHub Actions a cada commit de pull request e a cada push na `main`

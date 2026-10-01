@@ -1,7 +1,7 @@
 # Arquitetura — Pessoal Finance
 
-Fonte única da arquitetura do código: componentes, fluxos de identidade, dados, camadas de segurança,
-ambientes e convenções. Como instalar, executar e testar está no [`README.md`](README.md); contrato HTTP,
+Fonte única da arquitetura do código: componentes, infraestrutura, fluxos de identidade, dados, camadas de
+segurança, ambientes, variáveis de ambiente, requisitos de implantação e convenções. Como instalar, executar e testar está no [`README.md`](README.md); contrato HTTP,
 códigos de resposta e análise de segurança da API, no [`DOCS_API.md`](DOCS_API.md).
 
 ---
@@ -36,6 +36,52 @@ códigos de resposta e análise de segurança da API, no [`DOCS_API.md`](DOCS_AP
 | API (`api/app/`) | Python 3.13, FastAPI, Pydantic, PyJWT, bcrypt, pymongo | Regras de negócio, autenticação, autorização e persistência |
 | Identidade do cliente | Firebase Authentication + Cloud Firestore | Conta do cliente final e documento de perfil (`usuarios/{uid}`) |
 | Banco da aplicação | MongoDB 7 | Usuários do back-office e livro-caixa |
+
+### Infraestrutura (diagrama)
+
+Onde cada parte roda e por onde passam os dados. O tracejado é opcional (só existe quando configurado).
+
+```mermaid
+flowchart LR
+  subgraph Navegador
+    SPA["Área do cliente<br/>React 19 + Vite (web/)"]
+    PAINEL["Painel do back-office<br/>HTML, CSS e JS (api/painel/)"]
+  end
+
+  subgraph Publicação
+    PAGES["GitHub Pages<br/>build estático"]
+    NGINX["nginx alpine<br/>(web/Dockerfile)"]
+  end
+
+  subgraph Docker Compose
+    API["API REST<br/>FastAPI · Python 3.13<br/>porta 8081"]
+    MONGO[("MongoDB 7<br/>porta 27017")]
+  end
+
+  subgraph Google Firebase
+    AUTH["Authentication<br/>e-mail e senha"]
+    FS[("Cloud Firestore<br/>perfil usuarios/{uid}")]
+  end
+
+  EMAIL["Provedor de e-mail<br/>Resend ou SMTP"]
+  DISCORD["Discord<br/>3 webhooks de alerta"]
+  GH["GitHub Actions<br/>CI e CD"]
+
+  PAGES -->|serve| SPA
+  NGINX -->|serve| SPA
+  SPA -->|SDK: login e cadastro| AUTH
+  SPA -->|SDK: perfil| FS
+  SPA -->|HTTPS + ID token RS256<br/>/espacos e /conta| API
+  NGINX -.->|proxy /api/espacos| API
+  PAINEL -->|HTTPS + JWT HS256<br/>/auth e /usuarios| API
+  API -->|chaves públicas do Google| AUTH
+  API --> MONGO
+  API -.->|código do link| AUTH
+  API -.->|e-mails da conta| EMAIL
+  API -.->|alertas e telemetria| DISCORD
+  GH -->|deploy na main| PAGES
+  GH -.->|status do CI| DISCORD
+```
 
 ### Duas fontes de identidade
 
@@ -191,6 +237,9 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
   (`olifine/componentes/cenaDasFolhas.ts`, cerca de 2 kB comprimido) passam atrás de todas as seções num canvas
   fixo à janela: o módulo só é baixado quando a pessoa rola perto do conteúdo, o laço só roda com essa parte na
   tela, a densidade de pixels fica em 1,5 e a quantidade depende da tela e da memória (`regras/folhasAoVento.ts`).
+  Nesse céu, a moeda é uma caricatura 3D (face dourada com o aro em relevo e o cifrão no centro, espessura
+  serrilhada que aparece quando ela vira e contorno escuro), e um quinto das folhas vira cédula aos poucos enquanto
+  sobe: a forma, a cor e o medalhão com o cifrão mudam juntos, tudo no shader de fragmentos (sem textura).
   As duas cenas usam as mesmas peças de WebGL (`olifine/componentes/webgl.ts`). A revelação ao rolar e a
   inclinação dos cartões (`olifine/useMovimentoDaLanding.ts`) usam `IntersectionObserver` e transições de
   `opacity`, `translate` e `rotate`, que não refazem o layout.
@@ -198,7 +247,10 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
   `olifine/useNotebookPreso.ts` lê o progresso da pista uma vez por quadro (só com ela perto da tela) e escreve o
   ângulo da tampa, que termina de abrir antes do fim da pista (`olifine/regras/notebook.ts`). A tela do notebook
   (`olifine/componentes/Notebook.jsx`) é o app de exemplo em DOM, inerte (`inert`) até a tampa abrir. Com
-  "reduzir movimento" ou tela baixa, não há trava e a tampa já está aberta.
+  "reduzir movimento" ou tela baixa, não há trava e a tampa já está aberta. A base tem a largura da tampa e vem
+  antes dela no DOM (o Firefox pinta as peças do mesmo espaço 3D na ordem do código), e a face à mostra (costas ou
+  tela) sai da abertura, não de `backface-visibility`. O alumínio é um cinza neutro em tokens, com a versão
+  grafite no tema escuro.
 - **3D dentro do app:** as mesmas folhas e moedas, em CSS 3D (`olifine/componentes/FolhasEmVolta.tsx`, posições
   em `olifine/regras/folhasEmVolta.ts`), no cabeçalho da Visão geral, em volta do símbolo dos estados vazios e
   na colheita da meta completa: sem um contexto WebGL novo por tela, só `transform` e `opacity` animados.
@@ -228,8 +280,11 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
 - **Modo Família:** a página Pessoas da casa (`/familia`) e o filtro "de quem" (`componentes/FiltroDePessoa.tsx`)
   em Visão geral, Lançamentos e Relatórios, com o gasto por pessoa (`regras/familia.ts`). Os relatórios pedem à
   API o parâmetro `membro`; o extrato e a Visão geral filtram no navegador pelo `responsavel`.
-- **Tema e zoom:** tokens de cor trocados por `data-tema` no `<html>`; a transição de cor dura 400 ms e some com
-  "reduzir movimento". A coluna de conteúdo da área logada para em 1680 px (zoom de 50% a 80% não estica o extrato);
+- **Tema e zoom:** tokens de cor trocados por `data-tema` no `<html>` (uma escrita só, um recálculo de estilo). A
+  troca anima por View Transitions (`servicos/tema.js`): o navegador cruza a imagem de antes com a de depois no
+  compositor, sem transição de cor em cada elemento (antes, a landing repintava a página inteira a cada quadro).
+  Sem a API ou com "reduzir movimento", o tema troca na hora; o `public/tema.js` aplica o tema antes da primeira
+  pintura (sem piscar). A coluna de conteúdo da área logada para em 1680 px (zoom de 50% a 80% não estica o extrato);
   de 125% a 200% o layout passa pelas mesmas quebras do celular, sem rolagem lateral.
 
 ---
@@ -285,7 +340,73 @@ Ao mudar o código, mantenha estas regras:
 
 ---
 
-## 6. CI/CD
+## 6. Variáveis de ambiente
+
+Os modelos versionados são [`api/.env.example`](api/.env.example) e [`web/.env.example`](web/.env.example): copie
+para `.env` na mesma pasta (o `python subir-app.py` cria o `api/.env` sozinho). Os `.env` nunca entram no Git.
+Segredo é tudo o que dá acesso a algo: fica só no `.env` local, em `/run/secrets` (produção) ou nos secrets do
+GitHub. As `VITE_*` vão para o bundle do navegador e, por isso, nunca podem guardar segredo.
+
+**O mínimo para subir:**
+
+| Onde | Variável | Segredo | Para quê |
+|---|---|---|---|
+| `api/.env` | `JWT_SECRET` | Sim | Assina o token do back-office; 32 bytes ou mais, senão a API não sobe |
+| `api/.env` | `MONGODB_URI` | Sim (com senha) | Banco da aplicação; no Docker Compose, aponta para o container |
+| `api/.env` | `ADMIN_NOME`, `ADMIN_EMAIL`, `ADMIN_SENHA` | Sim (a senha) | Administrador criado na primeira subida, com o banco vazio |
+| `api/.env` | `FIREBASE_PROJECT_ID` | Não | Projeto cujos ID tokens abrem o livro-caixa; vazio, `/espacos` responde `503` |
+| `web/.env` | `VITE_FIREBASE_*` | Não (públicas) | Configuração do app Web do Firebase |
+| `web/.env` | `VITE_API_URL` | Não | Endereço da API; vazio, as telas do livro-caixa ficam desligadas (como no Pages) |
+
+**Tabela completa:**
+
+| Variável | Módulo | Descrição |
+|---|---|---|
+| `MONGODB_URI` | api | String de conexão do MongoDB (no Docker Compose, aponta para o container) |
+| `JWT_SECRET` | api | Chave de assinatura do token (mínimo 32 bytes) |
+| `JWT_EXPIRATION` | api | Validade do token, em minutos (padrão 15) |
+| `CORS_ORIGENS` | api | Origens de navegador autorizadas, separadas por vírgula (sem a variável: nenhuma; o `.env.example` libera a área do cliente local, portas 5173 e 8080) |
+| `CORS_ORIGENS_REDE` | api | Origens da área do cliente aberta pela rede local, somadas ao `CORS_ORIGENS`. Não vai no `.env`: o `subir-app.py` passa pelo Docker Compose a cada subida |
+| `FIREBASE_PROJECT_ID` | api | Projeto Firebase cujos ID tokens abrem o livro-caixa (o mesmo `VITE_FIREBASE_PROJECT_ID`). Vazio: `/espacos` responde `503` |
+| `ADMIN_NOME`, `ADMIN_EMAIL`, `ADMIN_SENHA` | api | Administrador criado na primeira subida, com o banco vazio |
+| `AMBIENTE` | api | `desenvolvimento` (padrão) ou `producao`: em produção, a API recusa configuração insegura e tira o Swagger do ar |
+| `FORWARDED_ALLOW_IPS` | api | Só atrás de um proxy reverso: o IP do proxy, para o limite de tentativas ver o IP real de quem chama |
+| `EMAIL_PROVEDOR` | api | E-mails da conta pela API: `resend`, `smtp` ou `pasta` (desenvolvimento). Vazio: `/conta` responde `503` e o Firebase manda |
+| `APP_URL` | api | Endereço da área do cliente usado nos links dos e-mails (em produção, `https://`) |
+| `EMAIL_REMETENTE`, `EMAIL_RESPONDER_PARA` | api | Remetente (`Nome <endereco>`, com o domínio verificado no provedor) e resposta |
+| `FIREBASE_CONTA_DE_SERVICO` | api | Chave JSON da conta de serviço (caminho ou conteúdo), só para gerar os códigos dos links |
+| `RESEND_API_KEY` | api | Chave do Resend (`EMAIL_PROVEDOR=resend`) |
+| `SMTP_HOST`, `SMTP_PORTA`, `SMTP_USUARIO`, `SMTP_SENHA` | api | Servidor SMTP (`EMAIL_PROVEDOR=smtp`): 465 com SSL ou 587 com STARTTLS |
+| `EMAIL_PASTA` | api | Pasta dos e-mails gravados com `EMAIL_PROVEDOR=pasta` (padrão `emails-enviados`) |
+| `EMAIL_COTA_DIARIA` | api | Cota diária de e-mails do provedor (padrão 100, a do Resend grátis): a telemetria avisa em 80% e em 100%. `0` desliga o aviso |
+| `DISCORD_WEBHOOK_SISTEMA`, `DISCORD_WEBHOOK_SEGURANCA`, `DISCORD_WEBHOOK_TELEMETRIA` | api | Webhook de cada canal de alertas (`#alertas-sistema`, `#logs-seguranca`, `#telemetria-custos`). Vazio: canal desligado. Endereço fora do Discord: a API não sobe |
+| `TELEMETRIA_INTERVALO_HORAS` | api | A cada quantas horas o resumo de uso vai para a telemetria (padrão 24) |
+| `VITE_FIREBASE_*` | web | Configuração pública do app Web do Firebase |
+| `VITE_FIREBASE_EMULADOR` | web | `true` para usar os emuladores locais do Firebase |
+| `VITE_API_URL` | web | Endereço da API (ex.: `http://localhost:8081`; `/api` com a API atrás do mesmo domínio). Vazio: telas do livro-caixa desligadas, como no GitHub Pages |
+| `VITE_BASE` | web | Caminho onde o build é publicado. Vazio: `/ADS-Project/` (GitHub Pages); `/` num domínio próprio (o Dockerfile já usa `/`). Só no build e no `npm run preview` |
+
+---
+
+## 7. Requisitos de implantação
+
+| Peça | Requisito | Observação |
+|---|---|---|
+| Máquina de desenvolvimento | Docker com Compose v2, Python 3.11+ (3.13 recomendado), Node.js 20.19+ | Portas livres: 8081 (API), 5173 (Vite), 27017 (MongoDB) e 8080 (`prod`) |
+| API | Imagem do `api/Dockerfile` (Python 3.13), `AMBIENTE=producao` | Atrás de um proxy reverso com TLS; `FORWARDED_ALLOW_IPS` com o IP do proxy; segredos em `/run/secrets` |
+| Banco | MongoDB 7 com usuário e senha | Os índices (únicos e TTL) são criados pela API na subida |
+| Front-end | Build estático do Vite (`npm run build`) | GitHub Pages (`VITE_BASE` vazio) ou nginx do `web/Dockerfile` (`VITE_BASE=/`); a CSP vai no `<meta>` do build |
+| Identidade | Projeto no Firebase com Authentication (e-mail e senha) e Cloud Firestore | Regras em `web/firestore.rules`; domínios autorizados e URL de ação no Console |
+| E-mails (opcional) | Resend (domínio verificado) ou SMTP com TLS | Conta de serviço do Firebase só para gerar o código dos links |
+| Alertas (opcional) | Três webhooks do Discord | `python subir-app.py alertas` testa cada canal |
+| CI/CD | GitHub Actions e GitHub Pages | Secrets: `VITE_FIREBASE_*` (build do Pages) e `DISCORD_WEBHOOK` (aviso do CI) |
+
+`python subir-app.py verificar` confere esta lista na máquina local (arquivos, variáveis, portas, Docker, Firebase e
+webhooks) e diz o que falta.
+
+---
+
+## 8. CI/CD
 
 | Workflow | Gatilho | Etapas |
 |---|---|---|
@@ -298,7 +419,7 @@ As actions ficam presas ao SHA do commit, com a versão num comentário (`@11d59
 
 ---
 
-## 7. Estrutura do repositório
+## 9. Estrutura do repositório
 
 ```
 api/                  API REST (FastAPI)
@@ -324,7 +445,7 @@ DOCS_API.md           documentação técnica da API
 
 ---
 
-## 8. Convenções
+## 10. Convenções
 
 - **Código em português, comentário que explica o porquê** (decisão, segurança, enunciado), não o quê.
 - **Funções puras para regra de negócio**, nos dois lados; componentes e rotas só orquestram.

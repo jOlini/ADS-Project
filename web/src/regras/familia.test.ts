@@ -25,7 +25,7 @@ const pessoal = (ativa: boolean, plano: Espaco['plano'] = 'FAMILIA'): Espaco => 
   tipo: 'PF',
   nome: 'Pessoal',
   papel: 'DONO',
-  familia: { ativa, pessoas: PESSOAS, maximo_de_pessoas: 5 },
+  familia: { ativa, pessoas: PESSOAS, maximo_de_pessoas: 4 },
   plano,
 });
 

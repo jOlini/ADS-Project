@@ -48,16 +48,37 @@ export interface DescricaoDoPlano {
   // O selo acima do nome (só no principal).
   selo?: string;
   destaque?: boolean;
+  // A lista curta do cartão: os principais benefícios, do que o plano tem de
+  // próprio (o resto está na tabela comparativa).
+  beneficios: readonly string[];
 }
 
+// Convidados da família além do titular: "eu + 4", 5 pessoas no total. O
+// mesmo número da API (MAXIMO_DE_MEMBROS_DA_FAMILIA), que é quem confere.
+export const CONVIDADOS_DA_FAMILIA = 4;
+const LIMITE_DA_FAMILIA = `Você + ${CONVIDADOS_DA_FAMILIA}`;
+
 export const PLANOS: readonly DescricaoDoPlano[] = [
-  { id: 'FREE', nome: 'Free', apoio: 'O essencial para organizar o seu dinheiro.', preco: 'R$ 0', nivel: 'entrada' },
+  {
+    id: 'FREE',
+    nome: 'Free',
+    apoio: 'O essencial para organizar o seu dinheiro.',
+    preco: 'R$ 0',
+    nivel: 'entrada',
+    beneficios: ['Contas e cartões de crédito', 'Lançamentos com categoria', 'Importação do extrato em CSV', 'Metas com a árvore'],
+  },
   {
     id: 'FAMILIA',
     nome: 'Família',
     apoio: 'O dinheiro da casa, com o gasto de cada pessoa separado.',
     preco: null,
     nivel: 'intermediario',
+    beneficios: [
+      'Tudo do Free',
+      `Você + ${CONVIDADOS_DA_FAMILIA} convidados: até ${CONVIDADOS_DA_FAMILIA + 1} pessoas`,
+      'Gasto por pessoa e filtro "de quem"',
+      'Divisão de gastos com nome e valor',
+    ],
   },
   {
     id: 'EMPRESARIAL',
@@ -67,6 +88,7 @@ export const PLANOS: readonly DescricaoDoPlano[] = [
     nivel: 'principal',
     selo: 'O mais completo',
     destaque: true,
+    beneficios: ['Tudo do Família', 'Caixa de cada empresa (CNPJ)', 'DRE e fluxo de caixa', 'Custos, impostos, sócios e folha'],
   },
 ];
 
@@ -138,8 +160,8 @@ export const RECURSOS_DOS_PLANOS: readonly GrupoDeRecursos[] = [
       {
         id: 'pessoas',
         nome: 'Pessoas da casa',
-        dica: 'Inclua quem mora com você (cada um com uma cor). Ninguém precisa criar conta nem pagar: a sua assinatura cobre todos.',
-        oferta: { FREE: false, FAMILIA: 'Você + 5', EMPRESARIAL: 'Você + 5' },
+        dica: `Inclua até ${CONVIDADOS_DA_FAMILIA} convidados que moram com você, cada um com uma cor: são ${CONVIDADOS_DA_FAMILIA + 1} pessoas com você. Ninguém precisa criar conta nem pagar: a sua assinatura cobre todos.`,
+        oferta: { FREE: false, FAMILIA: LIMITE_DA_FAMILIA, EMPRESARIAL: LIMITE_DA_FAMILIA },
       },
       {
         id: 'filtro',

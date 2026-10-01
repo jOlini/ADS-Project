@@ -12,8 +12,9 @@
 export const FIM_DA_ABERTURA = 0.78;
 // A partir daqui a tampa conta como aberta e a tela do app passa a responder.
 export const ABERTO = 0.98;
-// Ângulo da tampa fechada (graus, em rotateX): quase deitada sobre a base.
-export const TAMPA_FECHADA = -86;
+// Ângulo da tampa fechada (graus, em rotateX): quase deitada sobre a base,
+// com a fresta de um notebook de verdade (a tampa tem a largura da base).
+export const TAMPA_FECHADA = -88;
 
 const limitar = (valor: number) => Math.min(1, Math.max(0, valor));
 
