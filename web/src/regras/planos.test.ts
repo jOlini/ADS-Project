@@ -2,6 +2,7 @@
 // tabela comparativa da landing (cada recurso com dica e oferta nos três).
 import { describe, expect, it } from 'vitest';
 import {
+  CONVIDADOS_DA_FAMILIA,
   familiaLiberada,
   planoDoCliente,
   planoDoEspaco,
@@ -80,6 +81,23 @@ describe('tabela da landing', () => {
   it('cada célula tem texto para o leitor de tela', () => {
     expect(textoDaOferta(true)).toBe('Incluso');
     expect(textoDaOferta(false)).toBe('Não incluso');
-    expect(textoDaOferta('Você + 5')).toBe('Você + 5');
+    expect(textoDaOferta('Você + 4')).toBe('Você + 4');
+  });
+
+  it('a família é "eu + 4 convidados": até 5 pessoas, na tabela e no cartão', () => {
+    const pessoas = recursos.find((recurso) => recurso.id === 'pessoas');
+    const familia = PLANOS.find((plano) => plano.id === 'FAMILIA');
+
+    expect(CONVIDADOS_DA_FAMILIA).toBe(4);
+    expect(pessoas?.oferta.FAMILIA).toBe('Você + 4');
+    expect(pessoas?.oferta.EMPRESARIAL).toBe('Você + 4');
+    expect(familia?.beneficios).toContain('Você + 4 convidados: até 5 pessoas');
+  });
+
+  it('cada cartão tem a lista curta de benefícios, do mesmo tamanho nos três', () => {
+    for (const plano of PLANOS) {
+      expect(plano.beneficios.length).toBe(4);
+      expect(plano.beneficios.every((beneficio) => beneficio.length > 0 && beneficio.length <= 40)).toBe(true);
+    }
   });
 });

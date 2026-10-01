@@ -786,6 +786,19 @@
   font-size: var(--fonte-botao);
 }
 
+/* Parágrafos dos cartões justificados, sem os buracos entre palavras: a
+   hifenização (lang="pt-BR" no <html>) quebra as palavras longas na sílaba,
+   e a última linha fica alinhada à esquerda. */
+.lp-beneficio p,
+.lp-seguranca-grade p,
+.lp-plano-apoio,
+.lp-plano-nota,
+.lp-simulador-leitura {
+  text-align: justify;
+  hyphens: auto;
+  text-wrap: pretty;
+}
+
 .lp-demo-lista {
   display: grid;
   margin: 0;
@@ -861,15 +874,19 @@
   height: 8px;
 }
 
-.lp-demo-arvore {
+/* O pomar das metas no cartão "Evolua": três árvores, cada uma num ponto do
+   caminho, lado a lado no mesmo chão. */
+.lp-demo-arvores {
   display: grid;
-  place-items: center;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--espaco-3);
+  align-items: end;
   height: 100%;
 }
 
-.lp-demo-arvore svg {
-  width: auto;
-  height: 132px;
+.lp-demo-arvores .of-arvore {
+  width: 100%;
+  height: 112px;
 }
 
 /* ------------------------------------------------------ Demonstração */
@@ -997,16 +1014,31 @@
   }
 }
 
-/* O notebook em 3D, com acabamento de alumínio: a moldura preta com a
+/* O notebook em 3D, com acabamento de alumínio cinza: a moldura preta com a
    câmera e o vidro que reflete a luz de cima, a dobradiça escura, a base
    escovada com o teclado em baixo relevo, as grades dos alto-falantes, o
    touchpad de vidro fosco, a espessura da frente com o entalhe para o dedo e
-   a sombra no chão. Tudo em CSS (gradientes e sombras), sem imagem. */
+   a sombra no chão. Tudo em CSS (gradientes e sombras), sem imagem.
+
+   A paleta é um cinza neutro (sem o azulado de antes), em tokens: no claro,
+   um alumínio médio que se destaca do fundo branco; no escuro, o cinza
+   grafite, que não ofusca nem some no fundo. */
 .lp-laptop {
   --moldura: clamp(6px, 1.25vw, 12px);
-  --aluminio-claro: #e4e9ec;
-  --aluminio: #cfd7dc;
-  --aluminio-escuro: #a3aeb5;
+  --aluminio-claro: #e1e2e4;
+  --aluminio: #cbcdd0;
+  --aluminio-escuro: #9ea1a5;
+  --aluminio-sombra: #b5b8bb;
+  --aluminio-borda: #8f9296;
+  --aluminio-brilho: rgb(255 255 255 / 0.55);
+  --dobradica: #303235;
+  --dobradica-luz: #7c7f83;
+  --touchpad: #d6d8da;
+  --touchpad-fundo: #c6c8cb;
+  --frente: #a9acb0;
+  --frente-fundo: #85888c;
+  --grade-do-som: rgb(42 44 47 / 0.55);
+  --vidro-da-moldura: #111214;
   position: relative;
   display: grid;
   justify-items: center;
@@ -1034,9 +1066,28 @@
   pointer-events: none;
 }
 
-/* Tampa e base no mesmo espaço 3D: fechada, a tampa deita sobre a base. */
+/* Modo escuro: cinza grafite, com os brilhos mais contidos. */
+:root[data-tema='escuro'] .lp-laptop {
+  --aluminio-claro: #6e7175;
+  --aluminio: #5a5d61;
+  --aluminio-escuro: #3f4245;
+  --aluminio-sombra: #4c4f53;
+  --aluminio-borda: #7a7d81;
+  --aluminio-brilho: rgb(255 255 255 / 0.16);
+  --dobradica: #1b1c1e;
+  --dobradica-luz: #4a4d51;
+  --touchpad: #63666a;
+  --touchpad-fundo: #55585c;
+  --frente: #4a4d51;
+  --frente-fundo: #2f3134;
+  --grade-do-som: rgb(14 15 16 / 0.7);
+}
+
+/* Tampa e base no mesmo espaço 3D: fechada, a tampa deita sobre a base. A
+   base tem a largura da tampa (100%) e a profundidade da tela, então a tampa
+   fechada a cobre inteira, sem sobrar borda. */
 .lp-laptop-corpo {
-  --proporcao-da-base: 1.76;
+  --proporcao-da-base: 1.6;
   position: relative;
   width: 100%;
   transform-style: preserve-3d;
@@ -1044,7 +1095,14 @@
 
 /* A tampa gira em volta da dobradiça (a borda de baixo): a tela na frente,
    as costas de alumínio com o monograma atrás. Fechada, quase deitada sobre
-   a base, mostra as costas. */
+   a base, mostra as costas.
+
+   Firefox: a tampa vem depois da base no DOM (Notebook.jsx), porque ele
+   pinta as peças do mesmo espaço 3D na ordem do código, e a base cobria a
+   tampa fechada. A face à mostra também não depende de backface-visibility
+   (que o Firefox ignorava nas peças da tampa): a abertura escolhe a face. Até
+   10% aberta (a tampa quase de lado para quem olha, quando a troca não se
+   vê) aparecem as costas; depois, a tela. */
 .lp-laptop-tampa {
   position: relative;
   display: grid;
@@ -1057,7 +1115,10 @@
 .lp-laptop-moldura,
 .lp-laptop-costas {
   grid-area: 1 / 1;
-  backface-visibility: hidden;
+}
+
+.lp-laptop-moldura {
+  opacity: clamp(0, (var(--abertura, 1) - 0.1) * 1000, 1);
 }
 
 /* As costas: alumínio com o brilho em diagonal e a borda chanfrada. */
@@ -1066,17 +1127,18 @@
   place-items: center;
   border-radius: 18px 18px 6px 6px;
   background:
-    linear-gradient(115deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 38%),
-    linear-gradient(160deg, var(--aluminio-claro), #bcc6cc 60%, var(--aluminio-escuro));
+    linear-gradient(115deg, var(--aluminio-brilho) 0%, rgb(255 255 255 / 0) 38%),
+    linear-gradient(160deg, var(--aluminio-claro), var(--aluminio-sombra) 60%, var(--aluminio-escuro));
   box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 0.55),
+    inset 0 0 0 1px var(--aluminio-brilho),
     inset 0 -2px 3px rgb(0 0 0 / 0.12);
+  opacity: clamp(0, (0.1 - var(--abertura, 1)) * 1000, 1);
   transform: rotateY(180deg);
 }
 
 .lp-laptop-costas .of-monograma {
   opacity: 0.8;
-  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.6));
+  filter: drop-shadow(0 1px 0 var(--aluminio-brilho));
 }
 
 /* A moldura: preto quase puro, com o aro de alumínio fino em volta (a
@@ -1085,9 +1147,9 @@
   position: relative;
   padding: var(--moldura) var(--moldura) calc(var(--moldura) * 1.35);
   border-radius: 18px 18px 6px 6px;
-  background: linear-gradient(180deg, #111715, #0a0f0d);
+  background: linear-gradient(180deg, var(--vidro-da-moldura), #0a0a0b);
   box-shadow:
-    0 0 0 1.5px #9aa6ad,
+    0 0 0 1.5px var(--aluminio-borda),
     0 0 0 2.5px rgb(255 255 255 / 0.18),
     inset 0 0 0 1px rgb(255 255 255 / 0.05),
     0 50px 90px -50px rgb(26 36 48 / 0.6);
@@ -1140,17 +1202,17 @@
 .lp-laptop-teclado {
   position: absolute;
   top: 100%;
-  left: -5%;
-  width: 110%;
+  left: 0;
+  width: 100%;
   aspect-ratio: var(--proporcao-da-base);
   border-radius: 0 0 18px 18px;
   background:
     repeating-linear-gradient(90deg, rgb(255 255 255 / 0.05) 0 1px, rgb(0 0 0 / 0.018) 1px 3px),
-    linear-gradient(180deg, #b9c3c9, var(--aluminio-claro) 14%, var(--aluminio) 70%, #c4cdd2);
+    linear-gradient(180deg, var(--aluminio-sombra), var(--aluminio-claro) 14%, var(--aluminio) 70%, var(--aluminio-sombra));
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.7),
+    inset 0 1px 0 var(--aluminio-brilho),
     inset 0 -3px 4px rgb(0 0 0 / 0.1),
-    inset 1px 0 0 rgb(255 255 255 / 0.5),
+    inset 1px 0 0 var(--aluminio-brilho),
     inset -1px 0 0 rgb(0 0 0 / 0.08);
   transform-origin: 50% 0;
   transform: rotateX(90deg);
@@ -1165,7 +1227,7 @@
   right: 14%;
   height: 3.2%;
   border-radius: 0 0 10px 10px;
-  background: linear-gradient(180deg, #2c3438, #545e64 55%, #7d888f);
+  background: linear-gradient(180deg, var(--dobradica), color-mix(in srgb, var(--dobradica), var(--dobradica-luz)) 55%, var(--dobradica-luz));
   box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.25);
 }
 
@@ -1180,13 +1242,13 @@
   border-radius: 8px;
   background:
     repeating-linear-gradient(180deg, rgb(255 255 255 / 0.1) 0 1px, transparent 1px 20%),
-    repeating-linear-gradient(90deg, transparent 0 5.6%, #0c0f10 5.6% 6.6%),
-    repeating-linear-gradient(180deg, transparent 0 17%, #0c0f10 17% 20%),
-    linear-gradient(180deg, #2b3236, #1d2326);
+    repeating-linear-gradient(90deg, transparent 0 5.6%, #0d0d0e 5.6% 6.6%),
+    repeating-linear-gradient(180deg, transparent 0 17%, #0d0d0e 17% 20%),
+    linear-gradient(180deg, #2e3033, #1f2022);
   box-shadow:
-    0 0 0 3px #9ba7ae,
+    0 0 0 3px var(--aluminio-borda),
     inset 0 1px 3px rgb(0 0 0 / 0.6),
-    0 1px 0 4px rgb(255 255 255 / 0.35);
+    0 1px 0 4px var(--aluminio-brilho);
 }
 
 /* As grades dos alto-falantes, de cada lado do teclado. */
@@ -1197,7 +1259,7 @@
   top: 0;
   bottom: 0;
   width: 5.5%;
-  background: radial-gradient(circle, rgb(40 48 53 / 0.55) 0 0.7px, transparent 1px) 0 0 / 5px 5px;
+  background: radial-gradient(circle, var(--grade-do-som) 0 0.7px, transparent 1px) 0 0 / 5px 5px;
 }
 
 .lp-laptop-teclas::before {
@@ -1217,11 +1279,11 @@
   width: 32%;
   height: 30%;
   border-radius: 8px;
-  background: linear-gradient(180deg, #d9e0e4, #c9d2d7);
+  background: linear-gradient(180deg, var(--touchpad), var(--touchpad-fundo));
   box-shadow:
-    inset 0 0 0 1px rgb(120 132 140 / 0.45),
+    inset 0 0 0 1px color-mix(in srgb, var(--aluminio-borda) 55%, transparent),
     inset 0 1px 2px rgb(0 0 0 / 0.12),
-    0 1px 0 rgb(255 255 255 / 0.6);
+    0 1px 0 var(--aluminio-brilho);
 }
 
 /* A espessura da frente: uma faixa que desce da borda da base (rotateX
@@ -1233,12 +1295,12 @@
   left: 1.2%;
   right: 1.2%;
   height: 0;
-  padding-top: 1.6%;
+  padding-top: 1.75%;
   border-radius: 0 0 14px 14px;
   background:
     radial-gradient(50% 120% at 50% 0%, rgb(0 0 0 / 0.28), transparent 62%) 50% 0 / 16% 100% no-repeat,
-    linear-gradient(180deg, #b3bdc3, #8f9aa1);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5);
+    linear-gradient(180deg, var(--frente), var(--frente-fundo));
+  box-shadow: inset 0 1px 0 var(--aluminio-brilho);
   transform-origin: 50% 0;
   transform: rotateX(-90deg);
 }
@@ -1969,9 +2031,10 @@ button.lp-simulador-refazer:hover:not(:disabled) {
 
 .lp-planos-grade {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.14fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--espaco-10);
-  align-items: center;
+  /* Cartões da mesma altura (a do mais alto), com a ação sempre no pé. */
+  align-items: stretch;
   max-width: 1080px;
   margin: var(--espaco-20) auto 0;
   text-align: left;
@@ -1979,10 +2042,10 @@ button.lp-simulador-refazer:hover:not(:disabled) {
 
 .lp-plano {
   position: relative;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--espaco-7);
-  align-content: start;
-  padding: var(--espaco-14);
+  padding: var(--espaco-14) var(--espaco-12) var(--espaco-12);
   border: var(--borda);
   border-radius: 20px;
   background: var(--superficie);
@@ -2014,15 +2077,34 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   margin: 0;
 }
 
-.lp-plano .lp-botao {
-  margin-top: var(--espaco-4);
+/* A lista curta de benefícios ocupa o meio do cartão; a ação (o botão ou a
+   nota) desce para o pé, na mesma linha nos três cartões. */
+.lp-plano-beneficios {
+  flex: 1 0 auto;
+  align-content: start;
+  padding-top: var(--espaco-7);
+  border-top: var(--borda);
+  font-size: var(--fonte-botao);
+}
+
+.lp-plano.destaque .lp-plano-beneficios {
+  border-top-color: rgb(255 255 255 / 0.14);
+}
+
+.lp-plano.destaque .lp-plano-beneficios .icone {
+  color: var(--lp-verde-na-esmeralda);
+}
+
+.lp-plano .lp-botao,
+.lp-plano-nota {
+  margin-top: auto;
 }
 
 /* A escada: a entrada é o cartão comum; o intermediário ganha um fundo de
    menta e a borda verde; o principal (Empresarial) é o maior destaque:
    esmeralda, mais alto que os vizinhos, com o selo, a sombra longa e a
    borda viva (estilos/movimento.css). */
-.lp-plano.intermediario {
+.lp-plano.nivel-intermediario {
   border-color: color-mix(in srgb, var(--of-verde) 35%, var(--linha));
   background:
     radial-gradient(90% 70% at 100% 0%, color-mix(in srgb, var(--of-menta) 90%, transparent), transparent 70%),
@@ -2030,7 +2112,6 @@ button.lp-simulador-refazer:hover:not(:disabled) {
 }
 
 .lp-plano.destaque {
-  padding-block: calc(var(--espaco-14) + var(--espaco-6));
   border-color: transparent;
   background:
     radial-gradient(80% 60% at 100% 0%, rgb(100 191 141 / 0.3), transparent 70%),
@@ -2045,15 +2126,24 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   font-size: 3.125rem;
 }
 
+.lp-plano.destaque .lp-plano-preco small {
+  color: var(--lp-apoio-esmeralda);
+}
+
+/* O selo fica sobre a borda de cima, fora do fluxo: o conteúdo dos três
+   cartões começa na mesma altura. */
 .lp-plano-selo {
+  position: absolute;
+  top: 0;
+  left: var(--espaco-12);
   display: inline-flex;
   gap: var(--espaco-3);
   align-items: center;
-  justify-self: start;
   padding: var(--espaco-2) var(--espaco-6);
   border-radius: var(--raio-pilula);
-  background: rgb(132 210 165 / 0.18);
-  color: var(--lp-verde-na-esmeralda);
+  background: var(--lp-verde-na-esmeralda);
+  color: var(--of-esmeralda);
+  translate: 0 -50%;
   font-size: var(--fonte-micro);
   font-weight: var(--peso-forte);
   letter-spacing: 0.06em;
@@ -2065,26 +2155,7 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   color: var(--lp-apoio-esmeralda);
 }
 
-.lp-plano-arvores {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--espaco-6);
-  align-items: end;
-  padding: var(--espaco-8) var(--espaco-6) 0;
-  border-radius: var(--raio-grande);
-  background: rgb(255 255 255 / 0.06);
-}
-
-.lp-plano-arvores .of-arvore {
-  height: 120px;
-}
-
-.lp-plano-arvores .of-arvore-chao {
-  fill: rgb(255 255 255 / 0.12);
-}
-
 .lp-plano-nota {
-  align-self: end;
   font-size: var(--fonte-rotulo);
 }
 
@@ -2896,7 +2967,7 @@ button.lp-comparativo-alternar:hover .lp-comparativo-alternar-estado {
   }
 
   .lp-laptop-corpo {
-    --proporcao-da-base: 1.47;
+    --proporcao-da-base: 1.34;
   }
 
   .lp-mini-evolucao svg {

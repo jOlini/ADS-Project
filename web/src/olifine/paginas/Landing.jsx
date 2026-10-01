@@ -132,7 +132,7 @@ const BENEFICIOS = [
   {
     id: 'organize',
     titulo: 'Organize',
-    texto: 'Contas, cartões e cada lançamento num lugar só, com categoria e data.',
+    texto: 'Contas, cartões e cada lançamento em um só lugar, com categoria e data.',
     demo: (
       <ul className="lp-demo-lista">
         {LANCAMENTOS_DE_EXEMPLO.slice(0, 3).map((linha) => (
@@ -185,10 +185,14 @@ const BENEFICIOS = [
   {
     id: 'evolua',
     titulo: 'Evolua',
-    texto: 'Cada aporte rega a árvore da meta. Você vê o dinheiro crescer, literalmente.',
+    texto: 'Cada meta é uma árvore, e cada aporte a rega. Você vê o dinheiro crescer, literalmente.',
+    // As árvores das metas, cada uma num ponto do caminho (antes no cartão do
+    // Empresarial): o pomar que cresce com os aportes.
     demo: (
-      <div className="lp-demo-arvore" aria-hidden="true">
-        <Arvore semente={2026} progresso={0.82} compacta rotulo="" />
+      <div className="lp-demo-arvores" aria-hidden="true">
+        <Arvore semente={11} progresso={0.9} compacta rotulo="" />
+        <Arvore semente={29} progresso={0.55} compacta rotulo="" />
+        <Arvore semente={47} progresso={0.3} compacta rotulo="" />
       </div>
     ),
   },
@@ -206,7 +210,7 @@ const SEGURANCA = [
   {
     icone: 'escudo',
     titulo: 'Proteção em cada acesso',
-    texto: 'Conexão criptografada, e-mail confirmado, sessão que termina ao fechar o navegador e bloqueio depois de senhas erradas.',
+    texto: 'Conexão criptografada, e-mail confirmado, sessão que termina ao fechar o navegador e bloqueio após várias senhas erradas.',
   },
   {
     icone: 'documento',
@@ -325,7 +329,7 @@ function ComparativoDosPlanos() {
 
 // O texto de cada plano sem preço ainda (a decisão do preço está em aberto).
 const NOTA_DO_PLANO = {
-  FAMILIA: 'Estamos preparando. Por enquanto, comece pelo Free.',
+  FAMILIA: 'Estamos preparando este plano. Por enquanto, comece pelo Free.',
   EMPRESARIAL: 'Para quem tem CNPJ: o caixa de cada empresa, separado do seu.',
 };
 
@@ -679,13 +683,14 @@ export default function Landing() {
           </p>
           {/* Da entrada ao principal, da esquerda para a direita: o Free
               (entrada), o Família (intermediário, com um toque de menta) e o
-              Empresarial, o mais completo, em esmeralda, maior, com o selo e
-              a borda viva. */}
+              Empresarial, o mais completo, em esmeralda, com o selo e a borda
+              viva. Os três têm a mesma altura e o mesmo respiro: o nome, o
+              preço, a lista curta de benefícios e, embaixo, a ação. */}
           <div className="lp-planos-grade">
             {PLANOS.map((plano, indice) => (
               <article
                 key={plano.id}
-                className={`lp-plano ${plano.nivel}${plano.destaque ? ' destaque borda-viva' : ''}`}
+                className={`lp-plano nivel-${plano.nivel}${plano.destaque ? ' destaque borda-viva' : ''}`}
                 data-revela=""
                 data-inclina=""
                 style={{ '--ordem': indice + 1 }}
@@ -702,13 +707,14 @@ export default function Landing() {
                   <b>{plano.preco ?? 'Em breve'}</b>
                   <small>{plano.preco ? 'sem cartão de crédito' : 'preço em definição'}</small>
                 </p>
-                {plano.destaque && (
-                  <div className="lp-plano-arvores" aria-hidden="true">
-                    <Arvore semente={11} progresso={0.9} compacta rotulo="" />
-                    <Arvore semente={29} progresso={0.55} compacta rotulo="" />
-                    <Arvore semente={47} progresso={0.3} compacta rotulo="" />
-                  </div>
-                )}
+                <ul className="lp-lista-certa lp-plano-beneficios" aria-label={`O que o plano ${plano.nome} inclui`}>
+                  {plano.beneficios.map((beneficio) => (
+                    <li key={beneficio}>
+                      <Icone nome="certo" tamanho={16} />
+                      {beneficio}
+                    </li>
+                  ))}
+                </ul>
                 {plano.preco ? (
                   <Link to={logado ? '/principal' : '/cadastro'} className="lp-botao largo">
                     {logado ? 'Abrir o app' : 'Começar gratuitamente'}
