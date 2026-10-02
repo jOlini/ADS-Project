@@ -7,6 +7,7 @@
 // apiConfigurada é false e as telas do livro-caixa mostram o aviso.
 import { auth } from '../firebase';
 import { enderecoDaApi } from './enderecoDaApi';
+import { cabecalhoDoPlanoEmTeste } from './planoEmTeste';
 import { limparCorpo } from '../regras/sanitizacao';
 
 // Aberta pela rede local, a página chama a API no IP de onde veio; pelo túnel,
@@ -56,6 +57,9 @@ async function chamar(caminho, { metodo = 'GET', corpo } = {}) {
       headers: {
         Authorization: `Bearer ${token}`,
         ...(corpo ? { 'Content-Type': 'application/json' } : {}),
+        // Super admin testando um plano (servicos/planoEmTeste.ts). Para as
+        // outras contas a API ignora o cabeçalho.
+        ...cabecalhoDoPlanoEmTeste(),
       },
       // Nome, descrição e pessoa saem limpos (sem tag, fórmula nem caractere
       // invisível); a API limpa de novo, com a mesma regra.
@@ -80,6 +84,12 @@ const doEspaco = (espacoId, resto = '') => `/espacos/${encodeURIComponent(espaco
 // espaço pessoal com as categorias iniciais.
 export function listarEspacos() {
   return chamar('/espacos');
+}
+
+// O que a conta pode fazer além do uso normal: { super_admin, plano_simulado }.
+// API antiga (sem a rota) responde 404, e quem chama trata como conta comum.
+export function acessoDaConta() {
+  return chamar('/espacos/acesso');
 }
 
 // Empresa nova no espaço empresarial: { nome, cnpj (ou null), regime }. Cada

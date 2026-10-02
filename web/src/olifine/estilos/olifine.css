@@ -3948,3 +3948,88 @@ button.of-chip:hover:not(:disabled) {
     font-size: var(--fonte-corpo);
   }
 }
+
+/* ---------------------------------------------------- Plano em teste (super admin) */
+
+/* Ferramenta de teste, não parte do produto: borda tracejada em âmbar, para
+   ninguém confundir com o plano de verdade num print. */
+button.of-plano-em-teste {
+  gap: var(--espaco-3);
+  min-height: 42px;
+  padding: 0 var(--espaco-6);
+  border: var(--espessura) dashed color-mix(in srgb, var(--aviso) 70%, transparent);
+  border-radius: var(--raio-pilula);
+  color: var(--texto);
+  background: var(--superficie);
+  font-size: var(--fonte-apoio);
+}
+
+button.of-plano-em-teste:hover:not(:disabled) {
+  background: var(--lateral);
+}
+
+button.of-plano-em-teste.simulando {
+  color: var(--aviso);
+  background: color-mix(in srgb, var(--aviso) 12%, var(--superficie));
+  border-style: solid;
+}
+
+.of-plano-em-teste-dica {
+  padding: 0 var(--espaco-5) var(--espaco-4);
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+button.of-plano-em-teste-opcao {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: var(--espaco-4);
+  justify-content: stretch;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--espaco-4) var(--espaco-5);
+  border-radius: var(--raio-pequeno);
+  color: var(--texto);
+  background: transparent;
+  text-align: left;
+  font-weight: var(--peso-medio);
+}
+
+button.of-plano-em-teste-opcao:hover:not(:disabled),
+button.of-plano-em-teste-opcao[aria-pressed='true'] {
+  background: var(--lateral);
+}
+
+.of-plano-em-teste-opcao b {
+  display: block;
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+}
+
+.of-plano-em-teste-opcao small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-plano-em-teste-marca {
+  display: grid;
+  place-items: center;
+  color: var(--marca);
+}
+
+/* No celular, só o escudo: o nome do plano fica no painel. */
+@media (max-width: 640px) {
+  .of-plano-em-teste-rotulo {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  button.of-plano-em-teste {
+    width: 42px;
+    padding: 0;
+  }
+}
