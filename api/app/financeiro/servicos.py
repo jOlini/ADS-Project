@@ -441,17 +441,43 @@ class ServicoLivroCaixa:
         categoria.ativa = dados.ativa
         return self.repositorio.atualizar_categoria(categoria)
 
-    def excluir_categoria(self, espaco: Espaco, id: str) -> None:
-        """Só categoria sem lançamentos. Com lançamentos, 409: apagá-la
-        deixaria o extrato sem o "para onde foi" deles. Desativar tira a
-        categoria das opções e mantém o histórico."""
+    def excluir_categoria(self, espaco: Espaco, id: str, mover_para: str | None = None) -> int:
+        """Exclui a categoria. Com lançamentos e sem destino, 409: apagá-la
+        deixaria o extrato sem o "para onde foi" deles. Com mover_para (outra
+        categoria do mesmo tipo, ativa), os lançamentos passam para ela antes
+        da exclusão, e o relatório por categoria continua somando certo.
+        Desativar segue como a saída que mantém tudo como está.
+
+        Ordem segura sem transação: primeiro os lançamentos mudam de
+        categoria, depois a categoria sai. Se a operação parar no meio, os
+        lançamentos já estão no destino e excluir de novo termina. Devolve
+        quantos lançamentos mudaram."""
         categoria = self.categoria(espaco, id)
-        if usados := self.repositorio.contar_lancamentos_da_categoria(espaco.id, categoria.id):
-            quantos = "1 lançamento" if usados == 1 else f"{usados} lançamentos"
+        usados = self.repositorio.contar_lancamentos_da_categoria(espaco.id, categoria.id)
+        if mover_para is None:
+            if usados:
+                quantos = "1 lançamento" if usados == 1 else f"{usados} lançamentos"
+                raise ErroConflito(
+                    f'"{categoria.nome}" está em {quantos}. Escolha para qual categoria eles vão, '
+                    "ou desative a categoria para tirá-la das opções sem mexer no histórico.",
+                    lancamentos=usados,
+                )
+            self.repositorio.excluir_categoria(espaco.id, categoria.id)
+            return 0
+
+        destino = self.repositorio.buscar_categoria(espaco.id, mover_para)
+        if erros := regras.conferir_destino_da_categoria(categoria, destino):
+            raise ErroValidacao(erros)
+        # A gestão da empresa acha a categoria pela função (aporte, folha,
+        # tributo): mover os lançamentos para uma categoria sem a função os
+        # tiraria das telas de Sociedade, Pessoal e Impostos.
+        if usados and categoria.funcao is not None:
             raise ErroConflito(
-                f'"{categoria.nome}" está em {quantos}. Desative a categoria para tirá-la das opções sem mexer no histórico.'
+                f'"{categoria.nome}" é usada pela gestão da empresa. Desative-a em vez de excluir, para não perder o histórico.'
             )
+        movidos = self.repositorio.mover_lancamentos_de_categoria(espaco.id, categoria.id, destino.id) if usados else 0
         self.repositorio.excluir_categoria(espaco.id, categoria.id)
+        return movidos
 
     # --- Lançamentos ---
 

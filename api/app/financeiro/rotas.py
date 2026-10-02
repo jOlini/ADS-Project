@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from datetime import date
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
+from fastapi.responses import JSONResponse
 
 from app.erros import ErroIndisponivel
 from app.financeiro import cartoes, simulacao
@@ -34,6 +35,7 @@ from app.financeiro.modelos import (
     Espaco,
     EspacoResposta,
     EstruturaResposta,
+    ExclusaoDeCategoriaResposta,
     ExclusaoEmLote,
     ExclusaoResposta,
     FaturaResposta,
@@ -441,14 +443,29 @@ def atualizar_categoria(
 @rotas_livro_caixa.delete(
     "/{espaco_id}/categorias/{categoria_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Excluir categoria sem lançamentos",
-    responses={**ERRO_404, 409: {"description": "Categoria usada em lançamentos (desative em vez de excluir)"}},
+    summary="Excluir categoria (com os lançamentos levados para outra)",
+    responses={
+        200: {"model": ExclusaoDeCategoriaResposta, "description": "Com `mover_para`: quantos lançamentos mudaram"},
+        **ERRO_400,
+        **ERRO_404,
+        409: {"description": "Categoria usada em lançamentos e sem `mover_para`, ou usada pela gestão da empresa"},
+    },
 )
 def excluir_categoria(
-    categoria_id: str, espaco: Espaco = Depends(espaco_do_cliente), servico: ServicoLivroCaixa = Depends(obter_servico)
+    categoria_id: str,
+    mover_para: str | None = Query(
+        None, description="Categoria (do mesmo tipo, ativa) que recebe os lançamentos da excluída"
+    ),
+    espaco: Espaco = Depends(espaco_do_cliente),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
-    servico.excluir_categoria(espaco, categoria_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    """Sem lançamentos, sai direto (`204`). Com lançamentos, `409` com a quantidade em
+    `lancamentos`, a não ser que venha `mover_para`: aí os lançamentos passam para essa
+    categoria antes da exclusão, e a resposta é `200` com `lancamentos_movidos`."""
+    movidos = servico.excluir_categoria(espaco, categoria_id, mover_para)
+    if mover_para is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return JSONResponse(ExclusaoDeCategoriaResposta(lancamentos_movidos=movidos).model_dump())
 
 
 # --- Lançamentos ---------------------------------------------------------------

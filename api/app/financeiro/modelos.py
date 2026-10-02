@@ -832,6 +832,12 @@ class PlanoResposta(BaseModel):
     plano: Plano
 
 
+class ExclusaoDeCategoriaResposta(BaseModel):
+    """Categoria excluída levando os lançamentos para outra: quantos mudaram."""
+
+    lancamentos_movidos: int
+
+
 class AcessoResposta(BaseModel):
     """O que a conta pode fazer além do uso normal. super_admin: pode simular
     os planos na tela (cabeçalho X-Simular-Plano). plano_simulado: o plano que

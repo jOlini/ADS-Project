@@ -127,6 +127,8 @@ class RepositorioLivroCaixa(Protocol):
 
     def contar_lancamentos_da_categoria(self, espaco_id: str, categoria_id: str) -> int: ...
 
+    def mover_lancamentos_de_categoria(self, espaco_id: str, de: str, para: str) -> int: ...
+
     def listar_lancamentos(
         self, espaco_id: str, de: date | None, ate: date | None, limite: int, conta_id: str | None = None
     ) -> list[Lancamento]: ...
@@ -350,6 +352,17 @@ class LivroCaixaMongo:
 
     def contar_lancamentos_da_categoria(self, espaco_id: str, categoria_id: str) -> int:
         return self._lancamentos.count_documents({"espaco_id": espaco_id, "categoria_id": categoria_id})
+
+    def mover_lancamentos_de_categoria(self, espaco_id: str, de: str, para: str) -> int:
+        """Troca a categoria dos lançamentos de uma vez, no campo e na partida
+        da categoria (é ela que os relatórios somam). Cada documento muda
+        inteiro (atômico); rodar de novo não muda nada."""
+        resultado = self._lancamentos.update_many(
+            {"espaco_id": espaco_id, "categoria_id": de},
+            {"$set": {"categoria_id": para, "partidas.$[partida].categoria_id": para}},
+            array_filters=[{"partida.categoria_id": de}],
+        )
+        return resultado.modified_count
 
     # --- Lançamentos ---
 

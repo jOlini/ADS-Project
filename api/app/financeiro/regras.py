@@ -161,6 +161,22 @@ def conferir_conta(dados: NovaConta | AtualizacaoConta, atual: Conta | None = No
     return erros
 
 
+def conferir_destino_da_categoria(categoria: Categoria, destino: Categoria | None) -> dict[str, str]:
+    """Para onde vão os lançamentos de uma categoria excluída: outra categoria
+    do espaço, do mesmo tipo (despesa continua despesa) e ativa. Erros no
+    campo mover_para (vazio = pode mover)."""
+    if destino is None:
+        return {"mover_para": "Categoria de destino não encontrada."}
+    if destino.id == categoria.id:
+        return {"mover_para": "Escolha outra categoria: esta é a que sai."}
+    if destino.tipo != categoria.tipo:
+        tipo = "despesa" if categoria.tipo == TipoCategoria.DESPESA else "receita"
+        return {"mover_para": f"Escolha uma categoria de {tipo}, como a que sai."}
+    if not destino.ativa:
+        return {"mover_para": "A categoria de destino está desativada. Ative-a ou escolha outra."}
+    return {}
+
+
 def conferir_lancamento(
     dados: NovoLancamento,
     conta: Conta | None,
