@@ -330,6 +330,155 @@ button.of-lateral-sair {
   color: var(--suave);
 }
 
+/* Resultados da busca, logo abaixo do campo: as abas com a contagem e a
+   lista do que combina, por cima da página. */
+.of-busca {
+  position: relative;
+}
+
+.of-busca-painel {
+  position: absolute;
+  top: calc(100% + var(--espaco-3));
+  left: 0;
+  z-index: var(--camada-flutuante);
+  display: grid;
+  gap: var(--espaco-3);
+  width: max(100%, 520px);
+  max-width: calc(100vw - 32px);
+  padding: var(--espaco-4);
+  background: var(--superficie);
+  border: var(--borda);
+  border-radius: 14px;
+  box-shadow: var(--sombra-flutuante);
+  color: var(--texto);
+  cursor: default;
+}
+
+.of-busca-abas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+  padding-bottom: var(--espaco-3);
+  border-bottom: var(--borda);
+}
+
+.of-busca-abas button {
+  gap: var(--espaco-3);
+  min-height: 32px;
+  padding: 0 var(--espaco-5);
+  border-radius: var(--raio-pilula);
+  color: var(--suave);
+  background: transparent;
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-medio);
+}
+
+.of-busca-abas button:hover:not(:disabled) {
+  color: var(--texto);
+  background: var(--lateral);
+}
+
+.of-busca-abas button[aria-pressed='true'],
+.of-busca-abas button[aria-pressed='true']:hover:not(:disabled) {
+  color: var(--marca-forte);
+  background: var(--marca-suave);
+}
+
+.of-busca-contagem {
+  min-width: 1.4em;
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio-pilula);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-size: var(--fonte-micro);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.of-busca-lista {
+  display: grid;
+  gap: var(--espaco-1);
+  max-height: min(420px, 60vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.of-busca-lista li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: var(--espaco-5);
+  align-items: center;
+  padding: var(--espaco-3) var(--espaco-4);
+  border-radius: var(--raio-pequeno);
+  cursor: pointer;
+}
+
+.of-busca-lista li[aria-selected='true'] {
+  background: var(--lateral);
+}
+
+.of-busca-marca {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--lateral);
+  color: var(--suave);
+}
+
+.of-busca-marca.aba-cartoes {
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+}
+
+.of-busca-textos {
+  display: grid;
+  min-width: 0;
+}
+
+.of-busca-textos b,
+.of-busca-textos small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-busca-textos b {
+  font-size: var(--fonte-rotulo);
+  font-weight: var(--peso-semi);
+}
+
+.of-busca-textos small {
+  color: var(--suave);
+  font-size: var(--fonte-micro);
+}
+
+.of-busca-valor {
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.of-busca-valor.entrada {
+  color: var(--marca-forte);
+}
+
+.of-busca-vazio,
+.of-busca-rodape {
+  margin: 0;
+  padding: var(--espaco-3) var(--espaco-4);
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-busca-rodape {
+  padding-top: 0;
+  font-size: var(--fonte-micro);
+}
+
 .of-topo-acoes {
   display: flex;
   gap: var(--espaco-5);

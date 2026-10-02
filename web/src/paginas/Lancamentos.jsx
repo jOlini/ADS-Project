@@ -89,10 +89,19 @@ async function carregarMes(espacoId, mes) {
 export default function Lancamentos() {
   const { espaco, espacos } = useOutletContext();
   const toast = useToast();
-  const [mes, setMes] = useState(() => mesDe(new Date()));
-  const [filtro, setFiltro] = useState('tudo');
-  // ?busca= vem da barra de busca do topo e preenche a busca.
+  // ?busca= e ?mes=AAAA-MM vêm da busca do topo: o extrato abre no mês do
+  // lançamento achado, já filtrado por ele.
   const { search } = useLocation();
+  const mesDaUrl = /^\d{4}-\d{2}$/.test(new URLSearchParams(search).get('mes') ?? '') ? new URLSearchParams(search).get('mes') : null;
+  const [mes, setMes] = useState(() => (mesDaUrl ? mesDe(mesDaUrl) : mesDe(new Date())));
+  const [mesVisto, setMesVisto] = useState(mesDaUrl);
+  if (mesDaUrl !== mesVisto) {
+    setMesVisto(mesDaUrl);
+    if (mesDaUrl) {
+      setMes(mesDe(mesDaUrl));
+    }
+  }
+  const [filtro, setFiltro] = useState('tudo');
   const buscaDaUrl = new URLSearchParams(search).get('busca') ?? '';
   const [busca, setBusca] = useState(buscaDaUrl);
   const [buscaVista, setBuscaVista] = useState(buscaDaUrl);

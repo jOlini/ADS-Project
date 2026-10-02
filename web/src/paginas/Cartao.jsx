@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useOutletContext, useParams } from 'react-router-dom';
+import { useLocation, useOutletContext, useParams } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import AvisoComAtalho from '../componentes/AvisoComAtalho';
 import BarraDeSelecao from '../componentes/BarraDeSelecao';
@@ -69,8 +69,20 @@ export default function Cartao() {
   const { espaco, espacos } = useOutletContext();
   const { cartaoId } = useParams();
   const toast = useToast();
-  // null = a fatura atual (vem do painel).
-  const [mesEscolhido, setMesEscolhido] = useState(null);
+  // null = a fatura atual (vem do painel). ?fatura=AAAA-MM (a busca do topo)
+  // abre a fatura da compra achada.
+  const { search } = useLocation();
+  const faturaDaUrl = /^\d{4}-\d{2}$/.test(new URLSearchParams(search).get('fatura') ?? '')
+    ? new URLSearchParams(search).get('fatura')
+    : null;
+  const [mesEscolhido, setMesEscolhido] = useState(() => (faturaDaUrl ? mesDaReferencia(faturaDaUrl) : null));
+  const [faturaVista, setFaturaVista] = useState(faturaDaUrl);
+  if (faturaDaUrl !== faturaVista) {
+    setFaturaVista(faturaDaUrl);
+    if (faturaDaUrl) {
+      setMesEscolhido(mesDaReferencia(faturaDaUrl));
+    }
+  }
   const [modal, setModal] = useState(null);
   const [modalOcupado, setModalOcupado] = useState(false);
   const [faturasARemover, setFaturasARemover] = useState(null);

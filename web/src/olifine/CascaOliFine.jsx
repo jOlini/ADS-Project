@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useCarga } from '../componentes/useCarga';
 import { formatarBRL } from '../regras/dinheiro';
 import { faturasAVencer } from '../regras/cartoes';
@@ -11,6 +11,7 @@ import { guardarLateralRecolhida, lerLateralRecolhida } from '../servicos/latera
 import { acessoDaConta, apiConfigurada, EVENTO_DOS_TRIBUTOS, listarCartoes, listarTributos } from '../servicos/livroCaixa';
 import { guardarPlanoEmTeste, lerPlanoEmTeste } from '../servicos/planoEmTeste';
 import { alertasDosTributos, textoDaCompetencia } from './regras/impostos';
+import BuscaGlobal from './componentes/BuscaGlobal';
 import ChaveDoPlanoEmTeste from './componentes/ChaveDoPlanoEmTeste';
 import Flutuante from './componentes/Flutuante';
 import AlternadorDeTema from '../componentes/AlternadorDeTema';
@@ -101,9 +102,7 @@ function ItemDoMenu({ item, aoEscolher, dica }) {
 // balão ao passar o mouse. A escolha fica no navegador (servicos/lateral.ts).
 export default function CascaOliFine({ contexto }) {
   const { usuario, pessoa, espaco, espacos, trocarEspaco, trocarContexto, recarregarEspacos, sairDaConta } = contexto;
-  const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [busca, setBusca] = useState('');
   const [recolhida, setRecolhida] = useState(lerLateralRecolhida);
   // Super admin testando um plano (servicos/planoEmTeste.ts): null = o real.
   const [planoEmTeste, setPlanoEmTeste] = useState(lerPlanoEmTeste);
@@ -188,12 +187,6 @@ export default function CascaOliFine({ contexto }) {
   const quantosAvisos = avisos.length + guias.length;
   const itens = itensDoMenu(empresa, familiaAtiva(espaco.dados));
   const nomeDoAtivo = nomeDoEspaco(espaco.dados);
-
-  function buscar(evento) {
-    evento.preventDefault();
-    const termo = busca.trim();
-    navigate(termo ? `/lancamentos?busca=${encodeURIComponent(termo)}` : '/lancamentos');
-  }
 
   const conta = (fechar) => (
     <div className="of-conta">
@@ -290,18 +283,9 @@ export default function CascaOliFine({ contexto }) {
             />
           )}
 
-          {apiConfigurada && (
-            <form className="of-busca" role="search" onSubmit={buscar}>
-              <Icone nome="busca" tamanho={16} />
-              <input
-                type="search"
-                value={busca}
-                onChange={(evento) => setBusca(evento.target.value)}
-                placeholder="Buscar lançamentos"
-                aria-label="Buscar lançamentos do mês"
-              />
-            </form>
-          )}
+          {/* Busca em tudo (lançamentos, compras nos cartões, contas e
+              categorias), com os resultados em abas logo abaixo. */}
+          {apiConfigurada && <BuscaGlobal key={espacoId ?? 'sem-espaco'} espacoId={espacoId} />}
 
           <div className="of-topo-acoes">
             {superAdmin && <ChaveDoPlanoEmTeste plano={planoEmTeste} aoTrocar={trocarPlanoEmTeste} />}
