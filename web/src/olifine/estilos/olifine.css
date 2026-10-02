@@ -1092,7 +1092,7 @@ button.of-espaco-excluir .icone {
   gap: var(--espaco-8);
 }
 
-.of-kpis > .of-kpi-link {
+.of-kpis > .of-kpi-largo {
   grid-column: span 2;
 }
 
@@ -1200,37 +1200,6 @@ button.of-espaco-excluir .icone {
 .of-tendencia.ruim {
   background: var(--of-rosa-suave);
   color: var(--of-sobre-rosa);
-}
-
-/* Metas: o link se estica por cima do card inteiro (::after), e o "i" fica
-   por cima do link, porque botão dentro de link não é válido. */
-.of-kpi-link {
-  position: relative;
-}
-
-.of-kpi-alvo {
-  color: inherit;
-  text-decoration: none;
-}
-
-.of-kpi-alvo::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--raio-grande);
-}
-
-.of-kpi-alvo:focus-visible {
-  outline: none;
-}
-
-.of-kpi-alvo:focus-visible::after {
-  outline: var(--espessura-do-foco) solid var(--of-verde);
-  outline-offset: 2px;
-}
-
-.of-kpi-link .of-dica-botao {
-  z-index: 1;
 }
 
 /* Metas: a contagem e a barra geral à esquerda; no card largo, as metas
@@ -1896,13 +1865,24 @@ button.of-dica-botao:focus-visible {
   color: var(--cor-do-grupo);
 }
 
+/* O nome da conta por extenso: quebra em até duas linhas antes de cortar
+   (e o title mostra o resto). O tipo desce para a linha de baixo quando o
+   nome precisa do espaço (o topo do card quebra). */
+.of-saldo-card .of-kpi-topo {
+  flex-wrap: wrap;
+  row-gap: var(--espaco-2);
+}
+
 .of-saldo-card-nome {
+  display: -webkit-box;
   min-width: 0;
   overflow: hidden;
   color: var(--texto);
   font-weight: var(--peso-semi);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  line-height: var(--altura-de-linha-justa);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .of-saldo-card-tipo {
@@ -2054,10 +2034,15 @@ button.of-dica-botao:focus-visible {
 }
 
 /* As miniaturas lado a lado; a legenda embaixo de cada uma leva à tela do
-   cartão (o link cobre a miniatura e a legenda). */
+   cartão (o link cobre a miniatura e a legenda): é o único movimento da
+   seção, o clique. A miniatura é um container (as medidas dela são em cqi):
+   com o mínimo da coluna em porcentagem (min(100%, 200px)), cada layout da
+   página refazia a grade várias vezes para medir as miniaturas, e passava de
+   130 ms no trace. Com o mínimo fixo, o layout volta a uns poucos ms; os
+   200 px cabem até no celular de 320 px. */
 .of-cartoes {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: var(--espaco-8) var(--espaco-7);
   margin: 0;
   padding: 0;
@@ -2070,16 +2055,6 @@ button.of-dica-botao:focus-visible {
   gap: var(--espaco-4);
   align-content: start;
   min-width: 0;
-}
-
-.of-cartoes li .miniatura-do-cartao {
-  transition:
-    transform var(--tempo-medio) var(--curva-chegada),
-    box-shadow var(--tempo-medio) var(--curva);
-}
-
-.of-cartoes li:hover .miniatura-do-cartao {
-  transform: translateY(var(--elevacao)) rotate(-1deg);
 }
 
 .of-cartoes-legenda {
@@ -3856,7 +3831,7 @@ button.of-chip:hover:not(:disabled) {
     font-size: 1.1875rem;
   }
 
-  .of-kpi-link {
+  .of-kpi-largo {
     grid-column: 1 / -1;
   }
 

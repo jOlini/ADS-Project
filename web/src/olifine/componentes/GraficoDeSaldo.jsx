@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { memo, useId, useRef, useState } from 'react';
 import { useTamanho } from '../../componentes/useTamanho';
 import { formatarBRL } from '../../regras/dinheiro';
 import { caminhoSuave, valorCurto } from '../regras/curva';
@@ -42,7 +42,7 @@ function indicesDoEixo(quantos, largura) {
 // posição absoluta, e não empurra a caixa: antes, com o tamanho em pixels
 // dentro do fluxo, o zoom e a janela estreita não conseguiam encolher o
 // gráfico e ele vazava do cartão.
-export default function GraficoDeSaldo({ serie, descricao }) {
+function GraficoDeSaldo({ serie, descricao }) {
   const caixa = useRef(null);
   const { largura, altura } = useTamanho(caixa);
   const [cursor, setCursor] = useState(null);
@@ -156,3 +156,6 @@ export default function GraficoDeSaldo({ serie, descricao }) {
     </div>
   );
 }
+
+// memo: a Visão geral redesenha (filtro, modal, recarga) sem que isto mude (a série vem memorizada da Visão geral).
+export default memo(GraficoDeSaldo);

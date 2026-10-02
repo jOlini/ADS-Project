@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { corDaCategoria } from '../../regras/cores';
 import { formatarBRL } from '../../regras/dinheiro';
 
@@ -11,7 +11,7 @@ const FRESTA = 3;
 // Despesas por categoria: rosca com o total no meio e a legenda ao lado,
 // sempre com o nome da categoria (a cor é só apoio de leitura). Passar o
 // mouse ou o foco numa linha da legenda destaca a fatia, e vice-versa.
-export default function Rosca({ fatias, total, rotuloDoTotal }) {
+function Rosca({ fatias, total, rotuloDoTotal }) {
   const [destaque, setDestaque] = useState(null);
   const soma = fatias.reduce((acumulado, fatia) => acumulado + fatia.valor, 0) || 1;
 
@@ -76,3 +76,6 @@ export default function Rosca({ fatias, total, rotuloDoTotal }) {
     </div>
   );
 }
+
+// memo: a Visão geral redesenha (filtro, modal, recarga) sem que isto mude (fatias memorizadas por quem usa).
+export default memo(Rosca);

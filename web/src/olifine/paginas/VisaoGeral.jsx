@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import CompraNoCartao from '../../componentes/CompraNoCartao';
 import Esqueleto from '../../componentes/Esqueleto';
@@ -107,8 +107,35 @@ async function carregarVisao(espacoId, hoje) {
   return { contas, categorias, lancamentos, relatorio, cartoes, pessoas };
 }
 
+// As últimas transações em grupos por dia, na ordem da lista.
+function agruparPorDia(linhas) {
+  return linhas.reduce((grupos, linha) => {
+    const ultimo = grupos.at(-1);
+    if (ultimo?.data === linha.data) {
+      ultimo.linhas.push(linha);
+    } else {
+      grupos.push({ data: linha.data, linhas: [linha] });
+    }
+    return grupos;
+  }, []);
+}
+
+// O resumo das metas, as que aparecem no card e no painel e a mais perto de
+// mudar de fase (o convite para regar).
+function destaquesDasMetas(metas) {
+  const metasEmDestaque = [...metas]
+    .filter((meta) => porcentagem(meta) < 100)
+    .sort((a, b) => progresso(b) - progresso(a))
+    .slice(0, 4);
+  const pertoDeCrescer = metasEmDestaque
+    .map((meta) => ({ meta, proxima: proximaFase(meta) }))
+    .filter((item) => item.proxima && item.proxima.fase.id !== 'broto')
+    .sort((a, b) => a.proxima.faltam / a.meta.alvo - b.proxima.faltam / b.meta.alvo)[0];
+  return { resumo: resumoDasMetas(metas), metasEmDestaque, pertoDeCrescer };
+}
+
 // Gasto de cada pessoa da casa no mês (Modo Família, visão consolidada).
-function GastoPorPessoa({ gastos, mes }) {
+const GastoPorPessoa = memo(function GastoPorPessoa({ gastos, mes }) {
   const maior = gastos[0]?.valor ?? 0;
   return (
     <section className="cartao of-painel of-painel-gasto-por-pessoa" aria-labelledby="titulo-gasto-por-pessoa">
@@ -137,7 +164,7 @@ function GastoPorPessoa({ gastos, mes }) {
       )}
     </section>
   );
-}
+});
 
 // Uma linha só (o texto cortado com reticências no card estreito): a altura
 // do card não muda com o tamanho do mês por extenso.
@@ -167,6 +194,14 @@ function SeloDeTendencia({ variacao, maiorEhMelhor = true, referencia }) {
 // O "+ Novo" do topo deixa a pessoa escolher o que criar (lançamento à
 // vista, compra no crédito, conta ou cartão), cada um no seu modal, sem sair
 // da tela.
+//
+// Desempenho (sem engasgos): tudo o que sai dos dados é calculado em useMemo
+// (só refaz quando os dados mudam, e não a cada abertura de modal ou troca
+// de filtro), as ações passadas aos filhos são estáveis (useCallback) e os
+// componentes de desenho (árvore, rosca, gráfico, miniatura do cartão, folhas)
+// são memo. As listas daqui são curtas (5 transações, 4 metas): não pedem
+// virtualização. Os custos grandes estavam no CSS (estilos/movimento.css,
+// borda viva; olifine.css, grade dos cartões).
 export default function VisaoGeral() {
   const { usuario, pessoa, espaco, espacos } = useOutletContext();
   const [exemplo, setExemplo] = useState(
@@ -280,6 +315,85 @@ export default function VisaoGeral() {
   }, [exemplo, livro.dados, hojeReal, filtroDePessoa, pessoasDaCasa, relatorioDaPessoa.dados]);
 
   const real = apiConfigurada && !exemplo;
+  const semContas = real && Boolean(livro.dados) && livro.dados.contas.length === 0;
+  const comNumeros = Boolean(visao) && !semContas;
+
+  // Tudo o que sai dos dados, calculado só quando eles mudam (e não a cada
+  // abertura de modal, troca de filtro ou de período do gráfico).
+  const { resumo, metasEmDestaque, pertoDeCrescer } = useMemo(() => destaquesDasMetas(metas), [metas]);
+  const diasDasUltimas = useMemo(() => (comNumeros ? agruparPorDia(visao.ultimas) : []), [comNumeros, visao]);
+  const fatiasDaCategoria = useMemo(() => (comNumeros ? fatiasDaRosca(visao.categorias, 6) : []), [comNumeros, visao]);
+  // Cartões e cadastros do "+ Novo": só com a API (o exemplo não tem cartão).
+  const cadastros = real ? livro.dados : null;
+  const cartoes = useMemo(() => cadastros?.cartoes ?? [], [cadastros]);
+  const faturas = useMemo(() => resumoDasFaturas(cartoes, hoje), [cartoes, hoje]);
+  const contasAtivas = useMemo(
+    () => (cadastros ? contasBancarias(cadastros.contas).filter((conta) => conta.ativa) : []),
+    [cadastros],
+  );
+  // Disponível (corrente, carteira, poupança) x investido (regras/saldos.ts)
+  // e quanto sobra até o fim do mês (regras/saldoLivre.ts).
+  const { saldos, investida, livreDoMes } = useMemo(() => {
+    if (!comNumeros) {
+      return { saldos: null, investida: null, livreDoMes: null };
+    }
+    const separados = separarSaldos(visao.contas);
+    return {
+      saldos: separados,
+      investida: parteInvestida(separados),
+      livreDoMes: calcularSaldoLivre({
+        saldo: visao.projecao.saldo,
+        linhasDasContas: visao.projecao.linhas,
+        cartoes: visao.projecao.cartoes,
+        investido: separados.investido.total,
+        hoje,
+      }),
+    };
+  }, [comNumeros, visao, hoje]);
+
+  // Ações estáveis: o menu "+ Novo", os formulários e o vazio do gráfico não
+  // redesenham só porque a Visão geral redesenhou.
+  const { recarregar } = livro;
+  const fecharModal = useCallback(() => {
+    setModal(null);
+    setModalOcupado(false);
+  }, []);
+  const aposCriar = useCallback(() => {
+    fecharModal();
+    recarregar();
+  }, [fecharModal, recarregar]);
+  // Lançamento e compra: o modal continua aberto para o próximo (os números
+  // da tela atualizam por trás).
+  const aposLancar = useCallback(() => recarregar(), [recarregar]);
+  const verExemplo = useCallback(() => setExemplo(true), []);
+  const cadastrarConta = useCallback(() => setModal('conta'), []);
+  const temCartoes = cartoes.length > 0;
+  const opcoesDoNovo = useMemo(
+    () => [
+      {
+        id: 'lancamento',
+        rotulo: 'Novo lançamento manual',
+        descricao: 'PIX, débito, dinheiro ou TED, direto no saldo da conta.',
+        icone: 'lancamentos',
+        aoEscolher: () => setModal('lancamento'),
+      },
+      ...(temCartoes
+        ? [
+            {
+              id: 'compra',
+              rotulo: 'Nova compra no crédito',
+              descricao: 'Entra na fatura do cartão, à vista ou parcelada.',
+              icone: 'cartao',
+              aoEscolher: () => setModal('compra'),
+            },
+          ]
+        : []),
+      { id: 'conta', rotulo: 'Cadastrar conta', descricao: 'Corrente, poupança, carteira ou investimento.', icone: 'contas', aoEscolher: () => setModal('conta') },
+      { id: 'cartao', rotulo: 'Cadastrar cartão', descricao: 'Limite, fechamento, vencimento e a cor.', icone: 'cartao', aoEscolher: () => setModal('cartao') },
+    ],
+    [temCartoes],
+  );
+
   const carregando = real && (espaco.carregando || (Boolean(espacoId) && livro.carregando && !livro.dados));
   if (pessoa.carregando || carregando) {
     return <Esqueleto />;
@@ -287,92 +401,12 @@ export default function VisaoGeral() {
 
   const dados = pessoa.dados;
   const erro = real ? espaco.erro || livro.erro?.message : '';
-  const semContas = real && Boolean(livro.dados) && livro.dados.contas.length === 0;
-  const comNumeros = Boolean(visao) && !semContas;
   const mesAnterior = NOME_DO_MES.format(comoData(somarDias(`${hoje.slice(0, 7)}-01`, -1)));
   const faixa = faixaEscolhida ?? (comNumeros && visao.series['6m'] ? '6m' : '30d');
   const serie = comNumeros ? visao.series[faixa] : null;
   const faixasDisponiveis = FAIXAS.filter((opcao) => !comNumeros || visao.series[opcao.id]);
-  const resumo = resumoDasMetas(metas);
-  const metasEmDestaque = [...metas]
-    .filter((meta) => porcentagem(meta) < 100)
-    .sort((a, b) => progresso(b) - progresso(a))
-    .slice(0, 4);
-  // A meta mais perto de mudar de fase: o convite para regar.
-  const pertoDeCrescer = metasEmDestaque
-    .map((meta) => ({ meta, proxima: proximaFase(meta) }))
-    .filter((item) => item.proxima && item.proxima.fase.id !== 'broto')
-    .sort((a, b) => a.proxima.faltam / a.meta.alvo - b.proxima.faltam / b.meta.alvo)[0];
-  const diasDasUltimas = comNumeros
-    ? visao.ultimas.reduce((grupos, linha) => {
-        const ultimo = grupos.at(-1);
-        if (ultimo?.data === linha.data) {
-          ultimo.linhas.push(linha);
-        } else {
-          grupos.push({ data: linha.data, linhas: [linha] });
-        }
-        return grupos;
-      }, [])
-    : [];
-  // Cartões e cadastros do "+ Novo": só com a API (o exemplo não tem cartão).
-  const cadastros = real ? livro.dados : null;
-  const cartoes = cadastros?.cartoes ?? [];
-  const faturas = resumoDasFaturas(cartoes, hoje);
-  const contasAtivas = cadastros ? contasBancarias(cadastros.contas).filter((conta) => conta.ativa) : [];
   // O racha com nome e parte de cada pessoa é do Plano Família (a API confere).
   const divisaoPorPessoa = familiaLiberada(planoDoCliente(espacos));
-  // Disponível (corrente, carteira, poupança) x investido (regras/saldos.ts).
-  const saldos = comNumeros ? separarSaldos(visao.contas) : null;
-  const investida = saldos ? parteInvestida(saldos) : null;
-  // Quanto sobra até o fim do mês (regras/saldoLivre.ts).
-  const livreDoMes = comNumeros
-    ? calcularSaldoLivre({
-        saldo: visao.projecao.saldo,
-        linhasDasContas: visao.projecao.linhas,
-        cartoes: visao.projecao.cartoes,
-        investido: saldos?.investido.total ?? 0,
-        hoje,
-      })
-    : null;
-
-  const opcoesDoNovo = [
-    {
-      id: 'lancamento',
-      rotulo: 'Novo lançamento manual',
-      descricao: 'PIX, débito, dinheiro ou TED, direto no saldo da conta.',
-      icone: 'lancamentos',
-      aoEscolher: () => setModal('lancamento'),
-    },
-    ...(cartoes.length > 0
-      ? [
-          {
-            id: 'compra',
-            rotulo: 'Nova compra no crédito',
-            descricao: 'Entra na fatura do cartão, à vista ou parcelada.',
-            icone: 'cartao',
-            aoEscolher: () => setModal('compra'),
-          },
-        ]
-      : []),
-    { id: 'conta', rotulo: 'Cadastrar conta', descricao: 'Corrente, poupança, carteira ou investimento.', icone: 'contas', aoEscolher: () => setModal('conta') },
-    { id: 'cartao', rotulo: 'Cadastrar cartão', descricao: 'Limite, fechamento, vencimento e a cor.', icone: 'cartao', aoEscolher: () => setModal('cartao') },
-  ];
-
-  function fecharModal() {
-    setModal(null);
-    setModalOcupado(false);
-  }
-
-  function aposCriar() {
-    fecharModal();
-    livro.recarregar();
-  }
-
-  // Lançamento e compra: o modal continua aberto para o próximo (os números
-  // da tela atualizam por trás).
-  function aposLancar() {
-    livro.recarregar();
-  }
 
   return (
     <div className="of-visao">
@@ -534,12 +568,12 @@ export default function VisaoGeral() {
           )}
         </article>
 
-        {/* O card inteiro leva às metas (o link se estica por cima dele), e o
-            "i" fica por cima do link: botão dentro de link não é válido. À
+        {/* Card só de leitura: sem clique, sem hover e sem levar à aba Metas
+            (o painel "Minhas metas", mais abaixo, tem os atalhos). À
             esquerda, a contagem e a barra de todas as metas juntas; à
             direita (card largo), as mais adiantadas, cada uma com a sua
-            barra. Só texto do lado direito: o link é o card inteiro. */}
-        <article className="of-kpi of-kpi-link of-kpi-metas">
+            barra. */}
+        <article className="of-kpi of-kpi-largo of-kpi-metas">
           <div className="of-kpi-metas-corpo">
           <div className="of-kpi-metas-resumo">
             <div className="of-kpi-topo">
@@ -547,9 +581,7 @@ export default function VisaoGeral() {
                 <span className="of-kpi-icone meta" aria-hidden="true">
                   <Icone nome="broto" tamanho={18} />
                 </span>
-                <Link to="/metas" className="of-kpi-alvo">
-                  Metas
-                </Link>
+                Metas
               </p>
               <Dica titulo="Metas">
                 <p>
@@ -633,8 +665,7 @@ export default function VisaoGeral() {
               descricao={`Evolução do saldo em ${FAIXAS.find((opcao) => opcao.id === faixa).rotulo}: de ${formatarBRL(serie[0].saldo)} a ${formatarBRL(serie.at(-1).saldo)}`}
             />
           ) : (
-            <VazioDaVisao semContas={semContas} real={real} aoVerExemplo={() => setExemplo(true)}
-              aoCadastrarConta={() => setModal('conta')} />
+            <VazioDaVisao semContas={semContas} real={real} aoVerExemplo={verExemplo} aoCadastrarConta={cadastrarConta} />
           )}
         </section>
 
@@ -644,7 +675,7 @@ export default function VisaoGeral() {
             {comNumeros && <small>{NOME_DO_MES.format(comoData(hoje))}, com as faturas do mês</small>}
           </div>
           {comNumeros && visao.categorias.length > 0 ? (
-            <Rosca fatias={fatiasDaRosca(visao.categorias, 6)} total={visao.totais.saidas} rotuloDoTotal="gasto neste mês" />
+            <Rosca fatias={fatiasDaCategoria} total={visao.totais.saidas} rotuloDoTotal="gasto neste mês" />
           ) : (
             <p className="of-discreto">Quando houver despesas no mês, elas aparecem aqui divididas por categoria.</p>
           )}
@@ -890,7 +921,7 @@ export default function VisaoGeral() {
 // corrente, carteira e poupança) separado do investido (o patrimônio
 // aplicado). Os dois totais abrem a fileira, cada um com o "i"; cada conta diz
 // o que ela é e quanto pesa no seu grupo, em texto, sem gráfico.
-function SaldoPorConta({ saldos, investida, real }) {
+const SaldoPorConta = memo(function SaldoPorConta({ saldos, investida, real }) {
   const grupos = saldos
     ? [
         {
@@ -957,7 +988,9 @@ function SaldoPorConta({ saldos, investida, real }) {
                       <span className="of-kpi-icone" aria-hidden="true">
                         <Icone nome={sobre.icone} tamanho={16} />
                       </span>
-                      <span className="of-saldo-card-nome">{conta.nome}</span>
+                      <span className="of-saldo-card-nome" title={conta.nome}>
+                        {conta.nome}
+                      </span>
                     </p>
                     {/* O tipo só quando o nome não é o próprio tipo ("Conta corrente"). */}
                     {normalizarTexto(conta.nome) !== normalizarTexto(tipo) && <span className="of-saldo-card-tipo">{tipo}</span>}
@@ -990,11 +1023,11 @@ function SaldoPorConta({ saldos, investida, real }) {
       )}
     </section>
   );
-}
+});
 
 // Gráfico vazio: sem contas, convida a cadastrar (no modal, sem sair da
 // tela); sem API, oferece o exemplo.
-function VazioDaVisao({ semContas, real, aoVerExemplo, aoCadastrarConta }) {
+const VazioDaVisao = memo(function VazioDaVisao({ semContas, real, aoVerExemplo, aoCadastrarConta }) {
   if (semContas) {
     return (
       <div className="vazio">
@@ -1025,4 +1058,4 @@ function VazioDaVisao({ semContas, real, aoVerExemplo, aoCadastrarConta }) {
       </button>
     </div>
   );
-}
+});

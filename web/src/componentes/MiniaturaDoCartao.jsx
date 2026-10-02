@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { estiloDoPlastico } from '../regras/cores';
 import { formatarData } from '../regras/datas';
 
@@ -11,7 +12,7 @@ import { formatarData } from '../regras/datas';
 //
 // É enfeite: o nome e os valores estão escritos ao lado, na legenda de quem
 // usa a miniatura, então o desenho inteiro fica fora do leitor de tela.
-export default function MiniaturaDoCartao({ cartao, titular = '' }) {
+function MiniaturaDoCartao({ cartao, titular = '' }) {
   const vencimento = cartao.fatura_atual?.vencimento;
   const plastico = estiloDoPlastico(cartao.cor);
   return (
@@ -45,3 +46,6 @@ export default function MiniaturaDoCartao({ cartao, titular = '' }) {
     </span>
   );
 }
+
+// memo: a Visão geral redesenha (filtro, modal, recarga) sem que isto mude (o painel do cartão só muda ao recarregar).
+export default memo(MiniaturaDoCartao);

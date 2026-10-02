@@ -618,6 +618,16 @@ button.link:hover:not(:disabled) {
   container: extrato / inline-size;
 }
 
+/* Virtualização sem biblioteca: o navegador só desenha os dias do extrato
+   que estão perto da tela (content-visibility); os de longe guardam a altura
+   provável (contain-intrinsic-size, depois a medida de verdade) para a
+   rolagem não pular. Com um mês de mil lançamentos, abrir e rolar o extrato
+   deixa de desenhar a lista inteira. */
+.extrato > .dia-do-extrato {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+
 /* Ações à vista: ícone e nome em botões baixos, discretos até o mouse
    chegar. Excluir fica em vermelho só no texto (o vermelho cheio é da
    confirmação). */

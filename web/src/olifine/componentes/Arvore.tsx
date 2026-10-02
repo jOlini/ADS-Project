@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { memo, useMemo, useState, type CSSProperties } from 'react';
 import { caminhoDoGalho, desenharArvore, montarGalhos, RAIZ, recorteDaMiniatura } from '../regras/arvore';
 import { frutosQueCaem, quedaDoFruto } from '../regras/crescimento';
 import { useProgressoAnimado } from '../useProgressoAnimado';
@@ -76,7 +76,7 @@ interface Props {
 // no CSS, e o Chrome não deixa sobra de quadro antigo fora dela), e a maçã da
 // colheita é o próprio fruto que desce do galho, não uma segunda maçã por
 // cima dele. As que não caem ficam na copa.
-export default function Arvore({ semente, progresso, mostrado, rega = 0, compacta = false, rotulo }: Props) {
+function Arvore({ semente, progresso, mostrado, rega = 0, compacta = false, rotulo }: Props) {
   const galhos = useMemo(() => montarGalhos(semente), [semente]);
   const animado = useProgressoAnimado(progresso, { rega, animar: mostrado === undefined && !compacta });
   const p = mostrado ?? animado;
@@ -213,3 +213,6 @@ export default function Arvore({ semente, progresso, mostrado, rega = 0, compact
     </svg>
   );
 }
+
+// memo: a Visão geral redesenha (filtro, modal, recarga) sem que isto mude (props simples (semente, progresso)).
+export default memo(Arvore);

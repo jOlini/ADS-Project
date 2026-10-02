@@ -296,21 +296,6 @@ button.botao-icone.sobre-o-plastico:hover:not(:disabled) {
   font-family: inherit;
 }
 
-/* Reflexo que corre pelo plástico ao passar o mouse, uma vez. */
-.miniatura-do-cartao::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.28) 48%, transparent 60%);
-  transform: translateX(-110%);
-  transition: transform 900ms var(--curva);
-  pointer-events: none;
-}
-
-:hover > .miniatura-do-cartao::after {
-  transform: translateX(110%);
-}
-
 .miniatura-do-cartao.desativado {
   filter: saturate(0.3) brightness(0.9);
 }
@@ -424,12 +409,6 @@ button.botao-icone.sobre-o-plastico:hover:not(:disabled) {
   opacity: 0.75;
   font-size: 3.2cqi;
   letter-spacing: 0.1em;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .miniatura-do-cartao::after {
-    display: none;
-  }
 }
 
 /* ------------------------------------------------------ Medidor do limite */

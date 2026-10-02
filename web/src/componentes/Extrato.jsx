@@ -31,7 +31,7 @@ export default function Extrato({ dias, mostrarSaldo = true, acoes, selecao, cor
   return (
     <div className="extrato">
   {dias.map((dia) => (
-    <div key={dia.data}>
+    <div key={dia.data} className="dia-do-extrato">
       <p className="dia">
         <span>{DIA_LONGO.format(comoData(dia.data))}</span>
         {mostrarSaldo && <span>Saldo do dia {formatarBRL(dia.saldo)}</span>}
