@@ -52,7 +52,7 @@ def consultar_familia(
 ):
     """Se o modo está ligado e as pessoas da família (o mesmo que vem em `familia` no espaço
     pessoal). `maximo_de_pessoas` é quantas cabem além do titular."""
-    return FamiliaResposta.de(servico.familia(espaco), espaco.plano)
+    return FamiliaResposta.de(servico.familia(espaco), espaco.plano_em_vigor)
 
 
 @rotas_familia.put(
@@ -68,7 +68,7 @@ def ligar_familia(
 ):
     """Desligado, a família some da tela; as pessoas continuam guardadas para quando o modo
     voltar. Ligar pede o Plano Família ou o Empresarial (no Free, 403); desligar, nunca."""
-    return FamiliaResposta.de(servico.ligar(espaco, dados), espaco.plano)
+    return FamiliaResposta.de(servico.ligar(espaco, dados), espaco.plano_em_vigor)
 
 
 @rotas_familia.post(

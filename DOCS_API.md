@@ -448,14 +448,15 @@ tipos, e só dois: o **pessoal** (`PF`), criado no primeiro acesso, com o Modo F
 | Método | Endpoint | Finalidade | Resposta de sucesso | Erros possíveis |
 |---|---|---|---|---|
 | `GET` | `/espacos` | Listar meus espaços; no primeiro acesso, cria o espaço pessoal com as categorias iniciais | `200 OK` | `401`, `403` (e-mail não confirmado), `503` |
+| `GET` | `/espacos/acesso` | O que a conta pode fazer além do uso normal: `super_admin` (modo de teste dos planos) e o `plano_simulado` do pedido | `200 OK` | `401`, `403` |
 | `POST` | `/espacos` | Cadastrar uma empresa no espaço empresarial (`tipo: PJ`, `nome`, `cnpj` e `regime` opcionais), com as categorias de empresa | `201 Created` + `Location` | `400`, `401`, `409` (limite de empresas) |
 | `GET` | `/espacos/{espaco_id}` | Consultar um espaço | `200 OK` | `401`, `404` |
 | `PATCH` | `/espacos/{espaco_id}` | Editar o nome, o CNPJ ou o regime de uma empresa (só os campos enviados) | `200 OK` | `400`, `401`, `403`, `404`, `409` (pessoal) |
 | `DELETE` | `/espacos/{espaco_id}` | Excluir uma empresa sem movimento (sem contas nem lançamentos), com as categorias e os cadastros dela | `204 No Content` | `401`, `403`, `404`, `409` (pessoal ou com dados) |
 | `GET` | `/espacos/{espaco_id}/contas` | Listar contas com o saldo de cada uma | `200 OK` | `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial) ou cartão de crédito (tipo `CARTAO_CREDITO`, com limite, fechamento, vencimento e cor) | `201 Created` + `Location` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial e cor opcional) ou cartão de crédito (tipo `CARTAO_CREDITO`, com limite, fechamento, vencimento e cor) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/contas/{conta_id}` | Consultar conta e saldo | `200 OK` | `401`, `404` |
-| `PUT` | `/espacos/{espaco_id}/contas/{conta_id}` | Renomear, trocar o tipo, desativar ou reativar; no cartão, também limite, dias da fatura e cor | `200 OK` | `400`, `401`, `404` |
+| `PUT` | `/espacos/{espaco_id}/contas/{conta_id}` | Renomear, trocar o tipo, recolorir, desativar ou reativar; no cartão, também limite e dias da fatura | `200 OK` | `400`, `401`, `404` |
 | `DELETE` | `/espacos/{espaco_id}/contas/{conta_id}` | Excluir conta ou cartão com todos os lançamentos dela (`excluidos` na resposta) | `200 OK` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/cartoes` | Listar cartões com limite total e disponível, fatura atual, a pagar e parcelamentos futuros | `200 OK` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/cartoes/{cartao_id}` | Consultar o painel de um cartão | `200 OK` | `401`, `404` |
@@ -465,10 +466,10 @@ tipos, e só dois: o **pessoal** (`PF`), criado no primeiro acesso, com o Modo F
 | `POST` | `/espacos/{espaco_id}/cartoes/{cartao_id}/compras` | Lançar compra no cartão, à vista ou parcelada (uma despesa por parcela) | `201 Created` (parcelas criadas) | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/cartoes/{cartao_id}/pagamentos` | Pagar a fatura: sai da conta indicada e libera o limite | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/categorias` | Listar categorias | `200 OK` | `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/categorias` | Criar categoria (nome, tipo, cor) | `201 Created` + `Location` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/categorias` | Criar categoria (nome, tipo, cor da paleta ou `#rrggbb`) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Consultar categoria | `200 OK` | `401`, `404` |
 | `PUT` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Renomear, recolorir, desativar ou reativar | `200 OK` | `400`, `401`, `404` |
-| `DELETE` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Excluir categoria sem lançamentos (com lançamentos: `409`, desative) | `204 No Content` | `401`, `404`, `409` |
+| `DELETE` | `/espacos/{espaco_id}/categorias/{categoria_id}?mover_para=` | Excluir categoria; com lançamentos, só com `mover_para` (a categoria que os recebe) | `204 No Content`; com `mover_para`, `200 OK` (`lancamentos_movidos`) | `400`, `401`, `404`, `409` (em uso, sem destino) |
 | `GET` | `/espacos/{espaco_id}/lancamentos?de=&ate=&limite=&conta_id=` | Listar lançamentos do mais recente ao mais antigo (período e conta opcionais, até 1000) | `200 OK` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência à vista nas contas (com meio, responsável e divisão entre pessoas, opcionais) | `201 Created` + `Location` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/lancamentos/exclusao-em-lote` | Excluir vários lançamentos de uma vez (`ids`), com as regras da exclusão de um | `200 OK` | `400`, `401`, `404` |
@@ -478,7 +479,7 @@ tipos, e só dois: o **pessoal** (`PF`), criado no primeiro acesso, com o Modo F
 | `DELETE` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Excluir: apaga o lançamento de vez (e o estorno dele, se houver; numa parcela, a compra inteira) | `204 No Content` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/pessoas` | Listar os nomes já usados em divisões e como responsável (para a tela sugerir) | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/importacoes/estrutura` | Mostrar o começo do CSV em células e sugerir as colunas (nada é gravado) | `200 OK` | `400`, `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/importacoes` | Importar o extrato do banco em CSV, ou só simular (`simular: true`) | `200 OK` (relatório por linha) | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/importacoes` | Importar o extrato do banco em CSV, ou só simular (`simular: true`); linhas descartadas na conferência ficam de fora | `200 OK` (relatório por linha) | `400`, `401`, `404` |
 
 Lançamento não tem `PUT` (`405 Method Not Allowed`): a correção é pelo `PATCH` (seção "Edição, exclusão em lote
 e remoção de cadastros", abaixo), que muda só os campos enviados. Há dois jeitos de desfazer, com efeitos
@@ -597,6 +598,27 @@ Content-Type: application/json
 - Voltar ao Free esconde a família sem apagar ninguém; com o plano de volta, o modo gravado volta junto.
 - Espaço gravado antes dos planos (sem o campo) ou com um valor desconhecido conta como `FREE`.
 
+**Modo de teste dos planos (super admin).** Para testar o app de ponta a ponta com e sem as travas, as contas
+listadas em `SUPER_ADMINS` no `api/.env` (e-mails do Firebase, confirmados, separados por vírgula; o repositório
+não guarda nenhum) mandam o cabeçalho `X-Simular-Plano: FREE | FAMILIA | EMPRESARIAL`. Só naquele pedido, a API
+trata os espaços delas como se o plano fosse o simulado: o `plano` do `GET /espacos` sai como o simulado e as
+travas acima valem com ele (simular o Free mostra os `403` do Free). O plano gravado no MongoDB não muda.
+
+- `GET /espacos/acesso` responde `{"super_admin": true, "plano_simulado": "FAMILIA"}`; a tela de quem é super
+  admin mostra a chave "Plano em teste" no topo.
+- Para qualquer outra conta, o cabeçalho é ignorado em silêncio: o cliente não se promove sozinho, e a resposta
+  não conta que o modo existe. Plano que não existe, vindo de um super admin, é `400` (`plano`).
+- O CORS aceita o cabeçalho `X-Simular-Plano` (sem ele na lista, a pré-verificação do navegador barraria).
+
+### Cores: paleta ou hexadecimal
+
+Categorias, contas e cartões aceitam a `cor` como o nome de uma sugestão da paleta (as categorias: `moradia`,
+`mercado`, `transporte`, `casa`, `saude`, `lazer`, `entrada`, `neutro`; contas e cartões: `grafite`, `azul`,
+`roxo`, `verde`, `vinho`, `laranja`, `dourado`, `prata`) ou uma cor livre no formato exato `#rrggbb`, gravada em
+minúsculas. Qualquer outro texto é `400` em `cor` ("Cor inválida. Use ... ou uma cor no formato #rrggbb."): a cor
+vai para o CSS da tela, e nada além de seis algarismos hexadecimais chega lá. Toda conta pode ter cor (o card dela
+em Contas & Cartões); conta sem cor sai com `cor: null` e a tela usa a cor do tipo.
+
 ### Edição, exclusão em lote e remoção de cadastros
 
 **Editar um lançamento** (`PATCH /lancamentos/{id}`): só os campos enviados mudam, e as partidas são remontadas
@@ -628,9 +650,20 @@ inclusive transferências e pagamentos de fatura com outras contas, e o saldo da
 devolve os pagamentos ao saldo da conta de onde saíram). Os lançamentos saem antes da conta: se a operação parar
 no meio, a conta continua lá e excluir de novo termina. Para guardar o histórico, o caminho é desativar.
 
-**Excluir categoria** (`DELETE /categorias/{id}`): só categoria sem lançamentos. Com lançamentos, `409`
-(`"Mercado" está em 3 lançamentos. Desative a categoria para tirá-la das opções sem mexer no histórico.`):
-apagá-la deixaria o extrato sem o "para onde foi".
+**Excluir categoria** (`DELETE /categorias/{id}`): sem lançamentos, sai direto (`204`). Com lançamentos e sem
+destino, `409` com a quantidade no corpo (`"lancamentos": 3`): apagá-la deixaria o extrato sem o "para onde foi".
+Com `?mover_para=<id>` (outra categoria do espaço, do mesmo tipo e ativa), os lançamentos passam para ela, no
+campo e na partida da categoria (é ela que os relatórios somam), e só então a categoria sai: `200` com
+`{"lancamentos_movidos": 3}`. Sem transação no MongoDB, a ordem é a segura: se parar no meio, os lançamentos já
+estão no destino e excluir de novo termina. Categoria usada pela gestão da empresa (com `funcao`) não sai com
+lançamentos (`409`): desative-a.
+
+| Situação | Campo | Mensagem |
+|---|---|---|
+| Destino de outro tipo | `mover_para` | Escolha uma categoria de despesa (ou receita), como a que sai. |
+| Destino igual à categoria que sai | `mover_para` | Escolha outra categoria: esta é a que sai. |
+| Destino desativado | `mover_para` | A categoria de destino está desativada. Ative-a ou escolha outra. |
+| Destino inexistente ou de outro espaço | `mover_para` | Categoria de destino não encontrada. |
 
 | Situação | Campo | Mensagem |
 |---|---|---|
@@ -832,6 +865,12 @@ Receita, despesa e compra no cartão aceitam `responsavel`: o nome de quem fez o
 com o valor **inteiro**. Antes, vincular um gasto a alguém pedia uma divisão de uma pessoa só; agora a divisão
 fica para o racha de verdade. É informação do lançamento, como o meio: não muda saldo nem partidas.
 
+O responsável é sempre **uma pessoa da família** do espaço pessoal, e só no **Plano Família** (ou no
+Empresarial, que o inclui): um nome qualquer separaria o gasto por pessoa sem o plano. A API grava o nome como
+está na família (`"leo "` vira `"Léo"`). No Free, `403`, mesmo que a tela seja burlada; um nome de fora da
+família, `400`; na empresa não há responsável (`400`). A tela mostra o campo só no Família, com a lista das
+pessoas da casa. Lançamentos antigos com outro nome continuam como estão (a regra vale para o que é gravado).
+
 ```json
 { "tipo": "DESPESA", "descricao": "Farmácia", "data": "2026-09-19", "valor_centavos": 8990,
   "conta_id": "<id da conta>", "categoria_id": "<id de Saúde>", "responsavel": "Bruno" }
@@ -847,6 +886,9 @@ fica para o racha de verdade. É informação do lançamento, como o meio: não 
 |---|---|---|
 | Responsável numa transferência | `responsavel` | Transferência entre contas próprias não tem responsável. |
 | Nome vazio (depois da limpeza) ou com mais de 60 caracteres | `responsavel` | (validação do tamanho) |
+| Nome que não é de uma pessoa da família | `responsavel` | Escolha uma pessoa da família (Pessoas da casa). |
+| Responsável num lançamento da empresa | `responsavel` | Na empresa, o lançamento não tem responsável. |
+| Responsável no Free | — | `403`: escolher o responsável faz parte do Plano Família. |
 
 ### Importação do extrato (CSV)
 
@@ -911,6 +953,15 @@ mesmo caminho de um lançamento digitado (partidas dobradas, centavos, limites d
   (`400` em `ajustes.<linha>.categoria_id`). A chave da linha continua a do arquivo: a mesma linha, editada ou
   não, não entra duas vezes. Na fatura de um cartão, a parcela continua lida da descrição do arquivo, para a
   fatura seguinte reconhecer as parcelas geradas.
+- **Descarte na conferência:** `{"descartar": true}` no ajuste de uma linha a tira da importação: ela volta como
+  `DESCARTADA`, nada é gravado e nenhuma parcela nasce dela; a resposta conta `descartadas`. É o caminho do
+  pagamento da fatura anterior, que na fatura do cartão aparece como crédito e entraria em dobro (a tela já o
+  traz descartado, com o motivo). Nada é guardado da linha descartada: o mesmo arquivo importado de novo a traz
+  para conferir. Descartar uma linha já importada não muda nada (ela continua `JA_IMPORTADA`).
+- **PDF do banco:** a API recebe só CSV. A fatura ou o extrato em PDF é lido no navegador (pdf.js), por um
+  leitor de cada banco (padrão Strategy, `web/src/regras/extratos`), que tira só as linhas de lançamento e as
+  manda como um CSV simples (`Data;Descrição;Valor`), com o `mapeamento` fixo. O PDF, com nome, CPF, endereço e
+  código de barras, nunca chega ao servidor.
 - **Linha ruim não barra o arquivo:** volta como `INVALIDA`, com o motivo, e as outras entram. Linhas de saldo
   (`SALDO ANTERIOR`, `SALDO DO DIA`) são recusadas: não são lançamentos.
 - **Injeção de fórmula (CSV injection):** o arquivo vem de fora, então a descrição e a categoria perdem os

@@ -118,6 +118,8 @@ def test_uma_assinatura_cobre_ate_o_limite_de_pessoas(ana):
 def test_nome_novo_leva_os_lancamentos_da_pessoa(ana):
     conta = ana.criar_conta("Corrente", 100_000)
     leo = incluir(ana, "Léo").json()["id"]
+    # O responsável é sempre alguém da família: o Leonardo também é da casa.
+    incluir(ana, "Leonardo")
     como_responsavel = despesa(ana, conta, 3_000, responsavel="leo")
     no_racha = despesa(ana, conta, 4_000, divisao=[{"pessoa": "LÉO", "valor_centavos": 1_000}])
     de_outro = despesa(ana, conta, 5_000, responsavel="Leonardo")
@@ -169,6 +171,7 @@ def test_relatorios_filtram_por_pessoa_da_familia(ana):
     despesa(ana, conta, 3_000, responsavel="leo")
     despesa(ana, conta, 2_000, responsavel="LÉO", categoria="Lazer")
     despesa(ana, conta, 7_000)
+    incluir(ana, "Carla")
     despesa(ana, conta, 1_000, responsavel="Carla")
     periodo = "de=2026-09&ate=2026-09"
 

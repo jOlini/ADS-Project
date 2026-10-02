@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import AvisoComAtalho from './AvisoComAtalho';
 import Campo from './Campo';
 import CampoDeResponsavel from './CampoDeResponsavel';
@@ -11,29 +11,36 @@ import { primeiroCampoComErro } from '../regras/cadastro';
 import { compraVazia, corpoDaCompra, OPCOES_DE_PARCELAS, ORDEM_DA_COMPRA, textoDasParcelas, validarCompra } from '../regras/cartoes';
 import { camposDaDivisao } from '../regras/divisao';
 import { lerValor } from '../regras/dinheiro';
+import { proximaCompra, SEQUENCIA_VAZIA, somarNaSequencia, textoDaSequencia } from '../regras/lancamentoEmSequencia';
 import { errosDaApi } from '../regras/livroCaixa';
 import { comprarNoCartao } from '../servicos/livroCaixa';
 
 // Formulário da "Nova compra" no cartão (dentro do modal): à vista ou
 // parcelada. O valor é o total da compra; a API cria uma despesa por parcela,
-// cada uma numa fatura, e o total ocupa o limite desde já. O responsável vale
+// cada uma numa fatura, e o total ocupa o limite desde já. Depois de lançar,
+// o formulário fica aberto para a próxima compra (regras/lancamentoEmSequencia.ts),
+// até a pessoa clicar em Concluir. O responsável vale
 // para todas as parcelas; racha entre pessoas só na compra à vista (com o
 // nome e a parte de cada um no Plano Família, divisaoPorPessoa; no Free, só o
-// número de pessoas). aoComprar recebe as parcelas criadas.
+// número de pessoas). aoComprar recebe as parcelas criadas. O responsável só
+// aparece com a família (Plano Família), com as pessoas dela.
 export default function FormularioDeCompra({
   espacoId,
   cartao,
   categorias,
   pessoasConhecidas,
+  familia = [],
   divisaoPorPessoa = false,
   aoComprar,
   aoCancelar,
   aoMudarOcupado,
 }) {
   const toast = useToast();
+  const formularioRef = useRef(null);
   const [formulario, setFormulario] = useState(compraVazia);
   const [erros, setErros] = useState({});
   const [enviando, setEnviando] = useState(false);
+  const [sequencia, setSequencia] = useState(SEQUENCIA_VAZIA);
 
   if (!cartao.ativa) {
     return (
@@ -84,19 +91,24 @@ export default function FormularioDeCompra({
     try {
       const criadas = await comprarNoCartao(espacoId, cartao.id, corpoDaCompra(formulario));
       toast.sucesso(`${criadas[0].descricao} · ${textoDasParcelas(total, parcelas)}`, { titulo: 'Compra lançada no cartão' });
+      setSequencia((atual) => somarNaSequencia(atual, criadas[0].descricao, total));
+      setFormulario(proximaCompra);
+      setErros({});
       aoComprar(criadas);
+      requestAnimationFrame(() => formularioRef.current?.elements.descricao?.focus());
     } catch (erro) {
       const campos = errosDaApi(erro.campos);
       setErros(campos);
       toast.erro(erro.message, { titulo: 'Compra não lançada' });
       focar(elementos, primeiroCampoComErro(campos, ordem));
+    } finally {
       setEnviando(false);
       aoMudarOcupado?.(false);
     }
   }
 
   return (
-    <form onSubmit={enviar} noValidate>
+    <form ref={formularioRef} onSubmit={enviar} noValidate>
       <Campo rotulo="Descrição" name="descricao" mascara="texto" autoComplete="off" maxLength={120} placeholder="Ex.: Supermercado" data-foco-inicial
         value={formulario.descricao} onChange={(evento) => mudar('descricao', evento.target.value)} erro={erros.descricao} />
 
@@ -117,8 +129,7 @@ export default function FormularioDeCompra({
       </div>
 
       <CampoDeResponsavel valor={formulario.responsavel} aoMudar={(nome) => mudar('responsavel', nome)}
-        erro={erros.responsavel} pessoasConhecidas={pessoasConhecidas}
-        dica="Quem fez a compra, em todas as parcelas. Vazio, fica com você." />
+        erro={erros.responsavel} familia={familia} dica="Quem da casa fez a compra, em todas as parcelas." />
 
       {categoriasDeDespesa.length === 0 && (
         <AvisoComAtalho compacto atalho={{ para: '/categorias?cadastrar=DESPESA', rotulo: 'Criar categoria', icone: 'categorias' }}>
@@ -144,12 +155,16 @@ export default function FormularioDeCompra({
           aoMudar={(numero) => mudar('dividido_entre', numero)} />
       )}
 
+      <p className="resumo-da-sequencia" role="status">
+        {textoDaSequencia(sequencia, ['compra', 'compras'])}
+      </p>
+
       <div className="acoes-do-formulario">
         <button type="button" className="secundario" onClick={aoCancelar} disabled={enviando}>
-          Cancelar
+          {sequencia.quantos > 0 ? 'Concluir' : 'Cancelar'}
         </button>
         <button type="submit" disabled={enviando} aria-busy={enviando}>
-          {enviando ? 'Lançando…' : 'Lançar compra'}
+          {enviando ? 'Lançando…' : sequencia.quantos > 0 ? 'Lançar outra compra' : 'Lançar compra'}
         </button>
       </div>
     </form>

@@ -14,6 +14,7 @@ export default function CompraNoCartao({
   cartoes,
   categorias,
   pessoasConhecidas,
+  familia = [],
   divisaoPorPessoa = false,
   aoComprar,
   aoCancelar,
@@ -48,6 +49,7 @@ export default function CompraNoCartao({
           cartao={cartao}
           categorias={categorias}
           pessoasConhecidas={pessoasConhecidas}
+          familia={familia}
           divisaoPorPessoa={divisaoPorPessoa}
           aoComprar={aoComprar}
           aoCancelar={aoCancelar}

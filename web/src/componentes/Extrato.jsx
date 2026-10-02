@@ -1,5 +1,6 @@
 import Icone from './Icone';
 import { iconeDaLinha } from '../olifine/regras/icones';
+import { corDaCategoria } from '../regras/cores';
 import { formatarBRL, formatarComSinal } from '../regras/dinheiro';
 import { COR_DA_CATEGORIA } from '../regras/exemplo';
 
@@ -10,8 +11,7 @@ const comoData = (iso) => new Date(`${iso}T12:00:00`);
 
 // A linha da API já traz a cor; a de exemplo usa a tabela por nome.
 function corDoLancamento(lancamento) {
-  const cor = lancamento.cor ?? COR_DA_CATEGORIA[lancamento.categoria] ?? 'neutro';
-  return `var(--cat-${cor})`;
+  return corDaCategoria(lancamento.cor ?? COR_DA_CATEGORIA[lancamento.categoria]);
 }
 
 // "Ana R$ 100,00 · Bruno R$ 150,00": quem entrou no racha e com quanto.
@@ -31,7 +31,7 @@ export default function Extrato({ dias, mostrarSaldo = true, acoes, selecao, cor
   return (
     <div className="extrato">
   {dias.map((dia) => (
-    <div key={dia.data}>
+    <div key={dia.data} className="dia-do-extrato">
       <p className="dia">
         <span>{DIA_LONGO.format(comoData(dia.data))}</span>
         {mostrarSaldo && <span>Saldo do dia {formatarBRL(dia.saldo)}</span>}

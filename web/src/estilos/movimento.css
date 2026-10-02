@@ -79,7 +79,7 @@ button.discreto-botao:active:not(:disabled) {
    lugar: sobem e acendem a borda. Cartões que só mostram dados não se mexem
    (subir prometeria um clique que não existe); só a borda acende de leve. */
 
-:is(.of-kpi-link, .of-metas-resumo a, .of-metas-lista button, a.of-regar-convite-link, .of-atalho, a.nome-do-cartao) {
+:is(.of-metas-resumo a, .of-metas-lista button, a.of-regar-convite-link, .of-atalho, a.nome-do-cartao) {
   transition:
     background-color var(--tempo) var(--curva),
     border-color var(--tempo) var(--curva),
@@ -87,20 +87,12 @@ button.discreto-botao:active:not(:disabled) {
     transform var(--tempo-medio) var(--curva-chegada);
 }
 
-/* Metas: o card é um article com o link esticado por cima; sobe quando o
-   link (e não o "i") está sob o ponteiro. */
-.of-kpi-link:has(.of-kpi-alvo:hover) {
-  transform: translateY(var(--elevacao));
-  border-color: color-mix(in srgb, var(--of-verde) 45%, var(--linha));
-  box-shadow: var(--sombra-elevada);
-}
-
 :is(.of-metas-resumo a, .of-metas-lista button):hover:not(:disabled) {
   transform: translateY(var(--elevacao-leve));
   box-shadow: var(--sombra);
 }
 
-:is(.of-kpi-link:has(.of-kpi-alvo:active), .of-metas-resumo a, .of-metas-lista button):active:not(:disabled) {
+:is(.of-metas-resumo a, .of-metas-lista button):active:not(:disabled) {
   transform: translateY(0) scale(0.99);
   transition-duration: var(--tempo-curto);
 }
@@ -479,17 +471,14 @@ button.item-do-menu,
 /* ------------------------------------------------ Borda viva */
 
 /* Faixas e cards de destaque (o saldo livre, o total das faturas, o convite
-   para regar, o plano Empresarial da landing): um degradê verde corre
-   devagar pela borda, fino, por cima da borda normal. O anel é o ::before
-   com a máscara que deixa só a moldura (padding) à mostra. O ângulo é uma
-   propriedade registrada (@property), a única forma de animar o
-   conic-gradient sem trocar a imagem a cada quadro. */
-@property --angulo-da-borda {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-
+   para regar, o plano Empresarial da landing): um anel verde fino, por cima
+   da borda normal, que "respira" devagar. O anel é o ::before com a máscara
+   que deixa só a moldura (padding) à mostra.
+   Só a opacidade anima, numa camada própria (will-change): roda no
+   compositor (GPU), sem recalcular estilo nem repintar o card. Antes, o
+   degradê girava animando o ângulo do conic-gradient (@property), que
+   repintava os cards inteiros a cada quadro: no trace da Visão geral, eram
+   mais de 400 pinturas por segundo com a tela parada. */
 .borda-viva {
   position: relative;
 }
@@ -502,7 +491,7 @@ button.item-do-menu,
   padding: 1.5px;
   border-radius: inherit;
   background: conic-gradient(
-    from var(--angulo-da-borda),
+    from 210deg,
     transparent 0% 18%,
     color-mix(in srgb, var(--of-verde-vivo) 90%, transparent) 30%,
     var(--of-verde) 38%,
@@ -517,13 +506,18 @@ button.item-do-menu,
   mask:
     linear-gradient(#000 0 0) content-box exclude,
     linear-gradient(#000 0 0);
-  animation: borda-viva 7s linear infinite;
+  animation: borda-viva 3.6s ease-in-out infinite alternate;
+  will-change: opacity;
   pointer-events: none;
 }
 
 @keyframes borda-viva {
+  from {
+    opacity: 0.45;
+  }
+
   to {
-    --angulo-da-borda: 360deg;
+    opacity: 1;
   }
 }
 
@@ -557,7 +551,7 @@ button.item-do-menu,
     background-image: none;
   }
 
-  /* A borda viva para onde está: o degradê fica, sem girar. */
+  /* A borda viva fica parada, acesa: o anel continua, sem respirar. */
   .borda-viva::before {
     animation: none;
   }

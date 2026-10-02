@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import AvisoComAtalho from './AvisoComAtalho';
 import Campo from './Campo';
 import CampoDeResponsavel from './CampoDeResponsavel';
@@ -11,6 +11,7 @@ import { useToast } from './toast/useToast';
 import { primeiroCampoComErro } from '../regras/cadastro';
 import { hojeIso } from '../regras/datas';
 import { formatarBRL, lerValor } from '../regras/dinheiro';
+import { proximoLancamento, SEQUENCIA_VAZIA, somarNaSequencia, textoDaSequencia } from '../regras/lancamentoEmSequencia';
 import { corpoDoLancamento, errosDaApi, ordemDoLancamento, TIPOS_DE_LANCAMENTO, validarLancamento } from '../regras/livroCaixa';
 import { lancar } from '../servicos/livroCaixa';
 
@@ -38,25 +39,34 @@ const opcoesDeConta = (contas) => contas.map((conta) => ({ valor: conta.id, rotu
 // transferência entre contas, sempre à vista (PIX, débito, dinheiro ou
 // TED/DOC), com o responsável e o racha entre pessoas nas duas primeiras.
 // Confere tudo antes de ir à API e põe o foco no primeiro campo com erro.
-// aoLancar recebe o lançamento criado. Compras no crédito não entram aqui: com
+// Depois de lançar, o formulário fica aberto para o próximo gasto
+// (regras/lancamentoEmSequencia.ts): limpa descrição, valor e divisão, mantém
+// o resto e volta o foco à descrição, até a pessoa clicar em Concluir.
+// aoLancar recebe cada lançamento criado (quem abriu recarrega a tela por
+// trás, sem fechar o modal). Compras no crédito não entram aqui: com
 // cartões cadastrados, o formulário aponta a fatura (temCartoes).
 // divisaoPorPessoa (Plano Família ou Empresarial) mostra o racha com o nome e
 // a parte de cada pessoa; no Free, só o número de pessoas, como anotação.
+// familia (as pessoas da casa, no Plano Família) traz o campo "Responsável";
+// sem família, ele não aparece.
 export default function FormularioDeLancamento({
   espacoId,
   contas,
   temCartoes = false,
   categorias,
   pessoasConhecidas,
+  familia = [],
   divisaoPorPessoa = false,
   aoLancar,
   aoCancelar,
   aoMudarOcupado,
 }) {
   const toast = useToast();
+  const formularioRef = useRef(null);
   const [formulario, setFormulario] = useState(() => formularioVazio(contas));
   const [erros, setErros] = useState({});
   const [enviando, setEnviando] = useState(false);
+  const [sequencia, setSequencia] = useState(SEQUENCIA_VAZIA);
 
   if (contas.length === 0) {
     return (
@@ -115,19 +125,25 @@ export default function FormularioDeLancamento({
     try {
       const criado = await lancar(espacoId, corpoDoLancamento(formulario));
       toast.sucesso(`${criado.descricao} · ${formatarBRL(lerValor(formulario.valor))}`, { titulo: 'Lançamento registrado' });
+      setSequencia((atual) => somarNaSequencia(atual, criado.descricao, criado.valor_centavos));
+      setFormulario(proximoLancamento);
+      setErros({});
       aoLancar(criado);
+      // O próximo gasto começa pela descrição, sem tocar no mouse.
+      requestAnimationFrame(() => formularioRef.current?.elements.descricao?.focus());
     } catch (erro) {
       const campos = errosDaApi(erro.campos);
       setErros(campos);
       toast.erro(erro.message, { titulo: 'Lançamento não registrado' });
       focar(elementos, primeiroCampoComErro(campos, ordemDoLancamento(formulario)));
+    } finally {
       setEnviando(false);
       aoMudarOcupado?.(false);
     }
   }
 
   return (
-    <form onSubmit={enviar} noValidate>
+    <form ref={formularioRef} onSubmit={enviar} noValidate>
       {temCartoes && (
         <AvisoComAtalho icone="cartao" compacto atalho={{ para: '/contas#cartoes', rotulo: 'Abrir cartões', icone: 'cartao' }}>
           Compra no crédito entra na fatura do cartão, não aqui.
@@ -172,8 +188,8 @@ export default function FormularioDeLancamento({
 
       {!transferencia && (
         <CampoDeResponsavel valor={formulario.responsavel} aoMudar={(nome) => mudar('responsavel', nome)}
-          erro={erros.responsavel} pessoasConhecidas={pessoasConhecidas}
-          dica={formulario.tipo === 'RECEITA' ? 'De quem é a receita. Vazio, fica com você.' : 'Quem fez o gasto. Vazio, fica com você.'} />
+          erro={erros.responsavel} familia={familia}
+          dica={formulario.tipo === 'RECEITA' ? 'De quem da casa é a receita.' : 'Quem da casa fez o gasto.'} />
       )}
 
       <SeletorDeMeio valor={formulario.meio} aoMudar={(meio) => mudar('meio', meio)} erro={erros.meio} />
@@ -199,12 +215,17 @@ export default function FormularioDeLancamento({
             aoMudar={(numero) => mudar('dividido_entre', numero)} />
         ))}
 
+      {/* A linha fica reservada: o resumo aparecer não empurra os botões. */}
+      <p className="resumo-da-sequencia" role="status">
+        {textoDaSequencia(sequencia)}
+      </p>
+
       <div className="acoes-do-formulario">
         <button type="button" className="secundario" onClick={aoCancelar} disabled={enviando}>
-          Cancelar
+          {sequencia.quantos > 0 ? 'Concluir' : 'Cancelar'}
         </button>
         <button type="submit" disabled={enviando} aria-busy={enviando}>
-          {enviando ? 'Lançando…' : 'Lançar'}
+          {enviando ? 'Lançando…' : sequencia.quantos > 0 ? 'Lançar outro' : 'Lançar'}
         </button>
       </div>
     </form>

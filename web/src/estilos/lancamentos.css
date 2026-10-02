@@ -336,30 +336,10 @@ button.sugestao:hover:not(:disabled) {
 
 /* ------------------------------------------- Responsável do lançamento */
 
-/* Campo com os atalhos de pessoas já usadas embaixo. A lista de atalhos não
-   muda enquanto a pessoa digita (componentes/CampoDeResponsavel.tsx): só o
-   atalho escolhido troca de cor, sem mexer no tamanho de nada. */
-.campo-de-responsavel {
-  display: grid;
-  gap: var(--espaco-4);
-  min-width: 0;
-}
-
+/* "(opcional)" no rótulo do responsável (componentes/CampoDeResponsavel.tsx). */
 .rotulo-opcional {
   color: var(--suave);
   font-weight: var(--peso-regular);
-}
-
-.atalhos-de-pessoa {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espaco-3);
-}
-
-button.sugestao[aria-pressed='true'] {
-  color: var(--marca-forte);
-  background: var(--marca-suave);
-  border-color: var(--marca);
 }
 
 button.sugestao > .icone {
@@ -755,6 +735,33 @@ button.sugestao > .icone {
   color: var(--suave);
 }
 
+/* Descartada: continua na lista, riscada e apagada, com o botão para voltar
+   (e o motivo, quando a tela sugeriu o descarte). */
+.conferencia-da-importacao tr.descartada :is(td.data, td.valor, td.descricao input) {
+  color: var(--suave);
+  text-decoration: line-through;
+}
+
+.conferencia-da-importacao tr.descartada td.categoria {
+  opacity: 0.55;
+}
+
+.conferencia-da-importacao td small.motivo-do-descarte {
+  display: block;
+  margin-top: var(--espaco-2);
+  color: var(--aviso);
+  text-decoration: none;
+}
+
+.conferencia-da-importacao td.acao-da-linha {
+  width: 1%;
+  text-align: right;
+}
+
+.conferencia-da-importacao tr.descartada button[aria-pressed='true'] {
+  color: var(--marca-forte);
+}
+
 /* No celular, cada linha vira um cartão: o rótulo de cada campo vem do
    data-rotulo, já que o cabeçalho da tabela some. */
 @media (max-width: 640px) {
@@ -812,6 +819,16 @@ button.sugestao > .icone {
     grid-row: 1;
     grid-column: 2;
   }
+
+  .conferencia-da-importacao td.acao-da-linha {
+    grid-row: 1;
+    grid-column: 3;
+    width: auto;
+  }
+
+  .conferencia-da-importacao tr {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
 }
 
 .formato-reconhecido {
@@ -835,6 +852,38 @@ button.sugestao > .icone {
   color: var(--suave);
   font-size: var(--fonte-micro);
   font-weight: var(--peso-semi);
+}
+
+/* O documento lido pelo leitor do banco comparado com o resumo dele (a soma
+   das compras e dos créditos) e os avisos da leitura. */
+.conferencia-do-documento {
+  display: grid;
+  gap: var(--espaco-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fonte-apoio);
+}
+
+.conferencia-do-documento li {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: flex-start;
+  color: var(--suave);
+}
+
+.conferencia-do-documento li > .icone {
+  flex: none;
+  margin-top: 2px;
+}
+
+.conferencia-do-documento li.bate > .icone {
+  color: var(--marca);
+}
+
+.conferencia-do-documento li.nao-bate {
+  color: var(--aviso);
+  font-weight: var(--peso-medio);
 }
 
 .importacao .acoes-do-formulario button:last-child {

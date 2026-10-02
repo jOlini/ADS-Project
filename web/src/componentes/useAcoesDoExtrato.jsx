@@ -76,7 +76,7 @@ function consequenciasDoLote(linhas) {
 // de cada ação. Devolve os itens do menu de uma linha, removerEmLote(linhas)
 // e os diálogos, que a página desenha uma vez. aoMudar recarrega a tela;
 // removerEmLote chama aoConcluir (limpar a seleção) quando dá certo.
-export function useAcoesDoExtrato({ espacoId, categorias = [], pessoasConhecidas = [], aoMudar }) {
+export function useAcoesDoExtrato({ espacoId, categorias = [], familia = [], aoMudar }) {
   const toast = useToast();
   const [aEditar, setAEditar] = useState(null);
   const [editando, setEditando] = useState(false);
@@ -170,7 +170,7 @@ export function useAcoesDoExtrato({ espacoId, categorias = [], pessoasConhecidas
             espacoId={espacoId}
             linha={aEditar}
             categorias={categorias}
-            pessoasConhecidas={pessoasConhecidas}
+            familia={familia}
             aoSalvar={aposEditar}
             aoCancelar={() => aposEditar(null)}
             aoMudarOcupado={setEditando}

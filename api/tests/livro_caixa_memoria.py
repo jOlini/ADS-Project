@@ -137,6 +137,17 @@ class LivroCaixaMemoria:
     def contar_lancamentos_da_categoria(self, espaco_id, categoria_id):
         return sum(1 for l in self.lancamentos.values() if l.espaco_id == espaco_id and l.categoria_id == categoria_id)
 
+    def mover_lancamentos_de_categoria(self, espaco_id, de, para):
+        movidos = 0
+        for lancamento in self.lancamentos.values():
+            if lancamento.espaco_id == espaco_id and lancamento.categoria_id == de:
+                lancamento.categoria_id = para
+                lancamento.partidas = [
+                    replace(partida, categoria_id=para) if partida.categoria_id == de else partida for partida in lancamento.partidas
+                ]
+                movidos += 1
+        return movidos
+
     # --- Lançamentos ---
 
     def listar_lancamentos(self, espaco_id, de, ate, limite, conta_id=None):

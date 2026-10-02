@@ -158,9 +158,23 @@ def conferir_conta(dados: NovaConta | AtualizacaoConta, atual: Conta | None = No
     # inicial não teria fatura nem data.
     if cartao and isinstance(dados, NovaConta) and dados.saldo_inicial_centavos != 0:
         erros["saldo_inicial_centavos"] = "O cartão começa sem dívida: importe a fatura ou lance as compras."
-    if not cartao and dados.cor is not None:
-        erros["cor"] = "Só cartão de crédito tem cor."
     return erros
+
+
+def conferir_destino_da_categoria(categoria: Categoria, destino: Categoria | None) -> dict[str, str]:
+    """Para onde vão os lançamentos de uma categoria excluída: outra categoria
+    do espaço, do mesmo tipo (despesa continua despesa) e ativa. Erros no
+    campo mover_para (vazio = pode mover)."""
+    if destino is None:
+        return {"mover_para": "Categoria de destino não encontrada."}
+    if destino.id == categoria.id:
+        return {"mover_para": "Escolha outra categoria: esta é a que sai."}
+    if destino.tipo != categoria.tipo:
+        tipo = "despesa" if categoria.tipo == TipoCategoria.DESPESA else "receita"
+        return {"mover_para": f"Escolha uma categoria de {tipo}, como a que sai."}
+    if not destino.ativa:
+        return {"mover_para": "A categoria de destino está desativada. Ative-a ou escolha outra."}
+    return {}
 
 
 def conferir_lancamento(

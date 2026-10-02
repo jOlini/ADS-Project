@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react';
+import { memo, useMemo, type CSSProperties } from 'react';
 import { gerarFolhasEmVolta, type ArranjoDasFolhas } from '../regras/folhasEmVolta';
 
 interface Props {
@@ -15,7 +15,7 @@ interface Props {
 // Pedindo menos movimento, as peças ficam paradas no lugar.
 //
 // Decoração pura: fora da árvore de acessibilidade e sem receber o ponteiro.
-export default function FolhasEmVolta({ arranjo, semente = 2026, className = '' }: Props) {
+function FolhasEmVolta({ arranjo, semente = 2026, className = '' }: Props) {
   const pecas = useMemo(() => gerarFolhasEmVolta(arranjo, semente), [arranjo, semente]);
   return (
     <span className={`of-folhas-3d ${arranjo} ${className}`.trim()} aria-hidden="true">
@@ -40,3 +40,6 @@ export default function FolhasEmVolta({ arranjo, semente = 2026, className = '' 
     </span>
   );
 }
+
+// memo: a Visão geral redesenha (filtro, modal, recarga) sem que isto mude (o arranjo é fixo).
+export default memo(FolhasEmVolta);

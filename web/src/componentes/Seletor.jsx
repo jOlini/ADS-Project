@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import Icone from './Icone';
 import { mostrarNoPainel, useCliqueFora, usePosicaoFlutuante, usePresenca } from './flutuante';
+import { corDaCategoria } from '../regras/cores';
 import { opcaoPorDigitacao, primeiraHabilitada, proximaHabilitada, ultimaHabilitada } from '../regras/seletor';
 
 // Tempo para juntar as letras digitadas numa busca só ("mer" acha Mercado).
@@ -13,7 +14,7 @@ const PAGINA = 10;
 // aria-activedescendant. Setas, Home, End, Page Up/Down e letras (começo do
 // rótulo) andam pela lista; Enter ou espaço escolhem; Esc fecha sem mudar.
 //
-// opcoes: [{ valor, rotulo, descricao?, cor? (nome --cat-*), desabilitada? }].
+// opcoes: [{ valor, rotulo, descricao?, cor? (nome --cat-* ou #rrggbb), desabilitada? }].
 // onChange recebe { target: { name, value } }, como o de um <select>: dá para
 // trocar um pelo outro sem mexer no formulário. O botão leva o name, então
 // form.elements[name].focus() continua funcionando na validação.
@@ -154,7 +155,7 @@ export default function Seletor({
         onKeyDown={teclar}
         {...propsDoBotao}
       >
-        {escolhida?.cor && <span className="ponto-de-cor" style={{ '--cor-do-ponto': `var(--cat-${escolhida.cor})` }} aria-hidden="true" />}
+        {escolhida?.cor && <span className="ponto-de-cor" style={{ '--cor-do-ponto': corDaCategoria(escolhida.cor) }} aria-hidden="true" />}
         <span className={`valor-do-seletor${escolhida ? '' : ' sem-valor'}`}>{escolhida?.rotulo ?? placeholder}</span>
         <Icone nome="seta" tamanho={16} />
       </button>
@@ -175,7 +176,7 @@ export default function Seletor({
               onMouseDown={(evento) => evento.preventDefault()}
               onClick={() => escolher(indice)}
             >
-              {opcao.cor && <span className="ponto-de-cor" style={{ '--cor-do-ponto': `var(--cat-${opcao.cor})` }} aria-hidden="true" />}
+              {opcao.cor && <span className="ponto-de-cor" style={{ '--cor-do-ponto': corDaCategoria(opcao.cor) }} aria-hidden="true" />}
               <span className="rotulo-da-opcao">
                 {opcao.rotulo}
                 {opcao.descricao && <small>{opcao.descricao}</small>}

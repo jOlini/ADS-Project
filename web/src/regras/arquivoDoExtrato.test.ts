@@ -1,6 +1,6 @@
 // Testes da conferência do arquivo do extrato antes de ir à API.
 import { describe, expect, it } from 'vitest';
-import { conferirArquivo, conferirConteudo, decodificarExtrato, TAMANHO_MAXIMO_DO_ARQUIVO } from './arquivoDoExtrato';
+import { conferirArquivo, conferirConteudo, decodificarExtrato, pareceUmPdf, TAMANHO_MAXIMO_DO_ARQUIVO, TAMANHO_MAXIMO_DO_PDF } from './arquivoDoExtrato';
 
 const csv = (extras = {}) => ({ name: 'extrato.csv', type: 'text/csv', size: 1200, ...extras });
 const bytes = (...valores: number[]) => new Uint8Array(valores);
@@ -13,11 +13,18 @@ describe('conferirArquivo', () => {
     expect(conferirArquivo(csv({ name: 'EXTRATO.TXT', type: 'text/plain' }))).toBe('');
   });
 
+  it('aceita o PDF da fatura ou do extrato, com o teto próprio', () => {
+    const pdf = csv({ name: 'Fatura.PDF', type: 'application/pdf', size: 190_000 });
+    expect(pareceUmPdf(pdf)).toBe(true);
+    expect(conferirArquivo(pdf)).toBe('');
+    expect(conferirArquivo({ ...pdf, size: TAMANHO_MAXIMO_DO_PDF + 1 })).toMatch(/PDF grande demais/);
+  });
+
   it('recusa outra extensão ou outro tipo', () => {
-    expect(conferirArquivo(csv({ name: 'extrato.xlsx' }))).toMatch(/\.csv/);
-    expect(conferirArquivo(csv({ name: 'extrato.pdf', type: 'application/pdf' }))).toMatch(/\.csv/);
+    expect(conferirArquivo(csv({ name: 'extrato.xlsx' }))).toMatch(/\.csv ou \.pdf/);
+    expect(conferirArquivo(csv({ name: 'extrato.pdf', type: 'image/png' }))).toMatch(/\.csv ou \.pdf/);
     // Nome certo, conteúdo declarado errado.
-    expect(conferirArquivo(csv({ type: 'image/png' }))).toMatch(/\.csv/);
+    expect(conferirArquivo(csv({ type: 'image/png' }))).toMatch(/\.csv ou \.pdf/);
   });
 
   it('recusa vazio, grande demais e nenhum arquivo', () => {
@@ -28,10 +35,9 @@ describe('conferirArquivo', () => {
 });
 
 describe('conferirConteudo', () => {
-  it('reconhece planilha, PDF e imagem renomeados para .csv', () => {
+  it('reconhece planilha e imagem renomeadas para .csv', () => {
     expect(conferirConteudo(bytes(0x50, 0x4b, 0x03, 0x04, 0x14))).toMatch(/Excel \(\.xlsx\)/);
     expect(conferirConteudo(bytes(0xd0, 0xcf, 0x11, 0xe0))).toMatch(/Excel \(\.xls\)/);
-    expect(conferirConteudo(new TextEncoder().encode('%PDF-1.7'))).toMatch(/PDF/);
     expect(conferirConteudo(bytes(0x89, 0x50, 0x4e, 0x47))).toMatch(/imagem/);
   });
 

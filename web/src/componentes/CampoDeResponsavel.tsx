@@ -1,61 +1,46 @@
-import Campo from './Campo';
-import Icone from './Icone';
-import { mesmaPessoa, sugestoesDeResponsavel, TAMANHO_DO_RESPONSAVEL } from '../regras/responsavel';
+import CampoJs from './Campo';
+import SeletorJs from './Seletor';
+import { semTipos } from './semTipos';
+import { opcoesDeResponsavel } from '../regras/responsavel';
+import type { PessoaDaFamilia } from '../regras/espacos';
+
+const Campo = semTipos(CampoJs);
+const Seletor = semTipos(SeletorJs);
 
 interface Props {
   valor: string;
   aoMudar: (valor: string) => void;
   erro?: string;
-  // Pessoas já usadas no espaço (divisões e responsáveis), como atalho.
-  pessoasConhecidas?: readonly string[];
+  // As pessoas da casa (regras/familia.ts, pessoasDaFamilia): só existem com o
+  // Modo Família ligado e um plano que o libera.
+  familia: readonly PessoaDaFamilia[];
   // O que a pessoa lê embaixo do campo; muda entre despesa e receita.
   dica?: string;
 }
 
 // "Responsável" do lançamento: de quem é o gasto (ou a receita), com o valor
-// inteiro. Resolve o que antes pedia a divisão entre pessoas como contorno.
-// O campo aceita qualquer nome, e as pessoas já usadas viram atalhos: um
-// toque escolhe, outro toque no mesmo atalho volta para "você". A lista de
-// atalhos é fixa enquanto a pessoa digita, para nada pular de lugar.
-export default function CampoDeResponsavel({ valor, aoMudar, erro, pessoasConhecidas = [], dica }: Props) {
-  const sugestoes = sugestoesDeResponsavel(pessoasConhecidas);
+// inteiro. Só no Plano Família, e só com as pessoas cadastradas na família
+// ("Você" é o titular): fora disso o campo nem aparece, para ninguém separar
+// o gasto por pessoa sem o plano. A API confere de novo (403 no Free, 400
+// para um nome de fora da família).
+export default function CampoDeResponsavel({ valor, aoMudar, erro, familia, dica }: Props) {
+  if (familia.length === 0) {
+    return null;
+  }
   return (
-    <div className="campo-de-responsavel">
-      <Campo
-        rotulo={
-          <>
-            Responsável <span className="rotulo-opcional">(opcional)</span>
-          </>
-        }
-        name="responsavel"
-        mascara="texto"
-        autoComplete="off"
-        maxLength={TAMANHO_DO_RESPONSAVEL}
-        placeholder="Você"
-        dica={dica ?? 'De quem é o lançamento. Vazio, fica com você.'}
-        value={valor}
-        onChange={(evento: { target: { value: string } }) => aoMudar(evento.target.value)}
-        erro={erro}
-      />
-      {sugestoes.length > 0 && (
-        <div className="atalhos-de-pessoa" role="group" aria-label="Pessoas já usadas">
-          {sugestoes.map((nome) => {
-            const escolhida = mesmaPessoa(nome, valor);
-            return (
-              <button
-                key={nome}
-                type="button"
-                className="sugestao"
-                aria-pressed={escolhida}
-                onClick={() => aoMudar(escolhida ? '' : nome)}
-              >
-                <Icone nome={escolhida ? 'certo' : 'usuario'} tamanho={14} />
-                {nome}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    <Campo
+      elemento={Seletor}
+      rotulo={
+        <>
+          Responsável <span className="rotulo-opcional">(opcional)</span>
+        </>
+      }
+      name="responsavel"
+      opcoes={opcoesDeResponsavel(familia, valor)}
+      value={valor}
+      onChange={(evento: { target: { value: string } }) => aoMudar(evento.target.value)}
+      dica={dica ?? 'De quem é o lançamento, entre as pessoas da casa.'}
+      erro={erro}
+    />
   );
 }

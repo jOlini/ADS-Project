@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useOutletContext, useParams } from 'react-router-dom';
+import { useLocation, useOutletContext, useParams } from 'react-router-dom';
 import AvisoApi from '../componentes/AvisoApi';
 import AvisoComAtalho from '../componentes/AvisoComAtalho';
 import BarraDeSelecao from '../componentes/BarraDeSelecao';
@@ -27,6 +27,7 @@ import { formatarData } from '../regras/datas';
 import { formatarBRL } from '../regras/dinheiro';
 import { destinoDaImportacao } from '../regras/importacao';
 import { contasBancarias, paraExtrato } from '../regras/livroCaixa';
+import { pessoasDaFamilia } from '../regras/familia';
 import { familiaLiberada, planoDoCliente } from '../regras/planos';
 import { agruparPorDia } from '../regras/resumo';
 import {
@@ -61,15 +62,27 @@ async function carregarCartao(espacoId, cartaoId) {
 // Cartão de crédito: o painel (limite total, limite disponível, fatura
 // atual, parcelamentos futuros e o que há a pagar), a fatura aberta na tela,
 // com os itens dela, e a lista de faturas ao lado. Compras no crédito,
-// parceladas ou não, e a fatura importada em CSV entram aqui, nunca no extrato
+// parceladas ou não, e a fatura importada (CSV ou PDF) entram aqui, nunca no extrato
 // das contas; o pagamento da fatura sai de uma conta e libera o limite. Os
 // itens da fatura e as faturas inteiras têm seleção em lote para remover.
 export default function Cartao() {
   const { espaco, espacos } = useOutletContext();
   const { cartaoId } = useParams();
   const toast = useToast();
-  // null = a fatura atual (vem do painel).
-  const [mesEscolhido, setMesEscolhido] = useState(null);
+  // null = a fatura atual (vem do painel). ?fatura=AAAA-MM (a busca do topo)
+  // abre a fatura da compra achada.
+  const { search } = useLocation();
+  const faturaDaUrl = /^\d{4}-\d{2}$/.test(new URLSearchParams(search).get('fatura') ?? '')
+    ? new URLSearchParams(search).get('fatura')
+    : null;
+  const [mesEscolhido, setMesEscolhido] = useState(() => (faturaDaUrl ? mesDaReferencia(faturaDaUrl) : null));
+  const [faturaVista, setFaturaVista] = useState(faturaDaUrl);
+  if (faturaDaUrl !== faturaVista) {
+    setFaturaVista(faturaDaUrl);
+    if (faturaDaUrl) {
+      setMesEscolhido(mesDaReferencia(faturaDaUrl));
+    }
+  }
   const [modal, setModal] = useState(null);
   const [modalOcupado, setModalOcupado] = useState(false);
   const [faturasARemover, setFaturasARemover] = useState(null);
@@ -88,10 +101,12 @@ export default function Cartao() {
     [espacoId, cartaoId, referencia],
   );
   const fatura = useCarga(buscarDaFatura);
+  // Responsável só com a família (Plano Família), com as pessoas dela.
+  const familia = useMemo(() => pessoasDaFamilia(espaco.dados), [espaco.dados]);
   const acoes = useAcoesDoExtrato({
     espacoId,
     categorias: cartao.dados?.categorias ?? [],
-    pessoasConhecidas: cartao.dados?.pessoas,
+    familia,
     aoMudar: recarregar,
   });
 
@@ -386,8 +401,9 @@ export default function Cartao() {
           cartao={painel}
           categorias={categorias}
           pessoasConhecidas={pessoas}
+          familia={familia}
           divisaoPorPessoa={familiaLiberada(planoDoCliente(espacos))}
-          aoComprar={aposMudar}
+          aoComprar={recarregar}
           aoCancelar={fecharModal}
           aoMudarOcupado={setModalOcupado}
         />

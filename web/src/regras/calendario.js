@@ -116,7 +116,31 @@ export function mesForaDoLimite(ano, mes, min, max) {
 // Máscara do campo de data enquanto a pessoa digita: só números viram
 // "dd/mm/aaaa" com as barras no lugar; quem digita as barras ("5/9/2026")
 // escolhe onde cada parte termina.
-export function mascararData(texto) {
+//
+// inserindo (a pessoa acabou de digitar, não de apagar) adianta o que é certo:
+// a barra entra logo depois do dia e do mês completos ("05" vira "05/"), e o
+// dia ou o mês que só pode ter um dígito ganha o zero ("4" vira "04/", e
+// "05/3" vira "05/03/"). Apagando, nada é acrescentado, para a barra e o zero
+// poderem sair.
+export function mascararData(texto, { inserindo = false } = {}) {
+  const resultado = mascararDataSemAdiantar(texto);
+  if (!inserindo) {
+    return resultado;
+  }
+  if (/^[4-9]$/.test(resultado)) {
+    return `0${resultado}/`;
+  }
+  if (/^\d{2}$/.test(resultado)) {
+    return `${resultado}/`;
+  }
+  const mes = /^(\d{2})\/(\d{1,2})$/.exec(resultado);
+  if (mes && (mes[2].length === 2 || Number(mes[2]) > 1)) {
+    return `${mes[1]}/${mes[2].padStart(2, '0')}/`;
+  }
+  return resultado;
+}
+
+function mascararDataSemAdiantar(texto) {
   const limpo = String(texto ?? '').replace(/[^\d/]/g, '');
   const partes = limpo.split('/');
   if (partes.length === 1) {
@@ -143,6 +167,35 @@ export function lerDataDigitada(texto) {
   const [, dia, mes, ano] = partes;
   const iso = paraIso(Number(ano), Number(mes), Number(dia));
   return dataExiste(iso) ? iso : null;
+}
+
+// Ano de dois dígitos ao sair do campo: "05/09/26" vira "05/09/2026" (anos
+// 2000). O resto volta igual.
+export function completarAno(texto) {
+  const partes = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(String(texto ?? '').trim());
+  return partes ? `${partes[1]}/${partes[2]}/20${partes[3]}` : String(texto ?? '');
+}
+
+// O que está errado na data digitada, para aparecer embaixo do campo ao sair
+// dele: '' quando está vazia (a obrigatoriedade é do formulário) ou certa.
+export function erroDaDataDigitada(texto) {
+  const limpo = String(texto ?? '').trim();
+  if (!limpo) {
+    return '';
+  }
+  const partes = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(limpo);
+  if (!partes) {
+    return 'Data incompleta: use dd/mm/aaaa.';
+  }
+  const [, dia, mes, ano] = partes.map(Number);
+  if (mes < 1 || mes > 12) {
+    return 'Mês inválido: use de 01 a 12.';
+  }
+  const ultimo = diasNoMes(ano, mes);
+  if (dia < 1 || dia > ultimo) {
+    return `Dia inválido: ${NOMES_DOS_MESES[mes - 1]} tem ${ultimo} dias.`;
+  }
+  return '';
 }
 
 // "sexta-feira, 5 de setembro de 2026": o nome do dia para leitores de tela.

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import Campo from './Campo';
 import Seletor from './Seletor';
-import SeletorDeCor from './SeletorDeCor';
+import SeletorDeCorHex from './SeletorDeCorHex';
 import { useToast } from './toast/useToast';
 import { primeiroCampoComErro } from '../regras/cadastro';
+import { corDoPlastico, SUGESTOES_DE_PLASTICO } from '../regras/cores';
 import { formatarBRL, valorParaCampo } from '../regras/dinheiro';
-import { corpoDoCartao, CORES_DO_CARTAO, DIAS_DO_MES, errosDaApi, ORDEM_DO_CARTAO, validarCartao } from '../regras/livroCaixa';
+import { corpoDoCartao, DIAS_DO_MES, errosDaApi, ORDEM_DO_CARTAO, validarCartao } from '../regras/livroCaixa';
 import { atualizarConta, criarConta } from '../servicos/livroCaixa';
 
 const NOVO = { nome: '', limite: '', diaFechamento: '', diaVencimento: '', cor: 'grafite', ativa: true };
@@ -92,8 +93,8 @@ export default function FormularioDeCartao({ espacoId, emEdicao = null, aoSalvar
         A compra feita no dia do fechamento já entra na fatura seguinte. Dias 29 a 31 viram o último dia nos meses mais curtos.
       </p>
 
-      <SeletorDeCor rotulo="Cor do cartão" name="cor" valor={formulario.cor} opcoes={CORES_DO_CARTAO}
-        aoMudar={(cor) => mudar('cor', cor)} />
+      <SeletorDeCorHex rotulo="Cor do cartão" name="cor" valor={formulario.cor} sugestoes={SUGESTOES_DE_PLASTICO}
+        cssDaSugestao={corDoPlastico} aoMudar={(cor) => mudar('cor', cor)} erro={erros.cor} />
 
       {emEdicao && (
         <label className="caixa-de-marcar">

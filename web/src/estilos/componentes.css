@@ -107,7 +107,8 @@ button.controle-do-seletor[aria-invalid='true']:focus-visible {
   flex: none;
   width: var(--tamanho-ponto);
   height: var(--tamanho-ponto);
-  border-radius: var(--raio-foco);
+  /* Só o círculo da cor (sem o nome dela), como nas categorias. */
+  border-radius: 50%;
   background: var(--cor-do-ponto, var(--cat-neutro));
 }
 
@@ -996,3 +997,190 @@ button.botao-do-menu[aria-expanded='true'] > .icone:last-child {
 }
 
 
+
+/* ------------------------------------------------ Seletor de cor (hexadecimal) */
+
+/* Sugestões da paleta como círculos (o nome fica no title e no leitor de
+   tela) e a cor personalizada: área de saturação e brilho, faixa de matiz,
+   código #rrggbb e conta-gotas. Tudo nas cores do tema. */
+.seletor-de-cor-hex {
+  display: grid;
+  gap: var(--espaco-4);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.seletor-de-cor-hex legend {
+  margin-bottom: var(--espaco-4);
+  padding: 0;
+}
+
+.amostras-hex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4);
+}
+
+.amostra-hex {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* O rádio fica invisível mas focável: o círculo inteiro é o controle. */
+.amostra-hex input {
+  position: absolute;
+  opacity: 0;
+  width: var(--espessura);
+  height: var(--espessura);
+}
+
+.circulo-da-cor {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+  transition: transform var(--transicao);
+}
+
+.amostra-hex:hover .circulo-da-cor {
+  transform: scale(1.08);
+}
+
+.amostra-hex:has(input:checked) {
+  box-shadow: 0 0 0 2px var(--superficie), 0 0 0 4px var(--marca);
+}
+
+.amostra-hex:has(input:focus-visible) {
+  outline: var(--espessura-do-foco) solid var(--marca);
+  outline-offset: var(--afastamento-do-foco);
+}
+
+/* Sem cor personalizada ainda: o arco-íris convida a escolher uma. */
+.amostra-hex.personalizada .circulo-da-cor {
+  background: conic-gradient(from 90deg, #e5484d, #f5a524, #f5d90a, #46a758, #12a594, #3e63dd, #8e4ec6, #e5484d);
+}
+
+.painel-da-cor {
+  display: grid;
+  gap: var(--espaco-5);
+  padding: var(--espaco-5);
+  border: var(--borda);
+  border-radius: var(--raio);
+  background: var(--fundo);
+}
+
+.area-da-cor {
+  position: relative;
+  height: 132px;
+  border-radius: var(--raio-pequeno);
+  background:
+    linear-gradient(to top, #000, transparent),
+    linear-gradient(to right, #fff, var(--matiz-da-area, #f00));
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.area-da-cor:focus-visible {
+  outline: var(--espessura-do-foco) solid var(--marca);
+  outline-offset: var(--afastamento-do-foco);
+}
+
+.alvo-da-cor {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.4), 0 2px 6px rgb(0 0 0 / 0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.faixa-de-matiz {
+  width: 100%;
+  height: 14px;
+  margin: 0;
+  border-radius: var(--raio-pilula);
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  appearance: none;
+  cursor: pointer;
+}
+
+.faixa-de-matiz::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.4);
+  appearance: none;
+}
+
+.faixa-de-matiz::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.4);
+}
+
+.faixa-de-matiz:focus-visible {
+  outline: var(--espessura-do-foco) solid var(--marca);
+  outline-offset: var(--afastamento-do-foco);
+}
+
+.linha-do-codigo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4);
+  align-items: center;
+}
+
+.previa-da-cor {
+  flex: none;
+  width: var(--altura-botao-compacto);
+  height: var(--altura-botao-compacto);
+  border-radius: var(--raio-pequeno);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+
+.codigo-da-cor {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+/* O campo fica fora de um .campo: repete o visual dos campos do app. */
+.codigo-da-cor input {
+  width: 100%;
+  min-height: var(--altura-botao-compacto);
+  padding: 0 var(--espaco-5);
+  border: var(--borda);
+  border-radius: var(--raio-pequeno);
+  color: var(--texto);
+  background: var(--superficie);
+  font: inherit;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  text-transform: lowercase;
+}
+
+.codigo-da-cor input:focus-visible {
+  outline: var(--espessura-do-foco) solid var(--marca);
+  outline-offset: var(--afastamento-do-foco);
+}
+
+.codigo-da-cor input[aria-invalid='true'] {
+  border-color: var(--erro);
+}
+
+button.botao-conta-gotas {
+  min-height: var(--altura-botao-compacto);
+}

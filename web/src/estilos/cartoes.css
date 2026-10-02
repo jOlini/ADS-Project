@@ -296,21 +296,6 @@ button.botao-icone.sobre-o-plastico:hover:not(:disabled) {
   font-family: inherit;
 }
 
-/* Reflexo que corre pelo plástico ao passar o mouse, uma vez. */
-.miniatura-do-cartao::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.28) 48%, transparent 60%);
-  transform: translateX(-110%);
-  transition: transform 900ms var(--curva);
-  pointer-events: none;
-}
-
-:hover > .miniatura-do-cartao::after {
-  transform: translateX(110%);
-}
-
 .miniatura-do-cartao.desativado {
   filter: saturate(0.3) brightness(0.9);
 }
@@ -424,12 +409,6 @@ button.botao-icone.sobre-o-plastico:hover:not(:disabled) {
   opacity: 0.75;
   font-size: 3.2cqi;
   letter-spacing: 0.1em;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .miniatura-do-cartao::after {
-    display: none;
-  }
 }
 
 /* ------------------------------------------------------ Medidor do limite */
@@ -744,4 +723,59 @@ button.abrir-fatura:hover:not(:disabled) {
 .compra-no-cartao {
   display: grid;
   gap: var(--espaco-9);
+}
+
+/* --------------------------------------------- Contas no estilo dos cartões */
+
+/* A conta bancária usa o mesmo plástico da carteira de cartões (cor, brilho,
+   sombra, seleção e editar por cima), sem a faixa magnética e com o saldo no
+   lugar dos números da fatura. O nome quebra em até duas linhas antes de
+   cortar: aparece por extenso sempre que couber. */
+.conta-visual {
+  grid-template-rows: auto 1fr auto;
+  padding-top: var(--espaco-8);
+}
+
+.conta-visual .nome-no-plastico {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: var(--altura-de-linha-justa);
+}
+
+.simbolo-da-conta {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sobre-cartao) 16%, transparent);
+}
+
+.saldo-da-conta {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.saldo-da-conta dd {
+  font-size: var(--fonte-numero, 1.5rem);
+}
+
+.rodape-da-conta {
+  opacity: 0.85;
+  font-size: var(--fonte-micro);
+  line-height: var(--altura-de-linha-justa);
+}
+
+.rodape-da-conta b {
+  font-weight: var(--peso-forte);
+}
+
+/* Texto escuro sobre uma cor clara escolhida: o fundo dos botões do plástico
+   escurece em vez de clarear. */
+.cartao-visual.cor-personalizada button.botao-icone.sobre-o-plastico {
+  background: color-mix(in srgb, var(--sobre-cartao) 12%, transparent);
 }

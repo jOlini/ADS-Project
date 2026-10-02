@@ -4,6 +4,7 @@ import AvisoApi from '../componentes/AvisoApi';
 import BarraDeSelecao from '../componentes/BarraDeSelecao';
 import CartaoVisual from '../componentes/CartaoVisual';
 import Confirmacao from '../componentes/Confirmacao';
+import ContaVisual from '../componentes/ContaVisual';
 import Esqueleto from '../componentes/Esqueleto';
 import FormularioDeCartao from '../componentes/FormularioDeCartao';
 import FormularioDeConta from '../componentes/FormularioDeConta';
@@ -14,7 +15,7 @@ import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
 import { useSelecao } from '../componentes/useSelecao';
 import { formatarBRL } from '../regras/dinheiro';
-import { cartoesDe, contasBancarias, rotuloDoTipoDeConta, saldoTotal } from '../regras/livroCaixa';
+import { cartoesDe, contasBancarias, saldoTotal } from '../regras/livroCaixa';
 import { apiConfigurada, excluirConta, listarCartoes, listarContas } from '../servicos/livroCaixa';
 import '../estilos/cartoes.css';
 
@@ -49,9 +50,10 @@ async function carregarCadastros(espacoId) {
   return { contas, paineis: new Map(cartoes.map((cartao) => [cartao.id, cartao])) };
 }
 
-// Contas & Cartões, em duas seções separadas:
+// Contas & Cartões, em duas seções separadas, no mesmo visual de carteira:
 // - Contas bancárias: onde o dinheiro está (corrente, poupança, carteira,
-//   investimento), com o saldo de cada uma;
+//   investimento), cada uma num card como o plástico de um cartão, com a cor
+//   escolhida e o saldo;
 // - Cartões de crédito: a carteira, com cada cartão desenhado como o plástico
 //   (cor, faixa magnética, fatura atual e limite disponível); o cartão
 //   inteiro abre a tela dele, com a fatura e as parcelas.
@@ -173,14 +175,6 @@ export default function Contas() {
     }
   }
 
-  const botaoEditar = (conta) => (
-    <button type="button" className="discreto-botao" onClick={() => abrir('conta', conta)}>
-      <Icone nome="editar" tamanho={16} />
-      <span className="rotulo-da-acao">Editar</span>
-      <span className="apenas-leitor">: {conta.nome}</span>
-    </button>
-  );
-
   const textosDoModal = modal ? TIPOS[modal.tipo] : null;
   const textosDaRemocao = aRemover ? TIPOS[aRemover.tipo] : null;
 
@@ -189,7 +183,8 @@ export default function Contas() {
       <header className="cabecalho-da-pagina">
         <h1>Contas & Cartões</h1>
         <div className="acoes-da-pagina">
-          <button type="button" className="secundario" onClick={() => abrir('conta')}>
+          {/* As duas ações principais da tela, no verde da marca. */}
+          <button type="button" onClick={() => abrir('conta')}>
             <Icone nome="contas" tamanho={18} />
             Nova conta
           </button>
@@ -216,48 +211,38 @@ export default function Contas() {
             )}
           </div>
 
-          <div className="cartao lista">
-            <BarraDeSelecao ids={idsDasContas} selecao={selecaoDeContas} nomes={TIPOS.conta.nomes}
-              aoRemover={(ids) => pedirRemocao('conta', ids)} ocupado={removendo} />
-            {contas.length === 0 ? (
-              <div className="vazio">
-                <SimboloDoVazio icone="contas" semente={17} />
-                <h3>Nenhuma conta cadastrada</h3>
-                <p>
-                  Comece pela conta onde o salário cai e informe o saldo de hoje. Poupança e dinheiro na carteira também
-                  contam.
-                </p>
-                <button type="button" onClick={() => abrir('conta')}>
-                  <Icone nome="mais" tamanho={16} />
-                  Cadastrar conta
-                </button>
+          {contas.length === 0 ? (
+            <div className="cartao vazio">
+              <SimboloDoVazio icone="contas" semente={17} />
+              <h3>Nenhuma conta cadastrada</h3>
+              <p>
+                Comece pela conta onde o salário cai e informe o saldo de hoje. Poupança e dinheiro na carteira também
+                contam.
+              </p>
+              <button type="button" onClick={() => abrir('conta')}>
+                <Icone nome="mais" tamanho={16} />
+                Cadastrar conta
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="cartao barra-da-carteira">
+                <BarraDeSelecao ids={idsDasContas} selecao={selecaoDeContas} nomes={TIPOS.conta.nomes}
+                  aoRemover={(ids) => pedirRemocao('conta', ids)} ocupado={removendo} />
               </div>
-            ) : (
-              <ul className="itens">
+              <div className="carteira">
                 {contas.map((conta) => (
-                  <li
+                  <ContaVisual
                     key={conta.id}
-                    className={`item com-selecao${conta.ativa ? '' : ' desativado'}${selecaoDeContas.marcado(conta.id) ? ' marcado' : ''}`}
-                  >
-                    <input type="checkbox" className="marcar-linha" checked={selecaoDeContas.marcado(conta.id)}
-                      onChange={() => selecaoDeContas.alternar(conta.id)} aria-label={`Selecionar ${conta.nome}`} />
-                    <span className="marca-da-categoria" aria-hidden="true">
-                      <Icone nome="contas" tamanho={16} />
-                    </span>
-                    <span className="descricao">
-                      <b>{conta.nome}</b>
-                      <small>
-                        {rotuloDoTipoDeConta(conta.tipo)}
-                        {!conta.ativa && <span className="etiqueta">Desativada</span>}
-                      </small>
-                    </span>
-                    <span className={`valor${conta.saldo_centavos < 0 ? ' negativo' : ''}`}>{formatarBRL(conta.saldo_centavos)}</span>
-                    {botaoEditar(conta)}
-                  </li>
+                    conta={conta}
+                    marcado={selecaoDeContas.marcado(conta.id)}
+                    aoMarcar={() => selecaoDeContas.alternar(conta.id)}
+                    aoEditar={() => abrir('conta', conta)}
+                  />
                 ))}
-              </ul>
-            )}
-          </div>
+              </div>
+            </>
+          )}
         </section>
 
         <section className="secao-do-cadastro" aria-labelledby="titulo-cartoes" id="cartoes">

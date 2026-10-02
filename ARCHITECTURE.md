@@ -118,7 +118,8 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
   │
   ├─ rotas.py / financeiro/rotas*.py      contrato HTTP: método, caminho, corpo e código de resposta
   │     └─ dependências (Depends): usuario_autenticado + exigir_perfis (RBAC) no back-office;
-  │        cliente_autenticado + espaco_do_cliente (membro do espaço) no livro-caixa
+  │        cliente_autenticado + espaco_do_cliente (membro do espaço) no livro-caixa;
+  │        financeiro/simulacao.py: plano simulado pelo super admin (X-Simular-Plano)
   ├─ emails/        e-mails da conta do cliente: rotas.py (/conta), correio.py (junta as peças),
   │                 links.py (código do Firebase pela conta de serviço), mensagens.py + modelo.html (marca
   │                 OliFine) e envio.py (Resend, SMTP ou pasta, atrás do contrato EnviadorDeEmail)
@@ -152,6 +153,14 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
   (`PF`, criado no primeiro acesso), com o **Modo Família** embutido (as pessoas da casa são perfis sem login, e
   um lançamento é de uma delas pelo `responsavel`), e o **empresarial**, em que cada empresa (`PJ`, com CNPJ e
   regime) é um livro-caixa separado, com as categorias de empresa; só a empresa sem movimento pode ser excluída.
+  O responsável de um lançamento é sempre uma pessoa da família, e só no Plano Família (a API confere).
+- **Planos e modo de teste:** toda trava de plano lê `Espaco.plano_em_vigor`: o plano gravado ou, num pedido de
+  um super admin (`SUPER_ADMINS`, e-mail confirmado) com o cabeçalho `X-Simular-Plano`, o plano simulado, só
+  naquele pedido e nunca gravado. Para as outras contas, o cabeçalho é ignorado.
+- **Cores:** categoria, conta e cartão guardam o nome de uma cor da paleta ou `#rrggbb` (só o formato exato
+  passa; `ler_cor` devolve a padrão para qualquer outra coisa gravada).
+- **Categoria excluída com destino:** `DELETE /categorias/{id}?mover_para=` troca a categoria dos lançamentos (no
+  campo e na partida) e só então exclui; sem destino, a categoria em uso continua `409`.
 - **Gestão da empresa:** sócios, tributos e pessoas da folha em coleções próprias (`socios`, `tributos`,
   `colaboradores`, sempre com `espaco_id`). O que mexe em dinheiro (aporte, pró-labore, distribuição, guia paga,
   folha) vira lançamento comum, na categoria achada pela `funcao` (não pelo nome); guia e folha levam a `origem`
@@ -160,9 +169,10 @@ main.py            fábrica criar_app(): middlewares, tratadores de erro, rotas 
 - **Importação de extrato (CSV):** leitura em funções puras; o arquivo que não é CSV é recusado antes de qualquer
   leitura; as colunas são reconhecidas pelo cabeçalho (moldes de vários bancos) ou pelo conteúdo, com as dúvidas
   apontadas; a categoria de cada linha vem da coluna do arquivo, do histórico do estabelecimento ou de regras pela
-  descrição; a pessoa edita descrição e categoria na conferência. Cada linha ganha uma chave de idempotência
-  (SHA-256 da conta, data, valor, descrição do arquivo e ocorrência), com índice único no MongoDB. No máximo 4
-  importações ao mesmo tempo no servidor.
+  descrição; a pessoa edita descrição e categoria na conferência, ou descarta a linha (`descartar`, situação
+  `DESCARTADA`). Cada linha ganha uma chave de idempotência (SHA-256 da conta, data, valor, descrição do arquivo
+  e ocorrência), com índice único no MongoDB. No máximo 4 importações ao mesmo tempo no servidor. O PDF do banco
+  não chega à API: a área do cliente o lê e manda só as linhas, como CSV.
 - **Relatórios:** agregações no MongoDB (`$group` por mês, categoria e conta), com o cartão por competência.
 
 ### Dados (MongoDB)
@@ -218,9 +228,29 @@ public/tema.js      aplica o tema salvo (ou o do sistema) antes da primeira pint
   também); os `.js` e `.jsx` antigos são lidos para dar tipo a quem os importa, sem ser conferidos, até migrarem.
   Componente `.jsx` usado num `.tsx` passa pelo `semTipos` (`componentes/semTipos.ts`).
 - **Campos com máscara:** o `Campo` recebe `mascara` (moeda, moeda com sinal, inteiro, texto) e a regra em
-  `regras/mascaras.ts` barra a tecla que não serve antes de ela aparecer; a linha da mensagem de erro fica
-  reservada embaixo de cada campo (sem deslocar a tela). Nome, descrição e pessoa saem limpos para a API
-  (`regras/sanitizacao.ts`, no `servicos/livroCaixa.js`).
+  `regras/mascaras.ts` barra a tecla que não serve antes de ela aparecer; o dinheiro é "centavos primeiro"
+  (digitar `10000` dá `100,00`), e a data digitada só com números ganha as barras e o zero sozinha e diz o que
+  está errado ao sair do campo (`regras/calendario.js`). A linha da mensagem de erro fica reservada embaixo de
+  cada campo (sem deslocar a tela). Nome, descrição e pessoa saem limpos para a API (`regras/sanitizacao.ts`, no
+  `servicos/livroCaixa.js`).
+- **Importação por leitores (Strategy):** `regras/extratos/` tem um leitor por formato e banco (`reconhece()` e
+  `preparar()`): o CSV vai inteiro para a API reconhecer as colunas; a fatura do Bradesco em PDF e um leitor
+  genérico de PDF tiram as linhas de lançamento no navegador, com o pdf.js (`servicos/leitorDePdf.ts`, carregado
+  só quando a pessoa escolhe um PDF, com o worker servido pelo próprio site) e as mandam como CSV simples, com a
+  soma conferida com o resumo do documento. O leitor é escolhido sozinho pelo arquivo (o mais específico ganha do
+  genérico), e a pessoa pode trocá-lo. Na conferência, o pagamento de fatura já vem descartado, e "+ Nova
+  categoria" cria a categoria num submodal sem perder o que foi carregado.
+- **Busca do topo:** `olifine/componentes/BuscaGlobal.tsx` lê um ano de lançamentos, as contas e as categorias ao
+  entrar no campo e mostra, a cada letra (`useDeferredValue`), os resultados em abas: lançamentos das contas,
+  compras nos cartões (que abrem a fatura certa), contas e categorias (`regras/buscaGlobal.ts`).
+- **Plano em teste:** a chave do topo (`olifine/componentes/ChaveDoPlanoEmTeste.tsx`) aparece para quem
+  `GET /espacos/acesso` diz ser super admin; o plano escolhido fica na aba (`servicos/planoEmTeste.ts`) e vai em
+  todo pedido no cabeçalho `X-Simular-Plano`.
+- **Desempenho da Visão geral:** o que sai dos dados é `useMemo`, as ações são `useCallback` e os desenhos
+  (árvore, rosca, gráfico, miniatura do cartão, folhas) são `memo`. A borda viva anima só a opacidade (no
+  compositor), e a grade dos cartões tem o mínimo fixo (com a miniatura em container query, o mínimo em
+  porcentagem fazia cada layout passar de 130 ms). O extrato longo só desenha os dias perto da tela
+  (`content-visibility`).
 - **Erros:** `servicos/livroCaixa.js` converte toda falha em `ErroDaApi` (status + mensagem própria):
   rede fora, token que não renova, `401`, Problem Details da API. O texto técnico do SDK ou da API nunca vai para
   a tela; código do Firebase desconhecido cai na mensagem genérica (`regras/erros.js`).
@@ -368,6 +398,7 @@ GitHub. As `VITE_*` vão para o bundle do navegador e, por isso, nunca podem gua
 | `CORS_ORIGENS` | api | Origens de navegador autorizadas, separadas por vírgula (sem a variável: nenhuma; o `.env.example` libera a área do cliente local, portas 5173 e 8080) |
 | `CORS_ORIGENS_REDE` | api | Origens da área do cliente aberta pela rede local, somadas ao `CORS_ORIGENS`. Não vai no `.env`: o `subir-app.py` passa pelo Docker Compose a cada subida |
 | `FIREBASE_PROJECT_ID` | api | Projeto Firebase cujos ID tokens abrem o livro-caixa (o mesmo `VITE_FIREBASE_PROJECT_ID`). Vazio: `/espacos` responde `503` |
+| `SUPER_ADMINS` | api | E-mails do Firebase (separados por vírgula) que simulam os planos com a chave "Plano em teste". Vazio: ninguém. Só no `.env`: o repositório não guarda e-mail real |
 | `ADMIN_NOME`, `ADMIN_EMAIL`, `ADMIN_SENHA` | api | Administrador criado na primeira subida, com o banco vazio |
 | `AMBIENTE` | api | `desenvolvimento` (padrão) ou `producao`: em produção, a API recusa configuração insegura e tira o Swagger do ar |
 | `FORWARDED_ALLOW_IPS` | api | Só atrás de um proxy reverso: o IP do proxy, para o limite de tentativas ver o IP real de quem chama |

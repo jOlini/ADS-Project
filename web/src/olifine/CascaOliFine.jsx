@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useCarga } from '../componentes/useCarga';
 import { formatarBRL } from '../regras/dinheiro';
 import { faturasAVencer } from '../regras/cartoes';
@@ -8,8 +8,11 @@ import { ehEmpresa, nomeDoEspaco } from '../regras/espacos';
 import { familiaAtiva } from '../regras/familia';
 import { destinoDoVoltar } from '../regras/voltar';
 import { guardarLateralRecolhida, lerLateralRecolhida } from '../servicos/lateral';
-import { apiConfigurada, EVENTO_DOS_TRIBUTOS, listarCartoes, listarTributos } from '../servicos/livroCaixa';
+import { acessoDaConta, apiConfigurada, EVENTO_DOS_TRIBUTOS, listarCartoes, listarTributos } from '../servicos/livroCaixa';
+import { guardarPlanoEmTeste, lerPlanoEmTeste } from '../servicos/planoEmTeste';
 import { alertasDosTributos, textoDaCompetencia } from './regras/impostos';
+import BuscaGlobal from './componentes/BuscaGlobal';
+import ChaveDoPlanoEmTeste from './componentes/ChaveDoPlanoEmTeste';
 import Flutuante from './componentes/Flutuante';
 import AlternadorDeTema from '../componentes/AlternadorDeTema';
 import Icone from '../componentes/Icone';
@@ -99,10 +102,10 @@ function ItemDoMenu({ item, aoEscolher, dica }) {
 // balão ao passar o mouse. A escolha fica no navegador (servicos/lateral.ts).
 export default function CascaOliFine({ contexto }) {
   const { usuario, pessoa, espaco, espacos, trocarEspaco, trocarContexto, recarregarEspacos, sairDaConta } = contexto;
-  const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [busca, setBusca] = useState('');
   const [recolhida, setRecolhida] = useState(lerLateralRecolhida);
+  // Super admin testando um plano (servicos/planoEmTeste.ts): null = o real.
+  const [planoEmTeste, setPlanoEmTeste] = useState(lerPlanoEmTeste);
   // Balão do item sob o mouse (ou no foco): fica fora da barra, em posição
   // fixa, porque a barra rola e cortaria o que passa da borda dela.
   const [dica, setDica] = useState(null);
@@ -163,17 +166,27 @@ export default function CascaOliFine({ contexto }) {
     globalThis.addEventListener(EVENTO_DOS_TRIBUTOS, lerTributosDeNovo);
     return () => globalThis.removeEventListener(EVENTO_DOS_TRIBUTOS, lerTributosDeNovo);
   }, [lerTributosDeNovo]);
+  // A chave "Plano em teste" só aparece para quem a API diz ser super admin.
+  // API antiga ou fora do ar: conta comum, sem a chave.
+  const buscarAcesso = useMemo(() => (apiConfigurada ? () => acessoDaConta().catch(() => null) : null), []);
+  const acesso = useCarga(buscarAcesso);
+  const superAdmin = Boolean(acesso.dados?.super_admin);
+
+  // Outro plano em teste: os espaços voltam da API com o plano simulado, e a
+  // tela é montada de novo (a chave do <div> abaixo) para nada do plano
+  // anterior sobrar no estado da página.
+  function trocarPlanoEmTeste(plano) {
+    guardarPlanoEmTeste(plano);
+    setPlanoEmTeste(plano);
+    // Sem rede, a lista fica a de antes; a próxima ida à API já leva o plano.
+    recarregarEspacos().catch(() => undefined);
+  }
+
   const avisos = cartoes.dados ? faturasAVencer(cartoes.dados) : [];
   const guias = empresa && tributos.dados ? alertasDosTributos(tributos.dados, hojeIso()) : [];
   const quantosAvisos = avisos.length + guias.length;
   const itens = itensDoMenu(empresa, familiaAtiva(espaco.dados));
   const nomeDoAtivo = nomeDoEspaco(espaco.dados);
-
-  function buscar(evento) {
-    evento.preventDefault();
-    const termo = busca.trim();
-    navigate(termo ? `/lancamentos?busca=${encodeURIComponent(termo)}` : '/lancamentos');
-  }
 
   const conta = (fechar) => (
     <div className="of-conta">
@@ -270,20 +283,12 @@ export default function CascaOliFine({ contexto }) {
             />
           )}
 
-          {apiConfigurada && (
-            <form className="of-busca" role="search" onSubmit={buscar}>
-              <Icone nome="busca" tamanho={16} />
-              <input
-                type="search"
-                value={busca}
-                onChange={(evento) => setBusca(evento.target.value)}
-                placeholder="Buscar lançamentos"
-                aria-label="Buscar lançamentos do mês"
-              />
-            </form>
-          )}
+          {/* Busca em tudo (lançamentos, compras nos cartões, contas e
+              categorias), com os resultados em abas logo abaixo. */}
+          {apiConfigurada && <BuscaGlobal key={espacoId ?? 'sem-espaco'} espacoId={espacoId} />}
 
           <div className="of-topo-acoes">
+            {superAdmin && <ChaveDoPlanoEmTeste plano={planoEmTeste} aoTrocar={trocarPlanoEmTeste} />}
             <AlternadorDeTema />
             <Flutuante
               rotulo={quantosAvisos > 0 ? `Avisos: ${quantosAvisos} conta(s) a pagar` : 'Avisos'}
@@ -358,7 +363,7 @@ export default function CascaOliFine({ contexto }) {
             {/* Outro espaço, tela nova: nada do livro anterior (filtros,
                 listas, seleção) sobra no estado da página. A tela nova
                 chega por opacidade (movimento.css), sem piscar. */}
-            <div key={espacoId ?? 'sem-espaco'} className="of-troca-de-espaco">
+            <div key={`${espacoId ?? 'sem-espaco'}:${planoEmTeste ?? 'real'}`} className="of-troca-de-espaco">
               {voltar && (
                 // Toda tela fora da Visão geral começa pelo caminho de volta,
                 // com alvo grande (44 px de altura, a linha inteira do texto).

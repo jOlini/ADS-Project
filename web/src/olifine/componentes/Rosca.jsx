@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
+import { corDaCategoria } from '../../regras/cores';
 import { formatarBRL } from '../../regras/dinheiro';
 
 const RAIO = 70;
@@ -7,12 +8,10 @@ const CIRCUNFERENCIA = 2 * Math.PI * RAIO;
 // Fresta entre as fatias, em unidades do traço.
 const FRESTA = 3;
 
-const corDa = (cor) => `var(--cat-${cor ?? 'neutro'})`;
-
 // Despesas por categoria: rosca com o total no meio e a legenda ao lado,
 // sempre com o nome da categoria (a cor é só apoio de leitura). Passar o
 // mouse ou o foco numa linha da legenda destaca a fatia, e vice-versa.
-export default function Rosca({ fatias, total, rotuloDoTotal }) {
+function Rosca({ fatias, total, rotuloDoTotal }) {
   const [destaque, setDestaque] = useState(null);
   const soma = fatias.reduce((acumulado, fatia) => acumulado + fatia.valor, 0) || 1;
 
@@ -38,7 +37,7 @@ export default function Rosca({ fatias, total, rotuloDoTotal }) {
                 cy="90"
                 r={RAIO}
                 strokeWidth={ESPESSURA}
-                style={{ stroke: corDa(arco.cor) }}
+                style={{ stroke: corDaCategoria(arco.cor) }}
                 strokeDasharray={`${arco.tamanho} ${CIRCUNFERENCIA}`}
                 strokeDashoffset={-arco.inicio}
                 onPointerEnter={() => setDestaque(arco.categoria)}
@@ -64,7 +63,7 @@ export default function Rosca({ fatias, total, rotuloDoTotal }) {
             onFocus={() => setDestaque(fatia.categoria)}
             onBlur={() => setDestaque(null)}
           >
-            <span className="of-rosca-ponto" style={{ background: corDa(fatia.cor) }} aria-hidden="true" />
+            <span className="of-rosca-ponto" style={{ background: corDaCategoria(fatia.cor) }} aria-hidden="true" />
             <span className="of-rosca-nome">
               {fatia.categoria}
               {fatia.agrupa ? <small> ({fatia.agrupa} categorias)</small> : null}
@@ -77,3 +76,6 @@ export default function Rosca({ fatias, total, rotuloDoTotal }) {
     </div>
   );
 }
+
+// memo: a Visão geral redesenha (filtro, modal, recarga) sem que isto mude (fatias memorizadas por quem usa).
+export default memo(Rosca);

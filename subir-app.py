@@ -44,7 +44,8 @@ OliFine (projeto Pessoal Finance, ADS-Project) — ambiente local com um comando
        a rede local (--host 0.0.0.0): celular e outros computadores da mesma
        rede abrem o app pelo IP desta máquina. Se já estiver no ar, reaproveita.
     6. Painel: endereços Local, Network e do túnel (se aberto), API, login do
-       painel administrativo, e-mails, alertas e quantas pendências existem.
+       painel administrativo, e-mails, alertas, quantas contas têm a chave
+       "Plano em teste" (SUPER_ADMINS) e quantas pendências existem.
 
 "prod" dispensa o .venv e o Node.js: tudo é construído no Docker. Encerra o
 Vite do "dev", gera a imagem do web/Dockerfile (build do Vite servido pelo
@@ -685,6 +686,11 @@ def _verificar_api(env: dict[str, str]) -> list[dict]:
     elif projeto_web and projeto_api != projeto_web:
         achados.append(_achado(AVISO, area, f"FIREBASE_PROJECT_ID ({projeto_api}) difere do web/.env ({projeto_web}): "
                                "a API recusa o login do cliente (401).", "Use o mesmo projeto nos dois arquivos."))
+    # Super admins (modo de teste dos planos, api/app/financeiro/simulacao.py):
+    # uma entrada sem "@" nunca bate com o e-mail de uma conta do Firebase.
+    if any("@" not in email for email in _super_admins(env)):
+        achados.append(_achado(AVISO, area, "SUPER_ADMINS tem uma entrada que não é e-mail: ela nunca vira super admin.",
+                               "Use os e-mails das contas do Firebase, separados por vírgula."))
     if not achados:
         achados.append(_achado(CERTO, area, "JWT, administrador, CORS e projeto Firebase conferidos."))
     return achados
@@ -1667,6 +1673,20 @@ def descricao_dos_alertas(env: dict[str, str]) -> str:
     return f"Discord: {', '.join(ligados)}"
 
 
+def _super_admins(env: dict[str, str]) -> list[str]:
+    return [email.strip() for email in env.get("SUPER_ADMINS", "").split(",") if email.strip()]
+
+
+def descricao_dos_super_admins(env: dict[str, str]) -> str:
+    """Quantas contas veem a chave "Plano em teste" no topo do app (sem
+    mostrar os e-mails, que são dado pessoal)."""
+    quantos = len(_super_admins(env))
+    if not quantos:
+        return fraco('chave "Plano em teste" desligada (SUPER_ADMINS vazio no api/.env)')
+    contas = "1 conta" if quantos == 1 else f"{quantos} contas"
+    return f'chave "Plano em teste" para {contas} {fraco(PONTO + " SUPER_ADMINS no api/.env")}'
+
+
 def painel(pendencias: int, dicas: bool = False) -> None:
     """Endereços, acessos e atalhos (sem mostrar senha nem segredo)."""
     env = ler_env(ENV_API)
@@ -1683,6 +1703,7 @@ def painel(pendencias: int, dicas: bool = False) -> None:
         ("Firebase", descricao_do_firebase()),
         ("E-mails", descricao_dos_emails(env)),
         ("Alertas", descricao_dos_alertas(env)),
+        ("Planos", descricao_dos_super_admins(env)),
     ]
     for rotulo, valor in linhas:
         print(f"  {fraco(rotulo.ljust(11))}{valor}")

@@ -7,6 +7,7 @@
 // apiConfigurada é false e as telas do livro-caixa mostram o aviso.
 import { auth } from '../firebase';
 import { enderecoDaApi } from './enderecoDaApi';
+import { cabecalhoDoPlanoEmTeste } from './planoEmTeste';
 import { limparCorpo } from '../regras/sanitizacao';
 
 // Aberta pela rede local, a página chama a API no IP de onde veio; pelo túnel,
@@ -24,12 +25,15 @@ export const MENSAGEM_SESSAO_ENCERRADA = 'Sua sessão terminou. Entre de novo.';
 const MENSAGEM_GENERICA = 'O servidor não conseguiu concluir a operação. Tente de novo.';
 
 // Falha que a tela sabe mostrar: status HTTP (0 = sem resposta), a mensagem
-// da API (Problem Details "detail") e o erro de cada campo ("campos", no 400).
+// da API (Problem Details "detail"), o erro de cada campo ("campos", no 400)
+// e o corpo inteiro (detalhes), para os membros extras de alguns erros, como
+// a quantidade de lançamentos no 409 da categoria em uso.
 export class ErroDaApi extends Error {
-  constructor(status, mensagem, campos = {}) {
+  constructor(status, mensagem, campos = {}, detalhes = null) {
     super(mensagem);
     this.status = status;
     this.campos = campos;
+    this.detalhes = detalhes;
   }
 }
 
@@ -56,6 +60,9 @@ async function chamar(caminho, { metodo = 'GET', corpo } = {}) {
       headers: {
         Authorization: `Bearer ${token}`,
         ...(corpo ? { 'Content-Type': 'application/json' } : {}),
+        // Super admin testando um plano (servicos/planoEmTeste.ts). Para as
+        // outras contas a API ignora o cabeçalho.
+        ...cabecalhoDoPlanoEmTeste(),
       },
       // Nome, descrição e pessoa saem limpos (sem tag, fórmula nem caractere
       // invisível); a API limpa de novo, com a mesma regra.
@@ -69,7 +76,7 @@ async function chamar(caminho, { metodo = 'GET', corpo } = {}) {
   const dados = await resposta.json().catch(() => null);
   if (!resposta.ok) {
     const mensagem = resposta.status === 401 ? MENSAGEM_SESSAO_ENCERRADA : (dados?.detail ?? MENSAGEM_GENERICA);
-    throw new ErroDaApi(resposta.status, mensagem, dados?.campos ?? {});
+    throw new ErroDaApi(resposta.status, mensagem, dados?.campos ?? {}, dados);
   }
   return dados;
 }
@@ -80,6 +87,12 @@ const doEspaco = (espacoId, resto = '') => `/espacos/${encodeURIComponent(espaco
 // espaço pessoal com as categorias iniciais.
 export function listarEspacos() {
   return chamar('/espacos');
+}
+
+// O que a conta pode fazer além do uso normal: { super_admin, plano_simulado }.
+// API antiga (sem a rota) responde 404, e quem chama trata como conta comum.
+export function acessoDaConta() {
+  return chamar('/espacos/acesso');
 }
 
 // Empresa nova no espaço empresarial: { nome, cnpj (ou null), regime }. Cada
@@ -199,8 +212,12 @@ export function atualizarCategoria(espacoId, categoriaId, categoria) {
 
 // Só categoria sem lançamentos: com lançamentos, a API responde 409 (o caminho
 // é desativar). 204.
-export function excluirCategoria(espacoId, categoriaId) {
-  return chamar(doEspaco(espacoId, `/categorias/${encodeURIComponent(categoriaId)}`), { metodo: 'DELETE' });
+// Com moverPara, os lançamentos da categoria passam para essa outra antes de
+// ela sair: a resposta diz quantos ({ lancamentos_movidos }). Sem ele, a
+// categoria em uso volta 409 com a quantidade (erro.detalhes.lancamentos).
+export function excluirCategoria(espacoId, categoriaId, moverPara = null) {
+  const destino = moverPara ? `?${new URLSearchParams({ mover_para: moverPara })}` : '';
+  return chamar(doEspaco(espacoId, `/categorias/${encodeURIComponent(categoriaId)}${destino}`), { metodo: 'DELETE' });
 }
 
 // Limite da API para uma consulta.

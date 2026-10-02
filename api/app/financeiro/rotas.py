@@ -18,11 +18,13 @@ from contextlib import contextmanager
 from datetime import date
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
+from fastapi.responses import JSONResponse
 
 from app.erros import ErroIndisponivel
-from app.financeiro import cartoes
+from app.financeiro import cartoes, simulacao
 from app.financeiro.acesso import cliente_autenticado, espaco_do_cliente, obter_livro_caixa
 from app.financeiro.modelos import (
+    AcessoResposta,
     AtualizacaoCategoria,
     AtualizacaoConta,
     AtualizacaoEspaco,
@@ -33,6 +35,7 @@ from app.financeiro.modelos import (
     Espaco,
     EspacoResposta,
     EstruturaResposta,
+    ExclusaoDeCategoriaResposta,
     ExclusaoEmLote,
     ExclusaoResposta,
     FaturaResposta,
@@ -83,11 +86,29 @@ def obter_servico(livro_caixa: RepositorioLivroCaixa = Depends(obter_livro_caixa
 
 @rotas_livro_caixa.get("", response_model=list[EspacoResposta], summary="Listar meus espaços")
 def listar_espacos(
+    requisicao: Request,
     cliente: ClienteFirebase = Depends(cliente_autenticado),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
-    """No primeiro acesso, cria o espaço pessoal com as categorias iniciais."""
-    return [EspacoResposta.de(espaco, cliente.uid) for espaco in servico.espacos_do_cliente(cliente.uid)]
+    """No primeiro acesso, cria o espaço pessoal com as categorias iniciais. Para um super
+    admin com o cabeçalho `X-Simular-Plano`, o `plano` do pessoal sai como o simulado."""
+    espacos = simulacao.aplicar(servico.espacos_do_cliente(cliente.uid), simulacao.plano_simulado(requisicao, cliente))
+    return [EspacoResposta.de(espaco, cliente.uid) for espaco in espacos]
+
+
+# Antes de "/{espaco_id}": senão "acesso" seria lido como o id de um espaço.
+@rotas_livro_caixa.get("/acesso", response_model=AcessoResposta, summary="O que a minha conta pode fazer")
+def acesso_da_conta(
+    requisicao: Request,
+    cliente: ClienteFirebase = Depends(cliente_autenticado),
+):
+    """`super_admin: true` para as contas de `SUPER_ADMINS` (api/.env): a tela delas mostra a
+    chave de plano para testes e manda o cabeçalho `X-Simular-Plano` (`FREE`, `FAMILIA` ou
+    `EMPRESARIAL`). Para as outras contas, `false`, e o cabeçalho é ignorado."""
+    return AcessoResposta(
+        super_admin=simulacao.eh_super_admin(cliente, requisicao.app.state.config),
+        plano_simulado=simulacao.plano_simulado(requisicao, cliente),
+    )
 
 
 @rotas_livro_caixa.post(
@@ -422,14 +443,29 @@ def atualizar_categoria(
 @rotas_livro_caixa.delete(
     "/{espaco_id}/categorias/{categoria_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Excluir categoria sem lançamentos",
-    responses={**ERRO_404, 409: {"description": "Categoria usada em lançamentos (desative em vez de excluir)"}},
+    summary="Excluir categoria (com os lançamentos levados para outra)",
+    responses={
+        200: {"model": ExclusaoDeCategoriaResposta, "description": "Com `mover_para`: quantos lançamentos mudaram"},
+        **ERRO_400,
+        **ERRO_404,
+        409: {"description": "Categoria usada em lançamentos e sem `mover_para`, ou usada pela gestão da empresa"},
+    },
 )
 def excluir_categoria(
-    categoria_id: str, espaco: Espaco = Depends(espaco_do_cliente), servico: ServicoLivroCaixa = Depends(obter_servico)
+    categoria_id: str,
+    mover_para: str | None = Query(
+        None, description="Categoria (do mesmo tipo, ativa) que recebe os lançamentos da excluída"
+    ),
+    espaco: Espaco = Depends(espaco_do_cliente),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
-    servico.excluir_categoria(espaco, categoria_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    """Sem lançamentos, sai direto (`204`). Com lançamentos, `409` com a quantidade em
+    `lancamentos`, a não ser que venha `mover_para`: aí os lançamentos passam para essa
+    categoria antes da exclusão, e a resposta é `200` com `lancamentos_movidos`."""
+    movidos = servico.excluir_categoria(espaco, categoria_id, mover_para)
+    if mover_para is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return JSONResponse(ExclusaoDeCategoriaResposta(lancamentos_movidos=movidos).model_dump())
 
 
 # --- Lançamentos ---------------------------------------------------------------
@@ -620,7 +656,8 @@ def importar_extrato(
     valem as colunas indicadas (ver `/importacoes/estrutura`). Cada linha vira uma receita
     ou despesa na conta escolhida, na categoria da coluna do arquivo, do histórico do mesmo
     estabelecimento, da regra pela descrição ou na padrão (`origem_da_categoria`).
-    `ajustes` troca a descrição e a categoria de linhas, pelo número da linha. Linha já
+    `ajustes` troca a descrição e a categoria de linhas, pelo número da linha, ou as tira com
+    `descartar: true` (`DESCARTADA`, sem gravar nem gerar parcelas). Linha já
     importada antes é pulada (`JA_IMPORTADA`), e linha ilegível volta com o motivo
     (`INVALIDA`), sem barrar as outras. Com `simular: true`, nada é gravado e as linhas que
     entrariam voltam como `NOVA`. Arquivo que não é CSV (planilha, PDF, binário) é `400`;

@@ -68,6 +68,12 @@ DIVISAO_SO_NO_FAMILIA = (
     "No Free, anote só em quantas pessoas o gasto foi dividido."
 )
 CLIENTE_SEM_ESPACO = "Cliente sem espaço pessoal: ele precisa entrar no app uma vez antes de mudar de plano."
+RESPONSAVEL_SO_NO_FAMILIA = (
+    "Escolher o responsável pelo lançamento faz parte do Plano Família: ele separa o gasto de cada pessoa da casa. "
+    "No Free, o lançamento é de quem lançou."
+)
+RESPONSAVEL_FORA_DA_FAMILIA = "Escolha uma pessoa da família (Pessoas da casa)."
+RESPONSAVEL_NA_EMPRESA = "Na empresa, o lançamento não tem responsável."
 LIMITE_DE_EMPRESAS = (
     f"Você já cadastrou {MAXIMO_DE_EMPRESAS} empresas. Exclua uma empresa sem movimento para cadastrar outra."
 )
@@ -96,9 +102,10 @@ class ServicoLivroCaixa:
 
     def plano_do_cliente(self, espaco: Espaco, uid: str) -> Plano:
         """O plano de quem pede, guardado no espaço pessoal dela. Numa empresa,
-        vale o plano do pessoal de quem está lançando."""
-        if espaco.tipo == TipoEspaco.PF:
-            return espaco.plano
+        vale o plano do pessoal de quem está lançando. O plano simulado por um
+        super admin (simulacao.py) vale nos dois casos."""
+        if espaco.tipo == TipoEspaco.PF or espaco.plano_simulado:
+            return espaco.plano_em_vigor
         pessoal = self.repositorio.buscar_espaco_pessoal(uid)
         return pessoal.plano if pessoal else Plano.FREE
 
@@ -111,6 +118,27 @@ class ServicoLivroCaixa:
             raise ErroNaoEncontrado(CLIENTE_SEM_ESPACO)
         pessoal.plano = plano
         return self.repositorio.atualizar_plano(pessoal)
+
+    def _responsavel_da_familia(self, espaco: Espaco, responsavel: str | None) -> str | None:
+        """O responsável de um lançamento é uma pessoa da família do espaço
+        pessoal, no Plano Família (ou no Empresarial, que o inclui). Devolve o
+        nome como está cadastrado ("leo " vira "Léo"); vazio é de quem lançou.
+
+        Um nome qualquer separaria o gasto por pessoa sem o plano, que é o Modo
+        Família por outro caminho: no Free, 403, mesmo que a tela seja burlada;
+        um nome de fora da família, 400. A tela mostra o campo só no Família,
+        com a lista das pessoas da casa."""
+        if not responsavel:
+            return None
+        if espaco.tipo != TipoEspaco.PF:
+            raise ErroValidacao({"responsavel": RESPONSAVEL_NA_EMPRESA})
+        if not libera_familia(espaco.plano_em_vigor):
+            raise ErroPermissao(RESPONSAVEL_SO_NO_FAMILIA)
+        chave = regras.chave_da_pessoa(responsavel)
+        pessoa = next((p for p in espaco.familia.pessoas if regras.chave_da_pessoa(p.nome) == chave), None)
+        if pessoa is None:
+            raise ErroValidacao({"responsavel": RESPONSAVEL_FORA_DA_FAMILIA})
+        return pessoa.nome
 
     def _conferir_divisao_do_plano(self, espaco: Espaco, uid: str, divisao: list) -> None:
         # A divisão com nome e valor separa o gasto de cada pessoa, que é o
@@ -245,9 +273,8 @@ class ServicoLivroCaixa:
         conta.limite_centavos = dados.limite_centavos
         conta.dia_fechamento = dados.dia_fechamento
         conta.dia_vencimento = dados.dia_vencimento
-        # Sem cor no corpo, o cartão fica com a que tinha.
-        if conta.cartao:
-            conta.cor = dados.cor or conta.cor
+        # Sem cor no corpo, a conta (ou o cartão) fica com a que tinha.
+        conta.cor = dados.cor or conta.cor
         return self.repositorio.atualizar_conta(conta)
 
     def excluir_conta(self, espaco: Espaco, id: str) -> int:
@@ -335,6 +362,7 @@ class ServicoLivroCaixa:
         categoria = self.repositorio.buscar_categoria(espaco.id, dados.categoria_id)
         if erros := regras.conferir_compra(dados, cartao, categoria):
             raise ErroValidacao(erros)
+        responsavel = self._responsavel_da_familia(espaco, dados.responsavel)
 
         parcelada = dados.parcelas > 1
         compra_id = uuid4().hex if parcelada else None
@@ -364,7 +392,7 @@ class ServicoLivroCaixa:
                 criado_por=uid,
                 divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
                 dividido_entre=dados.dividido_entre,
-                responsavel=dados.responsavel,
+                responsavel=responsavel,
                 compra_id=compra_id,
                 parcela=numero if parcelada else None,
                 parcelas=dados.parcelas if parcelada else None,
@@ -441,17 +469,43 @@ class ServicoLivroCaixa:
         categoria.ativa = dados.ativa
         return self.repositorio.atualizar_categoria(categoria)
 
-    def excluir_categoria(self, espaco: Espaco, id: str) -> None:
-        """Só categoria sem lançamentos. Com lançamentos, 409: apagá-la
-        deixaria o extrato sem o "para onde foi" deles. Desativar tira a
-        categoria das opções e mantém o histórico."""
+    def excluir_categoria(self, espaco: Espaco, id: str, mover_para: str | None = None) -> int:
+        """Exclui a categoria. Com lançamentos e sem destino, 409: apagá-la
+        deixaria o extrato sem o "para onde foi" deles. Com mover_para (outra
+        categoria do mesmo tipo, ativa), os lançamentos passam para ela antes
+        da exclusão, e o relatório por categoria continua somando certo.
+        Desativar segue como a saída que mantém tudo como está.
+
+        Ordem segura sem transação: primeiro os lançamentos mudam de
+        categoria, depois a categoria sai. Se a operação parar no meio, os
+        lançamentos já estão no destino e excluir de novo termina. Devolve
+        quantos lançamentos mudaram."""
         categoria = self.categoria(espaco, id)
-        if usados := self.repositorio.contar_lancamentos_da_categoria(espaco.id, categoria.id):
-            quantos = "1 lançamento" if usados == 1 else f"{usados} lançamentos"
+        usados = self.repositorio.contar_lancamentos_da_categoria(espaco.id, categoria.id)
+        if mover_para is None:
+            if usados:
+                quantos = "1 lançamento" if usados == 1 else f"{usados} lançamentos"
+                raise ErroConflito(
+                    f'"{categoria.nome}" está em {quantos}. Escolha para qual categoria eles vão, '
+                    "ou desative a categoria para tirá-la das opções sem mexer no histórico.",
+                    lancamentos=usados,
+                )
+            self.repositorio.excluir_categoria(espaco.id, categoria.id)
+            return 0
+
+        destino = self.repositorio.buscar_categoria(espaco.id, mover_para)
+        if erros := regras.conferir_destino_da_categoria(categoria, destino):
+            raise ErroValidacao(erros)
+        # A gestão da empresa acha a categoria pela função (aporte, folha,
+        # tributo): mover os lançamentos para uma categoria sem a função os
+        # tiraria das telas de Sociedade, Pessoal e Impostos.
+        if usados and categoria.funcao is not None:
             raise ErroConflito(
-                f'"{categoria.nome}" está em {quantos}. Desative a categoria para tirá-la das opções sem mexer no histórico.'
+                f'"{categoria.nome}" é usada pela gestão da empresa. Desative-a em vez de excluir, para não perder o histórico.'
             )
+        movidos = self.repositorio.mover_lancamentos_de_categoria(espaco.id, categoria.id, destino.id) if usados else 0
         self.repositorio.excluir_categoria(espaco.id, categoria.id)
+        return movidos
 
     # --- Lançamentos ---
 
@@ -480,6 +534,7 @@ class ServicoLivroCaixa:
         erros = regras.conferir_lancamento(dados, conta, categoria, destino)
         if erros:
             raise ErroValidacao(erros)
+        responsavel = self._responsavel_da_familia(espaco, dados.responsavel)
 
         lancamento = Lancamento(
             espaco_id=espaco.id,
@@ -495,7 +550,7 @@ class ServicoLivroCaixa:
             criado_por=uid,
             divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
             dividido_entre=dados.dividido_entre,
-            responsavel=dados.responsavel,
+            responsavel=responsavel,
             meio=dados.meio,
         )
         return self._gravar(lancamento)
@@ -510,6 +565,8 @@ class ServicoLivroCaixa:
         categoria = self.repositorio.buscar_categoria(espaco.id, dados.categoria_id) if dados.categoria_id else None
         if erros := regras.conferir_edicao(lancamento, dados, conta, categoria):
             raise ErroValidacao(erros)
+        if dados.responsavel:
+            dados = dados.model_copy(update={"responsavel": self._responsavel_da_familia(espaco, dados.responsavel)})
         alvos = self.repositorio.listar_compra(espaco.id, lancamento.compra_id) if lancamento.compra_id else [lancamento]
         for alvo in alvos:
             editado = regras.aplicar_edicao(alvo, dados)
@@ -610,8 +667,9 @@ class ServicoLivroCaixa:
         categoria do arquivo, do histórico do mesmo estabelecimento, das regras
         pela descrição ou, sem pista, da categoria padrão do tipo
         (categorizacao.py). dados.ajustes troca a descrição e a categoria de
-        uma linha, como a pessoa editou na conferência; a chave da linha
-        continua a do arquivo (importar de novo não duplica).
+        uma linha, como a pessoa editou na conferência, ou a descarta (não
+        entra, nem gera parcelas); a chave da linha continua a do arquivo
+        (importar de novo não duplica).
 
         Na fatura de um cartão, a linha parcelada ("LOJA 03/12") vira a parcela
         da compra e gera as parcelas vincendas nas próximas faturas; a parcela
@@ -672,6 +730,9 @@ class ServicoLivroCaixa:
             observacao = None
             if chave in ja_importadas:
                 situacao, lancamento_id = SituacaoDaLinha.JA_IMPORTADA, None
+            elif ajuste and ajuste.descartar:
+                # Fora da importação: nada é gravado e nenhuma parcela nasce dela.
+                situacao, lancamento_id = SituacaoDaLinha.DESCARTADA, None
             elif parcela and parcelamentos:
                 situacao, lancamento_id, observacao, geradas = self._importar_parcela(
                     espaco, item, parcela, parcelamentos, dados, uid

@@ -618,6 +618,16 @@ button.link:hover:not(:disabled) {
   container: extrato / inline-size;
 }
 
+/* Virtualização sem biblioteca: o navegador só desenha os dias do extrato
+   que estão perto da tela (content-visibility); os de longe guardam a altura
+   provável (contain-intrinsic-size, depois a medida de verdade) para a
+   rolagem não pular. Com um mês de mil lançamentos, abrir e rolar o extrato
+   deixa de desenhar a lista inteira. */
+.extrato > .dia-do-extrato {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+
 /* Ações à vista: ícone e nome em botões baixos, discretos até o mouse
    chegar. Excluir fica em vermelho só no texto (o vermelho cheio é da
    confirmação). */
@@ -681,6 +691,17 @@ button.acao-explicita.perigo:hover:not(:disabled) {
   border-radius: 50%;
   color: var(--cor-da-categoria, var(--cat-neutro));
   background: color-mix(in srgb, var(--cor-da-categoria, var(--cat-neutro)) 12%, transparent);
+}
+
+/* Categorias: só o círculo na cor dela (da paleta ou hexadecimal), centrado
+   na coluna da marca. */
+.circulo-da-categoria {
+  justify-self: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--cor-da-categoria, var(--cat-neutro));
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
 }
 
 .lancamento .descricao {
@@ -970,6 +991,20 @@ form {
 .campo > .dica-do-campo.reservada {
   min-height: var(--altura-da-mensagem);
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Resumo dos lançamentos feitos com o modal aberto (lançar em sequência). A
+   linha existe sempre, vazia até o primeiro: aparecer não empurra os botões. */
+.resumo-da-sequencia {
+  min-height: var(--altura-da-mensagem);
+  margin: 0;
+  overflow: hidden;
+  color: var(--marca-forte);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-medio);
+  font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

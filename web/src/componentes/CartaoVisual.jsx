@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import Icone from './Icone';
 import { situacaoDoLimite, usoDoLimite } from '../regras/cartoes';
+import { estiloDoPlastico } from '../regras/cores';
 import { formatarBRL } from '../regras/dinheiro';
 
 // Cartão de crédito desenhado como o plástico (estilo carteira): a cor
@@ -13,9 +14,11 @@ import { formatarBRL } from '../regras/dinheiro';
 export default function CartaoVisual({ cartao, para, marcado = false, aoMarcar, aoEditar }) {
   const uso = usoDoLimite(cartao);
   const situacao = situacaoDoLimite(cartao);
+  // Cor da paleta (classe) ou hexadecimal (variáveis no style).
+  const plastico = estiloDoPlastico(cartao.cor);
   const classes = [
     'cartao-visual',
-    `cor-${cartao.cor ?? 'grafite'}`,
+    plastico.classe,
     para ? 'clicavel' : '',
     cartao.ativa ? '' : 'desativado',
     marcado ? 'marcado' : '',
@@ -23,7 +26,7 @@ export default function CartaoVisual({ cartao, para, marcado = false, aoMarcar, 
   ];
 
   return (
-    <article className={classes.filter(Boolean).join(' ')}>
+    <article className={classes.filter(Boolean).join(' ')} style={plastico.estilo}>
       <span className="faixa-magnetica" aria-hidden="true" />
       <div className="topo-do-plastico">
         {aoMarcar && (
