@@ -7,6 +7,8 @@ import {
   diaDaSemana,
   fimDaSemana,
   inicioDaSemana,
+  completarAno,
+  erroDaDataDigitada,
   lerDataDigitada,
   limitar,
   mascararData,
@@ -100,6 +102,38 @@ describe('campo de data', () => {
     }
     expect(texto).toBe('20/03/2027');
     expect(mascararData('5/123')).toBe('5/12/3');
+  });
+
+  it('digitando, adianta a barra e o zero que só podem ser aqueles', () => {
+    const digitar = (teclas) => {
+      let texto = '';
+      for (const tecla of teclas) {
+        texto = mascararData(texto + tecla, { inserindo: true });
+      }
+      return texto;
+    };
+    expect(digitar('4')).toBe('04/');
+    expect(digitar('05')).toBe('05/');
+    expect(digitar('053')).toBe('05/03/');
+    expect(digitar('0510')).toBe('05/10/');
+    expect(digitar('01012026')).toBe('01/01/2026');
+    expect(digitar('432026')).toBe('04/03/2026');
+    // Apagando, nada volta: a barra e o zero saem.
+    expect(mascararData('05', { inserindo: false })).toBe('05');
+  });
+
+  it('completa o ano de dois dígitos ao sair do campo', () => {
+    expect(completarAno('05/09/26')).toBe('05/09/2026');
+    expect(completarAno('5/9/2026')).toBe('5/9/2026');
+  });
+
+  it('diz o que está errado na data digitada', () => {
+    expect(erroDaDataDigitada('')).toBe('');
+    expect(erroDaDataDigitada('05/09/2026')).toBe('');
+    expect(erroDaDataDigitada('05/09')).toBe('Data incompleta: use dd/mm/aaaa.');
+    expect(erroDaDataDigitada('05/13/2026')).toBe('Mês inválido: use de 01 a 12.');
+    expect(erroDaDataDigitada('31/02/2026')).toBe('Dia inválido: fevereiro tem 28 dias.');
+    expect(erroDaDataDigitada('29/02/2028')).toBe('');
   });
 
   it('lê a data completa e recusa a incompleta ou inexistente', () => {

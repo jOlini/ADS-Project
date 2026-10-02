@@ -2,7 +2,7 @@
 // tecla, sem navegador.
 import { describe, expect, it } from 'vitest';
 import { lerValor } from './dinheiro';
-import { mascararInteiro, mascararMoeda, podeDigitar } from './mascaras';
+import { mascararCentavos, mascararInteiro, mascararMoeda, podeDigitar } from './mascaras';
 
 // Digita tecla por tecla no fim do campo, como a pessoa faria.
 function digitar(teclas: string, opcoes = {}): string {
@@ -83,6 +83,64 @@ describe('mascararMoeda', () => {
     }
     expect(lerValor(digitar('1234,56'))).toBe(123456);
     expect(lerValor(digitar('-80', { permitirNegativo: true }), { permitirNegativo: true })).toBe(-8000);
+  });
+});
+
+// Digita tecla por tecla no fim do campo, na máscara dos centavos.
+function digitarCentavos(teclas: string, opcoes = {}): string {
+  let texto = '';
+  for (const tecla of teclas) {
+    texto = mascararCentavos(texto + tecla, opcoes).texto;
+  }
+  return texto;
+}
+
+describe('mascararCentavos', () => {
+  it('cada dígito entra pelos centavos: 10000 vira 100,00', () => {
+    expect(digitarCentavos('1')).toBe('0,01');
+    expect(digitarCentavos('10')).toBe('0,10');
+    expect(digitarCentavos('100')).toBe('1,00');
+    expect(digitarCentavos('10000')).toBe('100,00');
+    expect(digitarCentavos('123456789')).toBe('1.234.567,89');
+  });
+
+  it('apagar tira o último dígito', () => {
+    expect(mascararCentavos('100,0').texto).toBe('10,00');
+    expect(mascararCentavos('0,0').texto).toBe('');
+  });
+
+  it('ignora letra, vírgula e ponto digitados e zero à esquerda', () => {
+    expect(digitarCentavos('1a0,0.0')).toBe('10,00');
+    expect(digitarCentavos('005')).toBe('0,05');
+    expect(digitarCentavos('0')).toBe('');
+  });
+
+  it('para no teto de R$ 1 bilhão (doze dígitos)', () => {
+    expect(digitarCentavos('1234567890123')).toBe('1.234.567.890,12');
+  });
+
+  it('o cursor fica sempre no fim', () => {
+    expect(mascararCentavos('12345')).toEqual({ texto: '123,45', cursor: 6 });
+  });
+
+  it('colado com vírgula ou ponto vale em reais; só dígitos, como digitados', () => {
+    expect(mascararCentavos('R$ 1.234,56', { colado: true }).texto).toBe('1.234,56');
+    expect(mascararCentavos('10.5', { colado: true }).texto).toBe('10,50');
+    expect(mascararCentavos('80,00', { colado: true }).texto).toBe('80,00');
+    expect(mascararCentavos('2350', { colado: true }).texto).toBe('23,50');
+  });
+
+  it('o sinal só com permitirNegativo, e cada "-" troca o sinal', () => {
+    expect(digitarCentavos('-150')).toBe('1,50');
+    expect(digitarCentavos('-150', { permitirNegativo: true })).toBe('-1,50');
+    expect(digitarCentavos('-', { permitirNegativo: true })).toBe('-');
+    expect(mascararCentavos('-1,50-', { permitirNegativo: true }).texto).toBe('1,50');
+  });
+
+  it('o texto da máscara é o que lerValor entende', () => {
+    expect(lerValor(digitarCentavos('10000'))).toBe(10000);
+    expect(lerValor(digitarCentavos('5'))).toBe(5);
+    expect(lerValor(digitarCentavos('-80', { permitirNegativo: true }), { permitirNegativo: true })).toBe(-80);
   });
 });
 

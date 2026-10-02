@@ -1,12 +1,14 @@
 // Máscaras dos campos, sem interface: cada uma recebe o texto que ficou no
 // campo depois da tecla (ou do colar) e a posição do cursor, e devolve o
-// texto no formato do tipo de dado e onde o cursor fica. Quem aplica é o
-// hook useMascara (componentes/useMascara.ts), no Campo e onde mais houver
-// um <input> de valor. O texto de saída é o mesmo que dinheiro.lerValor lê
-// na hora de enviar o formulário. A data tem máscara própria, no
-// SeletorDeData (calendario.mascararData); daqui ela usa só o podeDigitar.
+// texto no formato do tipo de dado e onde o cursor fica. Quem aplica é
+// componentes/mascara.ts, no Campo e onde mais houver um <input> de valor.
+// O texto de saída é o mesmo que dinheiro.lerValor lê na hora de enviar o
+// formulário. Os campos de dinheiro usam mascararCentavos (centavos
+// primeiro); mascararMoeda fica para quem digita os reais com a vírgula. A
+// data tem máscara própria, no SeletorDeData (calendario.mascararData);
+// daqui ela usa só o podeDigitar.
 
-import { LIMITE_EM_CENTAVOS } from './dinheiro';
+import { LIMITE_EM_CENTAVOS, lerValor } from './dinheiro';
 
 export type TipoDeMascara = 'moeda' | 'moeda-com-sinal' | 'inteiro' | 'data' | 'texto';
 
@@ -115,6 +117,46 @@ export function mascararMoeda(bruto: string, cursor?: number, opcoes: OpcoesDaMo
   const saida = `${sinal.length > 0 ? '-' : ''}${agruparMilhares(digitosDoInteiro.map((peca) => peca.caractere).join(''))}${resto}`;
   const antesDoCursor = pecas.filter((peca) => peca.origem < posicao).length;
   return { texto: saida, cursor: cursorDepoisDe(saida, antesDoCursor) };
+}
+
+export interface OpcoesDosCentavos {
+  permitirNegativo?: boolean;
+  // Texto colado (ou arrastado, ou preenchido pelo navegador).
+  colado?: boolean;
+}
+
+const DIGITOS_DOS_CENTAVOS = DIGITOS_INTEIROS + 2;
+
+// Valor "centavos primeiro", como na maquininha e no app do banco: cada dígito
+// entra pela direita, nos centavos, e o que já estava anda para a esquerda.
+// Digitar 1 dá 0,01; 10 dá 0,10; 10000 dá 100,00. Apagar tira o último
+// dígito (100,00 vira 10,00). A vírgula nunca é digitada: fica sempre antes
+// dos dois últimos, e o cursor fica sempre no fim.
+// - Colado com vírgula ou ponto ("R$ 1.234,56", "10.5"), o texto vale em
+//   reais, pela regra do lerValor; só dígitos colados entram como digitados.
+// - Com permitirNegativo, cada "-" digitado troca o sinal (um número ímpar de
+//   sinais no campo é negativo); "-" sozinho fica, esperando os dígitos.
+// - Campo sem dígito (ou só zeros) fica vazio, para o placeholder aparecer.
+export function mascararCentavos(bruto: string, opcoes: OpcoesDosCentavos = {}): TextoMascarado {
+  const { permitirNegativo = false, colado = false } = opcoes;
+  const texto = String(bruto ?? '');
+  const sinais = (texto.match(/[-−]/g) ?? []).length;
+  const negativo = permitirNegativo && sinais % 2 === 1;
+
+  let digitos = texto.replace(/\D/g, '');
+  if (colado && /[.,]/.test(texto)) {
+    const reais = lerValor(texto.replace(/[-−]/g, ''));
+    digitos = reais === null ? digitos : String(reais);
+  }
+  digitos = digitos.replace(/^0+/, '').slice(0, DIGITOS_DOS_CENTAVOS);
+  if (!digitos) {
+    const saida = negativo ? '-' : '';
+    return { texto: saida, cursor: saida.length };
+  }
+  const completo = digitos.padStart(3, '0');
+  const inteiros = completo.slice(0, -2).replace(/^0+(?=\d)/, '');
+  const saida = `${negativo ? '-' : ''}${agruparMilhares(inteiros)},${completo.slice(-2)}`;
+  return { texto: saida, cursor: saida.length };
 }
 
 // Número inteiro sem sinal (parcelas, dia do mês): só dígitos, sem zero à

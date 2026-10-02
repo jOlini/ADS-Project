@@ -1,4 +1,4 @@
-import { useId, type ElementType, type ReactNode } from 'react';
+import { useId, useState, type ElementType, type ReactNode } from 'react';
 import Icone from './Icone';
 import { propsDaMascara, type AntesDeDigitar, type AoMudar } from './mascara';
 import type { TipoDeMascara } from '../regras/mascaras';
@@ -29,7 +29,10 @@ interface PropsDoCampo {
 //
 // A linha da mensagem de erro existe sempre, vazia até haver um erro: mostrar
 // ou tirar a mensagem não empurra os campos de baixo nem desalinha o vizinho
-// da mesma linha (estilos em index.css, .campo).
+// da mesma linha (estilos em index.css, .campo). Um controle que confere o
+// que foi digitado sozinho (validaSozinho, como o SeletorDeData) recebe
+// aoValidar e põe a mensagem nessa linha ao sair dele; o erro do formulário,
+// quando houver, vale mais.
 export default function Campo({
   rotulo,
   dica,
@@ -41,13 +44,16 @@ export default function Campo({
   ...propsDoControle
 }: PropsDoCampo) {
   const id = useId();
+  const [erroDoControle, setErroDoControle] = useState('');
   const idDoRotulo = `${id}-rotulo`;
   const idDaDica = `${id}-dica`;
   const idDoErro = `${id}-erro`;
-  const descricao = [dica && idDaDica, erro && idDoErro].filter(Boolean).join(' ');
   const Controle = elemento as ElementType<Record<string, unknown>>;
   const nativo = typeof elemento === 'string';
-  const propsDoComponente = nativo ? {} : { idDoRotulo };
+  const validaSozinho = !nativo && Boolean((elemento as { validaSozinho?: boolean }).validaSozinho);
+  const mensagem = erro || (validaSozinho ? erroDoControle : '');
+  const descricao = [dica && idDaDica, mensagem && idDoErro].filter(Boolean).join(' ');
+  const propsDoComponente = nativo ? {} : { idDoRotulo, ...(validaSozinho ? { aoValidar: setErroDoControle } : {}) };
   const mascarado =
     nativo && mascara
       ? {
@@ -69,7 +75,7 @@ export default function Campo({
       </label>
       <Controle
         id={id}
-        aria-invalid={Boolean(erro)}
+        aria-invalid={Boolean(mensagem)}
         aria-describedby={descricao || undefined}
         {...propsDoComponente}
         {...propsDoControle}
@@ -81,10 +87,10 @@ export default function Campo({
         </span>
       )}
       <span id={idDoErro} className="erro-do-campo">
-        {erro && (
+        {mensagem && (
           <>
             <Icone nome="alerta" tamanho={14} />
-            {erro}
+            {mensagem}
           </>
         )}
       </span>

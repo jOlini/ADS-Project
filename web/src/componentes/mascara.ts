@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent } from 'react';
-import { mascararInteiro, mascararMoeda, podeDigitar, TECLADO, type TextoMascarado, type TipoDeMascara } from '../regras/mascaras';
+import { mascararCentavos, mascararInteiro, podeDigitar, TECLADO, type TextoMascarado, type TipoDeMascara } from '../regras/mascaras';
 import { limparDigitacao } from '../regras/sanitizacao';
 
 export type AoMudar = (evento: ChangeEvent<HTMLInputElement>) => void;
@@ -12,17 +12,19 @@ export interface OpcoesDaMascara {
   digitos?: number;
 }
 
-// O texto do campo depois da máscara e onde o cursor fica.
+// O texto do campo depois da máscara e onde o cursor fica. O dinheiro é
+// "centavos primeiro" (regras/mascaras.ts, mascararCentavos): 10000 vira
+// 100,00 enquanto a pessoa digita.
 export function aplicarMascara(
   mascara: TipoDeMascara,
   valor: string,
   cursor: number,
-  { teclaDigitada = null, colado = false, digitos }: { teclaDigitada?: string | null; colado?: boolean; digitos?: number } = {},
+  { colado = false, digitos }: { teclaDigitada?: string | null; colado?: boolean; digitos?: number } = {},
 ): TextoMascarado {
   switch (mascara) {
     case 'moeda':
     case 'moeda-com-sinal':
-      return mascararMoeda(valor, cursor, { permitirNegativo: mascara === 'moeda-com-sinal', teclaDigitada, colado });
+      return mascararCentavos(valor, { permitirNegativo: mascara === 'moeda-com-sinal', colado });
     case 'inteiro':
       return mascararInteiro(valor, cursor, { digitos });
     case 'texto':

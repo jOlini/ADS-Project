@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react';
 import Calendario from './Calendario';
 import Icone from './Icone';
 import { useCliqueFora, usePosicaoFlutuante, usePresenca } from './flutuante';
-import { lerDataDigitada, mascararData } from '../regras/calendario';
+import { completarAno, erroDaDataDigitada, lerDataDigitada, mascararData } from '../regras/calendario';
 import { dataExiste, formatarData } from '../regras/datas';
 import { podeDigitar } from '../regras/mascaras';
 
@@ -15,6 +15,10 @@ const textoDoValor = (valor) => (dataExiste(valor) ? formatarData(valor) : (valo
 // com Alt+seta para baixo. value e onChange usam a data ISO, como o input
 // nativo; enquanto a data está incompleta ou não existe, onChange recebe o
 // texto digitado, e a validação do formulário acusa "Data inválida".
+// Digitando só números, as barras e o zero do dia ou do mês entram sozinhos
+// (calendario.mascararData); ao sair, o ano de dois dígitos vira 20aa e o
+// que estiver errado (mês 13, 31 de fevereiro) vai para aoValidar, que o
+// Campo mostra na linha do erro (SeletorDeData.validaSozinho).
 // visaoInicial="anos" abre o calendário na escolha do ano (data de nascimento).
 export default function SeletorDeData({
   id,
@@ -27,6 +31,7 @@ export default function SeletorDeData({
   disabled = false,
   idDoRotulo,
   placeholder = 'dd/mm/aaaa',
+  aoValidar,
   ...propsDoCampo
 }) {
   const idGerado = useId();
@@ -58,21 +63,30 @@ export default function SeletorDeData({
   }
 
   function digitar(evento) {
-    const novo = mascararData(evento.target.value);
+    const inserindo = (evento.nativeEvent?.inputType ?? 'insert').startsWith('insert');
+    const novo = mascararData(evento.target.value, { inserindo });
     setTexto(novo);
     emitir(novo);
+    // Corrigindo, o aviso de antes sai na hora.
+    aoValidar?.('');
   }
 
-  // Ao sair do campo, "5/9/2026" vira "05/09/2026".
+  // Ao sair do campo, "5/9/2026" vira "05/09/2026" e "05/09/26", "05/09/2026".
   function sair() {
-    const iso = lerDataDigitada(texto);
+    const completo = completarAno(texto);
+    const iso = lerDataDigitada(completo);
     if (iso) {
       setTexto(formatarData(iso));
+      if (completo !== texto) {
+        emitir(completo);
+      }
     }
+    aoValidar?.(erroDaDataDigitada(completo));
   }
 
   function escolher(iso) {
     setTexto(formatarData(iso));
+    aoValidar?.('');
     onChange?.({ target: { name, value: iso } });
     fechar();
     campo.current?.focus();
@@ -140,3 +154,7 @@ export default function SeletorDeData({
     </div>
   );
 }
+
+// O Campo passa aoValidar só para quem valida sozinho, e mostra a mensagem na
+// linha do erro (componentes/Campo.tsx).
+SeletorDeData.validaSozinho = true;
