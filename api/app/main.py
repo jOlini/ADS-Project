@@ -135,12 +135,14 @@ def criar_app(
     # CORS: só as origens de CORS_ORIGENS chamam a API pelo navegador. O
     # cabeçalho Authorization é o único de credencial aceito; cookie, nenhum.
     # PATCH entra já: a edição de lançamento usa esse método, e o navegador
-    # barra na pré-verificação o método que não estiver na lista.
+    # barra na pré-verificação o método que não estiver na lista. O
+    # X-Simular-Plano é o modo de teste dos planos (financeiro/simulacao.py):
+    # sem ele na lista, a pré-verificação barraria o pedido do super admin.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.lista_cors,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-Simular-Plano"],
         expose_headers=["Location"],
     )
     app.add_middleware(CabecalhosDeSeguranca)

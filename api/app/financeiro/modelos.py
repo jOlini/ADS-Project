@@ -271,9 +271,18 @@ class Espaco:
     # Só no pessoal: o plano da pessoa dona dele.
     plano: Plano = Plano.FREE
     id: str | None = None
+    # O plano que um super admin está simulando neste pedido (simulacao.py).
+    # Nunca é gravado: o repositório só escreve o campo plano.
+    plano_simulado: Plano | None = field(default=None, compare=False)
 
     def papel_de(self, uid: str) -> Papel | None:
         return next((membro.papel for membro in self.membros if membro.uid == uid), None)
+
+    @property
+    def plano_em_vigor(self) -> Plano:
+        """O plano que vale neste pedido: o simulado, se houver, ou o gravado.
+        Toda trava de plano lê este, nunca o campo plano direto."""
+        return self.plano_simulado or self.plano
 
 
 @dataclass
@@ -751,14 +760,23 @@ class EspacoResposta(BaseModel):
             papel=espaco.papel_de(uid),
             cnpj=espaco.cnpj,
             regime=espaco.regime,
-            familia=FamiliaResposta.de(espaco.familia, espaco.plano) if pessoal else None,
-            plano=espaco.plano if pessoal else None,
+            familia=FamiliaResposta.de(espaco.familia, espaco.plano_em_vigor) if pessoal else None,
+            plano=espaco.plano_em_vigor if pessoal else None,
         )
 
 
 class PlanoResposta(BaseModel):
     uid: str
     plano: Plano
+
+
+class AcessoResposta(BaseModel):
+    """O que a conta pode fazer além do uso normal. super_admin: pode simular
+    os planos na tela (cabeçalho X-Simular-Plano). plano_simulado: o plano que
+    vale neste pedido, quando simulado (null sem simulação)."""
+
+    super_admin: bool
+    plano_simulado: Plano | None = None
 
 
 class ContaResposta(BaseModel):

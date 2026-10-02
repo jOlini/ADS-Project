@@ -6,13 +6,16 @@
    inacessíveis: 503.
 2. espaco_do_cliente: carrega o espaço da URL e confere que o uid é membro
    dele. Não é: 404, o mesmo de um espaço inexistente. Responder 403 contaria
-   a quem tenta ids alheios que aquele espaço existe (IDOR).
+   a quem tenta ids alheios que aquele espaço existe (IDOR). Para um super
+   admin com o cabeçalho X-Simular-Plano, o espaço sai marcado com o plano
+   simulado (simulacao.py), só neste pedido.
 """
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.erros import ErroIndisponivel, ErroNaoAutenticado, ErroNaoEncontrado, ErroPermissao
+from app.financeiro import simulacao
 from app.financeiro.modelos import Espaco
 from app.financeiro.repositorio import RepositorioLivroCaixa
 from app.firebase import (
@@ -75,10 +78,12 @@ def _verificar(credenciais, verificador: VerificadorFirebase, exigir_email_verif
 
 def espaco_do_cliente(
     espaco_id: str,
+    requisicao: Request,
     cliente: ClienteFirebase = Depends(cliente_autenticado),
     livro_caixa: RepositorioLivroCaixa = Depends(obter_livro_caixa),
 ) -> Espaco:
     espaco = livro_caixa.buscar_espaco(espaco_id)
     if espaco is None or espaco.papel_de(cliente.uid) is None:
         raise ErroNaoEncontrado("Espaço não encontrado.")
+    simulacao.aplicar([espaco], simulacao.plano_simulado(requisicao, cliente))
     return espaco

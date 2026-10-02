@@ -113,6 +113,13 @@ class Configuracoes(BaseSettings):
     admin_email: str = ""
     admin_senha: str = ""
 
+    # Super admins da área do cliente: e-mails do Firebase (separados por
+    # vírgula) que podem simular os planos Free, Família e Empresarial na
+    # própria tela, para testar de ponta a ponta com e sem as travas
+    # (financeiro/simulacao.py). Vazio = ninguém. Fica só no api/.env: o
+    # repositório é público e não guarda e-mail de verdade.
+    super_admins: str = ""
+
     @field_validator("jwt_secret")
     @classmethod
     def exigir_segredo_forte(cls, segredo: str) -> str:
@@ -191,6 +198,11 @@ class Configuracoes(BaseSettings):
         if self.email_provedor == "pasta":
             problemas.append("EMAIL_PROVEDOR=pasta é só para desenvolvimento.")
         return problemas
+
+    @property
+    def lista_super_admins(self) -> frozenset[str]:
+        # Sem diferença de caixa: o Firebase guarda o e-mail como foi digitado.
+        return frozenset(email.strip().lower() for email in self.super_admins.split(",") if email.strip())
 
     @property
     def lista_cors(self) -> list[str]:

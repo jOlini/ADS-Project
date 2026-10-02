@@ -20,9 +20,10 @@ from datetime import date
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 
 from app.erros import ErroIndisponivel
-from app.financeiro import cartoes
+from app.financeiro import cartoes, simulacao
 from app.financeiro.acesso import cliente_autenticado, espaco_do_cliente, obter_livro_caixa
 from app.financeiro.modelos import (
+    AcessoResposta,
     AtualizacaoCategoria,
     AtualizacaoConta,
     AtualizacaoEspaco,
@@ -83,11 +84,29 @@ def obter_servico(livro_caixa: RepositorioLivroCaixa = Depends(obter_livro_caixa
 
 @rotas_livro_caixa.get("", response_model=list[EspacoResposta], summary="Listar meus espaços")
 def listar_espacos(
+    requisicao: Request,
     cliente: ClienteFirebase = Depends(cliente_autenticado),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
-    """No primeiro acesso, cria o espaço pessoal com as categorias iniciais."""
-    return [EspacoResposta.de(espaco, cliente.uid) for espaco in servico.espacos_do_cliente(cliente.uid)]
+    """No primeiro acesso, cria o espaço pessoal com as categorias iniciais. Para um super
+    admin com o cabeçalho `X-Simular-Plano`, o `plano` do pessoal sai como o simulado."""
+    espacos = simulacao.aplicar(servico.espacos_do_cliente(cliente.uid), simulacao.plano_simulado(requisicao, cliente))
+    return [EspacoResposta.de(espaco, cliente.uid) for espaco in espacos]
+
+
+# Antes de "/{espaco_id}": senão "acesso" seria lido como o id de um espaço.
+@rotas_livro_caixa.get("/acesso", response_model=AcessoResposta, summary="O que a minha conta pode fazer")
+def acesso_da_conta(
+    requisicao: Request,
+    cliente: ClienteFirebase = Depends(cliente_autenticado),
+):
+    """`super_admin: true` para as contas de `SUPER_ADMINS` (api/.env): a tela delas mostra a
+    chave de plano para testes e manda o cabeçalho `X-Simular-Plano` (`FREE`, `FAMILIA` ou
+    `EMPRESARIAL`). Para as outras contas, `false`, e o cabeçalho é ignorado."""
+    return AcessoResposta(
+        super_admin=simulacao.eh_super_admin(cliente, requisicao.app.state.config),
+        plano_simulado=simulacao.plano_simulado(requisicao, cliente),
+    )
 
 
 @rotas_livro_caixa.post(

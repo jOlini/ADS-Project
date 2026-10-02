@@ -96,9 +96,10 @@ class ServicoLivroCaixa:
 
     def plano_do_cliente(self, espaco: Espaco, uid: str) -> Plano:
         """O plano de quem pede, guardado no espaço pessoal dela. Numa empresa,
-        vale o plano do pessoal de quem está lançando."""
-        if espaco.tipo == TipoEspaco.PF:
-            return espaco.plano
+        vale o plano do pessoal de quem está lançando. O plano simulado por um
+        super admin (simulacao.py) vale nos dois casos."""
+        if espaco.tipo == TipoEspaco.PF or espaco.plano_simulado:
+            return espaco.plano_em_vigor
         pessoal = self.repositorio.buscar_espaco_pessoal(uid)
         return pessoal.plano if pessoal else Plano.FREE
 

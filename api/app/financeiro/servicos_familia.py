@@ -122,7 +122,7 @@ class ServicoFamilia:
     @staticmethod
     def _conferir_plano(espaco: Espaco) -> None:
         # 403: o espaço é da pessoa, mas o plano dela não cobre o recurso.
-        if not libera_familia(espaco.plano):
+        if not libera_familia(espaco.plano_em_vigor):
             raise ErroPermissao(SO_NO_PLANO_FAMILIA)
 
     @staticmethod
