@@ -683,6 +683,17 @@ button.acao-explicita.perigo:hover:not(:disabled) {
   background: color-mix(in srgb, var(--cor-da-categoria, var(--cat-neutro)) 12%, transparent);
 }
 
+/* Categorias: só o círculo na cor dela (da paleta ou hexadecimal), centrado
+   na coluna da marca. */
+.circulo-da-categoria {
+  justify-self: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--cor-da-categoria, var(--cat-neutro));
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+
 .lancamento .descricao {
   min-width: 0;
 }

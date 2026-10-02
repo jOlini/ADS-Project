@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import Campo from './Campo';
 import Seletor from './Seletor';
+import SeletorDeCorHex from './SeletorDeCorHex';
 import { useToast } from './toast/useToast';
 import { primeiroCampoComErro } from '../regras/cadastro';
-import { CORES_DE_CATEGORIA, errosDaApi, ORDEM_DA_CATEGORIA, TIPOS_DE_CATEGORIA, validarCategoria } from '../regras/livroCaixa';
+import { corDaCategoria, SUGESTOES_DE_CATEGORIA } from '../regras/cores';
+import { errosDaApi, ORDEM_DA_CATEGORIA, TIPOS_DE_CATEGORIA, validarCategoria } from '../regras/livroCaixa';
 import { atualizarCategoria, criarCategoria } from '../servicos/livroCaixa';
 
 // Formulário de categoria (no modal "Nova categoria" ou "Editar
 // categoria"): nome, tipo (só na criação: uma categoria de despesa com
-// lançamentos não vira de receita) e cor. Na edição, pode ser desativada.
+// lançamentos não vira de receita) e cor, uma sugestão da paleta ou uma cor
+// livre em hexadecimal (SeletorDeCorHex). Na edição, pode ser desativada.
 // tipoInicial vem do atalho ?cadastrar=DESPESA|RECEITA. aoSalvar recebe a
 // categoria salva.
 export default function FormularioDeCategoria({ espacoId, emEdicao = null, tipoInicial = 'DESPESA', aoSalvar, aoCancelar, aoMudarOcupado }) {
@@ -70,9 +73,8 @@ export default function FormularioDeCategoria({ espacoId, emEdicao = null, tipoI
           onChange={(evento) => mudar('tipo', evento.target.value)} erro={erros.tipo} />
       )}
 
-      <Campo elemento={Seletor} rotulo="Cor" name="cor" value={formulario.cor}
-        opcoes={CORES_DE_CATEGORIA.map((cor) => ({ ...cor, cor: cor.valor }))}
-        onChange={(evento) => mudar('cor', evento.target.value)} erro={erros.cor} />
+      <SeletorDeCorHex rotulo="Cor" name="cor" valor={formulario.cor} sugestoes={SUGESTOES_DE_CATEGORIA}
+        cssDaSugestao={corDaCategoria} aoMudar={(cor) => mudar('cor', cor)} erro={erros.cor} />
 
       {emEdicao && (
         <label className="caixa-de-marcar">

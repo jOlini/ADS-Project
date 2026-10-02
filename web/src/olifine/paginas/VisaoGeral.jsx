@@ -11,6 +11,7 @@ import Menu from '../../componentes/Menu';
 import Modal from '../../componentes/Modal';
 import { useCarga } from '../../componentes/useCarga';
 import { resumoDasFaturas, usoDoLimite } from '../../regras/cartoes';
+import { corDaCategoria } from '../../regras/cores';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
 import { formatarData, hojeIso } from '../../regras/datas';
 import { donoDasMetas } from '../../regras/espacos';
@@ -658,7 +659,7 @@ export default function VisaoGeral() {
                   <ul>
                     {dia.linhas.map((linha) => (
                       <li key={linha.id ?? `${linha.data}-${linha.descricao}`}>
-                        <span className="of-marca-categoria" style={{ '--cor-da-categoria': `var(--cat-${linha.cor ?? 'neutro'})` }} aria-hidden="true">
+                        <span className="of-marca-categoria" style={{ '--cor-da-categoria': corDaCategoria(linha.cor) }} aria-hidden="true">
                           <Icone nome={iconeDaLinha(linha, linha.cor)} tamanho={16} />
                         </span>
                         <span className="of-transacao-textos">

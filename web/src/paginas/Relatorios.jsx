@@ -7,6 +7,7 @@ import GraficoMensal from '../componentes/GraficoMensal';
 import SimboloDoVazio from '../olifine/componentes/SimboloDoVazio';
 import Icone from '../componentes/Icone';
 import { useCarga } from '../componentes/useCarga';
+import { corDaCategoria } from '../regras/cores';
 import { formatarBRL, formatarComSinal } from '../regras/dinheiro';
 import { hojeIso } from '../regras/datas';
 import { pessoasDaFamilia, TITULAR, TODOS } from '../regras/familia';
@@ -55,7 +56,7 @@ function Categorias({ dados }) {
       {dados.categorias.map((categoria) => (
         <li key={categoria.categoria_id}>
           <span className="rel-categoria-nome">
-            <span className="ponto-de-cor" style={{ '--cor-do-ponto': `var(--cat-${categoria.cor ?? 'neutro'})` }} aria-hidden="true" />
+            <span className="ponto-de-cor" style={{ '--cor-do-ponto': corDaCategoria(categoria.cor) }} aria-hidden="true" />
             {categoria.nome}
           </span>
           <span className="rel-barra" aria-hidden="true">

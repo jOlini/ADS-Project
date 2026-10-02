@@ -46,35 +46,12 @@ export const MEIOS_DE_PAGAMENTO = [
 
 export const rotuloDoMeio = (meio) => MEIOS_DE_PAGAMENTO.find((item) => item.valor === meio)?.rotulo ?? '';
 
-// Cores do plástico do cartão na carteira (mesmos nomes da API e das
-// variáveis --cartao-* do CSS). O nome do cartão está sempre escrito nele.
-export const CORES_DO_CARTAO = [
-  { valor: 'grafite', rotulo: 'Grafite' },
-  { valor: 'azul', rotulo: 'Azul' },
-  { valor: 'roxo', rotulo: 'Roxo' },
-  { valor: 'verde', rotulo: 'Verde' },
-  { valor: 'vinho', rotulo: 'Vinho' },
-  { valor: 'laranja', rotulo: 'Laranja' },
-  { valor: 'dourado', rotulo: 'Dourado' },
-  { valor: 'prata', rotulo: 'Prata' },
-];
+// As cores dos cartões, das contas e das categorias (paleta e hexadecimal)
+// ficam em regras/cores.ts.
 
 export const TIPOS_DE_CATEGORIA = [
   { valor: 'DESPESA', rotulo: 'Despesa', descricao: 'Dinheiro que sai' },
   { valor: 'RECEITA', rotulo: 'Receita', descricao: 'Dinheiro que entra' },
-];
-
-// Mesmos nomes das variáveis --cat-* do CSS. O rótulo diz a cor, porque a
-// cor nunca aparece sozinha: sempre ao lado do nome da categoria.
-export const CORES_DE_CATEGORIA = [
-  { valor: 'moradia', rotulo: 'Azul' },
-  { valor: 'mercado', rotulo: 'Verde' },
-  { valor: 'entrada', rotulo: 'Verde de entrada' },
-  { valor: 'transporte', rotulo: 'Roxo' },
-  { valor: 'casa', rotulo: 'Âmbar' },
-  { valor: 'saude', rotulo: 'Ciano' },
-  { valor: 'lazer', rotulo: 'Rosa' },
-  { valor: 'neutro', rotulo: 'Cinza' },
 ];
 
 export function rotuloDoTipoDeConta(tipo) {

@@ -745,3 +745,58 @@ button.abrir-fatura:hover:not(:disabled) {
   display: grid;
   gap: var(--espaco-9);
 }
+
+/* --------------------------------------------- Contas no estilo dos cartões */
+
+/* A conta bancária usa o mesmo plástico da carteira de cartões (cor, brilho,
+   sombra, seleção e editar por cima), sem a faixa magnética e com o saldo no
+   lugar dos números da fatura. O nome quebra em até duas linhas antes de
+   cortar: aparece por extenso sempre que couber. */
+.conta-visual {
+  grid-template-rows: auto 1fr auto;
+  padding-top: var(--espaco-8);
+}
+
+.conta-visual .nome-no-plastico {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: var(--altura-de-linha-justa);
+}
+
+.simbolo-da-conta {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sobre-cartao) 16%, transparent);
+}
+
+.saldo-da-conta {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.saldo-da-conta dd {
+  font-size: var(--fonte-numero, 1.5rem);
+}
+
+.rodape-da-conta {
+  opacity: 0.85;
+  font-size: var(--fonte-micro);
+  line-height: var(--altura-de-linha-justa);
+}
+
+.rodape-da-conta b {
+  font-weight: var(--peso-forte);
+}
+
+/* Texto escuro sobre uma cor clara escolhida: o fundo dos botões do plástico
+   escurece em vez de clarear. */
+.cartao-visual.cor-personalizada button.botao-icone.sobre-o-plastico {
+  background: color-mix(in srgb, var(--sobre-cartao) 12%, transparent);
+}

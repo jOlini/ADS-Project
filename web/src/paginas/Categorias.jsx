@@ -10,7 +10,8 @@ import Modal from '../componentes/Modal';
 import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
 import { useSelecao } from '../componentes/useSelecao';
-import { CORES_DE_CATEGORIA, TIPOS_DE_CATEGORIA } from '../regras/livroCaixa';
+import { corDaCategoria } from '../regras/cores';
+import { TIPOS_DE_CATEGORIA } from '../regras/livroCaixa';
 import { apiConfigurada, excluirCategoria, listarCategorias } from '../servicos/livroCaixa';
 
 const GRUPOS = [
@@ -18,7 +19,6 @@ const GRUPOS = [
   { tipo: 'RECEITA', titulo: 'Receitas', icone: 'entrada' },
 ];
 
-const rotuloDaCor = (cor) => CORES_DE_CATEGORIA.find((item) => item.valor === cor)?.rotulo ?? cor;
 const contar = (quantidade, singular, plural) => `${quantidade} ${quantidade === 1 ? singular : plural}`;
 // "Mercado", "Mercado e Lazer", "Mercado, Lazer e Saúde".
 const juntar = (nomes) => (nomes.length > 1 ? `${nomes.slice(0, -1).join(', ')} e ${nomes.at(-1)}` : nomes[0]);
@@ -169,15 +169,16 @@ export default function Categorias() {
                     >
                       <input type="checkbox" className="marcar-linha" checked={selecao.marcado(categoria.id)}
                         onChange={() => selecao.alternar(categoria.id)} aria-label={`Selecionar ${categoria.nome}`} />
-                      <span className="marca-da-categoria" style={{ '--cor-da-categoria': `var(--cat-${categoria.cor})` }} aria-hidden="true">
-                        <Icone nome={grupo.icone} tamanho={16} />
-                      </span>
+                      {/* Só o círculo na cor da categoria: o nome da cor
+                          não diz nada a quem lê, e a hexadecimal menos ainda. */}
+                      <span className="circulo-da-categoria" style={{ '--cor-da-categoria': corDaCategoria(categoria.cor) }} aria-hidden="true" />
                       <span className="descricao">
                         <b>{categoria.nome}</b>
-                        <small>
-                          {rotuloDaCor(categoria.cor)}
-                          {!categoria.ativa && <span className="etiqueta">Desativada</span>}
-                        </small>
+                        {!categoria.ativa && (
+                          <small>
+                            <span className="etiqueta">Desativada</span>
+                          </small>
+                        )}
                       </span>
                       <button type="button" className="discreto-botao" onClick={() => setModal({ emEdicao: categoria })}>
                         <Icone nome="editar" tamanho={16} />

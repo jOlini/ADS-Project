@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { corDaCategoria } from '../../regras/cores';
 import { formatarBRL } from '../../regras/dinheiro';
 
 const RAIO = 70;
@@ -6,8 +7,6 @@ const ESPESSURA = 20;
 const CIRCUNFERENCIA = 2 * Math.PI * RAIO;
 // Fresta entre as fatias, em unidades do traço.
 const FRESTA = 3;
-
-const corDa = (cor) => `var(--cat-${cor ?? 'neutro'})`;
 
 // Despesas por categoria: rosca com o total no meio e a legenda ao lado,
 // sempre com o nome da categoria (a cor é só apoio de leitura). Passar o
@@ -38,7 +37,7 @@ export default function Rosca({ fatias, total, rotuloDoTotal }) {
                 cy="90"
                 r={RAIO}
                 strokeWidth={ESPESSURA}
-                style={{ stroke: corDa(arco.cor) }}
+                style={{ stroke: corDaCategoria(arco.cor) }}
                 strokeDasharray={`${arco.tamanho} ${CIRCUNFERENCIA}`}
                 strokeDashoffset={-arco.inicio}
                 onPointerEnter={() => setDestaque(arco.categoria)}
@@ -64,7 +63,7 @@ export default function Rosca({ fatias, total, rotuloDoTotal }) {
             onFocus={() => setDestaque(fatia.categoria)}
             onBlur={() => setDestaque(null)}
           >
-            <span className="of-rosca-ponto" style={{ background: corDa(fatia.cor) }} aria-hidden="true" />
+            <span className="of-rosca-ponto" style={{ background: corDaCategoria(fatia.cor) }} aria-hidden="true" />
             <span className="of-rosca-nome">
               {fatia.categoria}
               {fatia.agrupa ? <small> ({fatia.agrupa} categorias)</small> : null}

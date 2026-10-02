@@ -1,3 +1,4 @@
+import { estiloDoPlastico } from '../regras/cores';
 import { formatarData } from '../regras/datas';
 
 // Miniatura fiel de um cartão de crédito de verdade (85,6 × 54 mm, a mesma
@@ -12,8 +13,10 @@ import { formatarData } from '../regras/datas';
 // usa a miniatura, então o desenho inteiro fica fora do leitor de tela.
 export default function MiniaturaDoCartao({ cartao, titular = '' }) {
   const vencimento = cartao.fatura_atual?.vencimento;
+  const plastico = estiloDoPlastico(cartao.cor);
   return (
-    <span className={`miniatura-do-cartao cor-${cartao.cor ?? 'grafite'}${cartao.ativa === false ? ' desativado' : ''}`} aria-hidden="true">
+    <span className={`miniatura-do-cartao ${plastico.classe}${cartao.ativa === false ? ' desativado' : ''}`} style={plastico.estilo}
+      aria-hidden="true">
       <span className="miniatura-topo">
         <span className="miniatura-nome-do-cartao">{cartao.nome}</span>
         <span className="miniatura-rede">crédito</span>
