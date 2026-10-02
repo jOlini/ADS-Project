@@ -2,8 +2,10 @@ import { useId, useState, type ChangeEvent, type FormEvent } from 'react';
 import AvisoComAtalhoJs from './AvisoComAtalho';
 import Campo from './Campo';
 import ConferenciaDaImportacao from './ConferenciaDaImportacao';
+import FormularioDeCategoriaJs from './FormularioDeCategoria';
 import Icone from './Icone';
 import MapeamentoDeColunasJs from './MapeamentoDeColunas';
+import ModalJs from './Modal';
 import Seletor from './Seletor';
 import { semTipos } from './semTipos';
 import { useToast } from './toast/useToast';
@@ -14,6 +16,8 @@ import { formatarBRL } from '../regras/dinheiro';
 import { escolherLeitor, LEITOR_AUTOMATICO, opcoesDeLeitor } from '../regras/extratos/leitores';
 import { ErroDoLeitor, type ArquivoLido, type ExtratoPreparado, type LeitorDeExtrato } from '../regras/extratos/tipos';
 import {
+  ajustar,
+  ajustesDasSugestoes,
   ajustesParaAApi,
   cabecalhoProvavel,
   categoriaSugerida,
@@ -23,12 +27,15 @@ import {
   errosDaImportacao,
   mapeamentoDosPapeis,
   nomesDasColunas,
+  novasQueEntram,
   opcoesDaCategoria,
   ORDEM_DA_IMPORTACAO,
   papeisDoMapeamento,
   resumoDaImportacao,
   ROTULO_DA_ORIGEM_DAS_COLUNAS,
+  sugestoesDeDescarte,
   textoDasDuvidas,
+  tipoDaLinha,
   trocarPapel,
   validarAjustes,
   validarImportacao,
@@ -45,7 +52,9 @@ import { lerDocumentoPdf } from '../servicos/leitorDePdf';
 import { estruturaDoExtrato, importarExtrato } from '../servicos/livroCaixa';
 
 const AvisoComAtalho = semTipos(AvisoComAtalhoJs);
+const FormularioDeCategoria = semTipos(FormularioDeCategoriaJs);
 const MapeamentoDeColunas = semTipos(MapeamentoDeColunasJs);
+const Modal = semTipos(ModalJs);
 
 const ETAPAS = [
   { id: 'arquivo', rotulo: 'Arquivo' },
@@ -66,6 +75,7 @@ interface Resposta {
   importadas: number;
   ja_importadas: number;
   invalidas: number;
+  descartadas?: number;
   parcelas_futuras?: number;
   linhas: LinhaDaResposta[];
 }
@@ -123,7 +133,7 @@ export default function ImportarExtrato({
   espacoId,
   contas = [],
   contaFixa = null,
-  categorias,
+  categorias: categoriasDoEspaco,
   aoImportar,
   aoVerImportados,
   aoCancelar,
@@ -131,6 +141,14 @@ export default function ImportarExtrato({
 }: Props) {
   const toast = useToast();
   const idDoArquivo = useId();
+  // Categorias criadas aqui mesmo ("+ Nova categoria" da conferência): entram
+  // nas listas na hora, antes de a tela de trás recarregar as dela.
+  const [criadasAqui, setCriadasAqui] = useState<Categoria[]>([]);
+  const categorias = [...categoriasDoEspaco, ...criadasAqui.filter((nova) => !categoriasDoEspaco.some((categoria) => categoria.id === nova.id))];
+  // Linha da conferência esperando a categoria nova (submodal aberto).
+  const [linhaDaNovaCategoria, setLinhaDaNovaCategoria] = useState<LinhaDaResposta | null>(null);
+  // Por que cada linha já vem descartada (o pagamento da fatura anterior).
+  const [sugestoes, setSugestoes] = useState<Record<number, string>>({});
   const [etapa, setEtapa] = useState<Etapa>('arquivo');
   const [destino, setDestino] = useState(() => ({
     conta_id: contaFixa?.id ?? (contas.length === 1 ? (contas[0]?.id ?? '') : ''),
@@ -240,7 +258,10 @@ export default function ImportarExtrato({
       const resposta = await importarExtrato(espacoId, { ...destino, csv: comMapeamento.csv, mapeamento: comMapeamento.mapeamento, simular: true });
       setPrevia({ resposta, mapeamento: comMapeamento.mapeamento });
       // Outras colunas, outras linhas: o que foi editado antes não vale mais.
-      setAjustes({});
+      // O pagamento de fatura no meio das linhas já vem descartado.
+      const sugeridas = sugestoesDeDescarte(resposta.linhas, { cartao: Boolean(contaFixa) });
+      setSugestoes(sugeridas);
+      setAjustes(ajustesDasSugestoes(sugeridas));
       setErros({});
       setEtapa('previa');
     } catch (erro) {
@@ -351,7 +372,9 @@ export default function ImportarExtrato({
     }
   }
 
-  const novas = previa?.resposta.novas ?? 0;
+  // As novas que entram de fato (as descartadas ficam de fora).
+  const novas = novasQueEntram(previa?.resposta.linhas, ajustes);
+  const descartadasNaTela = (previa?.resposta.novas ?? 0) - novas;
   const indiceDaEtapa = ETAPAS.findIndex((item) => item.id === etapa);
   const semCategorias = opcoesDaCategoria(categorias, 'DESPESA').length === 0 || opcoesDaCategoria(categorias, 'RECEITA').length === 0;
   const reconhecidas = categoriasReconhecidas(previa?.resposta.linhas);
@@ -508,7 +531,7 @@ export default function ImportarExtrato({
       {etapa === 'previa' && previa && (
         <div className="previa-da-importacao">
           <p className="resumo-da-importacao" role="status">
-            {resumoDaImportacao(previa.resposta)}
+            {resumoDaImportacao({ ...previa.resposta, novas, descartadas: descartadasNaTela })}
             {reconhecidas.novas > 0 && (
               <small>
                 {reconhecidas.reconhecidas} de {reconhecidas.novas} com a categoria reconhecida. Edite a descrição e a
@@ -555,6 +578,8 @@ export default function ImportarExtrato({
             ajustes={ajustes}
             erros={erros}
             ocupado={Boolean(ocupado)}
+            sugestoes={sugestoes}
+            aoNovaCategoria={setLinhaDaNovaCategoria}
             aoAjustar={(novos) => {
               setAjustes(novos);
               setErros({});
@@ -564,10 +589,14 @@ export default function ImportarExtrato({
             <button type="button" className="secundario" onClick={() => setEtapa('arquivo')} disabled={Boolean(ocupado)}>
               Voltar
             </button>
-            {novas > 0 ? (
-              <button type="button" onClick={importar} disabled={Boolean(ocupado)} aria-busy={ocupado === 'importando'}>
+            {(previa.resposta.novas ?? 0) > 0 ? (
+              <button type="button" onClick={importar} disabled={Boolean(ocupado) || novas === 0} aria-busy={ocupado === 'importando'}>
                 <Icone nome="importar" tamanho={16} />
-                {ocupado === 'importando' ? 'Importando…' : `Importar ${novas === 1 ? '1 lançamento' : `${novas} lançamentos`}`}
+                {ocupado === 'importando'
+                  ? 'Importando…'
+                  : novas === 0
+                    ? 'Nada para importar'
+                    : `Importar ${novas === 1 ? '1 lançamento' : `${novas} lançamentos`}`}
               </button>
             ) : aoVerImportados && destinoDaImportacao(previa.resposta.linhas) ? (
               <button type="button" onClick={() => aoVerImportados(previa.resposta)}>
@@ -582,6 +611,26 @@ export default function ImportarExtrato({
           </div>
         </div>
       )}
+
+      {/* Submodal da categoria nova: abre por cima da importação, que fica
+          como estava (arquivo, linhas e edições). A categoria criada já entra
+          na linha que pediu. */}
+      <Modal aberta={Boolean(linhaDaNovaCategoria)} titulo="Nova categoria"
+        descricao={linhaDaNovaCategoria ? `Para "${linhaDaNovaCategoria.descricao ?? ''}" e as próximas importações.` : ''}
+        aoFechar={() => setLinhaDaNovaCategoria(null)}>
+        {linhaDaNovaCategoria && (
+          <FormularioDeCategoria
+            espacoId={espacoId}
+            tipoInicial={tipoDaLinha(linhaDaNovaCategoria)}
+            aoSalvar={(salva: Categoria) => {
+              setCriadasAqui((atuais) => [...atuais, salva]);
+              setAjustes((atuais) => ajustar(atuais, linhaDaNovaCategoria, 'categoria_id', salva.id));
+              setLinhaDaNovaCategoria(null);
+            }}
+            aoCancelar={() => setLinhaDaNovaCategoria(null)}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

@@ -735,6 +735,33 @@ button.sugestao > .icone {
   color: var(--suave);
 }
 
+/* Descartada: continua na lista, riscada e apagada, com o botão para voltar
+   (e o motivo, quando a tela sugeriu o descarte). */
+.conferencia-da-importacao tr.descartada :is(td.data, td.valor, td.descricao input) {
+  color: var(--suave);
+  text-decoration: line-through;
+}
+
+.conferencia-da-importacao tr.descartada td.categoria {
+  opacity: 0.55;
+}
+
+.conferencia-da-importacao td small.motivo-do-descarte {
+  display: block;
+  margin-top: var(--espaco-2);
+  color: var(--aviso);
+  text-decoration: none;
+}
+
+.conferencia-da-importacao td.acao-da-linha {
+  width: 1%;
+  text-align: right;
+}
+
+.conferencia-da-importacao tr.descartada button[aria-pressed='true'] {
+  color: var(--marca-forte);
+}
+
 /* No celular, cada linha vira um cartão: o rótulo de cada campo vem do
    data-rotulo, já que o cabeçalho da tabela some. */
 @media (max-width: 640px) {
@@ -791,6 +818,16 @@ button.sugestao > .icone {
   .conferencia-da-importacao td.valor {
     grid-row: 1;
     grid-column: 2;
+  }
+
+  .conferencia-da-importacao td.acao-da-linha {
+    grid-row: 1;
+    grid-column: 3;
+    width: auto;
+  }
+
+  .conferencia-da-importacao tr {
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
 }
 

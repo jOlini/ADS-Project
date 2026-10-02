@@ -245,13 +245,14 @@ export const ROTULO_DA_ORIGEM_DA_CATEGORIA: Record<string, string> = {
 
 // ------------------------------------------------ Conferência
 
-export type Situacao = 'NOVA' | 'IMPORTADA' | 'JA_IMPORTADA' | 'INVALIDA';
+export type Situacao = 'NOVA' | 'IMPORTADA' | 'JA_IMPORTADA' | 'INVALIDA' | 'DESCARTADA';
 
 export const ROTULO_DA_SITUACAO: Record<Situacao, string> = {
   NOVA: 'Nova',
   IMPORTADA: 'Importada',
   JA_IMPORTADA: 'Já importada',
   INVALIDA: 'Com erro',
+  DESCARTADA: 'Descartada',
 };
 
 export interface LinhaDaResposta {
@@ -270,6 +271,8 @@ export interface LinhaDaResposta {
 export interface Ajuste {
   descricao?: string;
   categoria_id?: string;
+  // A linha sai da importação (ex.: o pagamento da fatura anterior).
+  descartar?: boolean;
 }
 
 export type Ajustes = Record<number, Ajuste>;
@@ -281,7 +284,7 @@ export const tipoDaLinha = (linha: LinhaDaResposta): Categoria['tipo'] => ((linh
 
 // Guarda o que a pessoa mudou numa linha. Voltar ao que a API sugeriu tira o
 // ajuste, para o pedido levar só o que mudou de verdade.
-export function ajustar(ajustes: Ajustes, linha: LinhaDaResposta, campo: keyof Ajuste, valor: string): Ajustes {
+export function ajustar(ajustes: Ajustes, linha: LinhaDaResposta, campo: 'descricao' | 'categoria_id', valor: string): Ajustes {
   const original = campo === 'descricao' ? (linha.descricao ?? '') : (linha.categoria_id ?? '');
   const atual: Ajuste = { ...ajustes[linha.linha] };
   if (valor === original) {
@@ -296,6 +299,31 @@ export function ajustar(ajustes: Ajustes, linha: LinhaDaResposta, campo: keyof A
     novos[linha.linha] = atual;
   }
   return novos;
+}
+
+// Tira a linha da importação, ou a devolve. A descrição e a categoria
+// editadas ficam guardadas: desfazer o descarte não perde a edição.
+export function alternarDescarte(ajustes: Ajustes, linha: LinhaDaResposta): Ajustes {
+  const atual: Ajuste = { ...ajustes[linha.linha] };
+  if (atual.descartar) {
+    delete atual.descartar;
+  } else {
+    atual.descartar = true;
+  }
+  const novos = { ...ajustes };
+  if (Object.keys(atual).length === 0) {
+    delete novos[linha.linha];
+  } else {
+    novos[linha.linha] = atual;
+  }
+  return novos;
+}
+
+export const descartada = (ajustes: Ajustes, linha: LinhaDaResposta) => Boolean(ajustes[linha.linha]?.descartar);
+
+// Quantas linhas novas entram de fato (as novas menos as descartadas).
+export function novasQueEntram(linhas: readonly LinhaDaResposta[] = [], ajustes: Ajustes): number {
+  return linhas.filter((linha) => editavel(linha) && !descartada(ajustes, linha)).length;
 }
 
 // Descrição e categoria que a linha tem na tela (a editada, ou a da API).
@@ -313,7 +341,8 @@ export const TAMANHO_MAXIMO_DA_DESCRICAO = 120;
 export function validarAjustes(ajustes: Ajustes): Erros {
   const erros: Erros = {};
   for (const [linha, ajuste] of Object.entries(ajustes)) {
-    if (ajuste.descricao === undefined) {
+    // A linha descartada não entra: a descrição dela não precisa servir.
+    if (ajuste.descricao === undefined || ajuste.descartar) {
       continue;
     }
     const texto = ajuste.descricao.trim();
@@ -336,6 +365,46 @@ export function ajustesParaAApi(ajustes: Ajustes): Record<string, Ajuste> {
   );
 }
 
+// ------------------------------------------------ Sugestão de descarte
+
+// Pagamento de fatura no meio das linhas: na fatura do cartão, o pagamento da
+// fatura anterior vem como crédito ("PAG BOLETO BANCARIO", "Pagamento
+// recebido"); no extrato da conta, como saída ("PAGTO FATURA CARTAO"). Nos
+// dois casos, importar contaria o dinheiro em dobro (o pagamento é a
+// transferência da conta para o cartão, feita em "Pagar fatura"). Na conta, o
+// "pagamento de boleto" sozinho é uma conta qualquer (luz, escola) e fica.
+const PAGAMENTO_NA_FATURA = /\b(pag(amento|to)?\.?\s+(de\s+|da\s+)?(fatura|boleto)|pag\s+boleto|pagamento\s+recebido|pagamento\s+efetuado)\b/i;
+const PAGAMENTO_NA_CONTA = /\b(pag(amento|to)?\.?\s+(de\s+|da\s+|do\s+)?(fatura|cart[aã]o)|fatura\s+(do\s+)?cart[aã]o)\b/i;
+
+export const MOTIVO_DO_PAGAMENTO_NA_FATURA =
+  'Parece o pagamento da fatura anterior: ele já saiu da conta. Importado, viraria um crédito em dobro.';
+export const MOTIVO_DO_PAGAMENTO_NA_CONTA =
+  'Parece o pagamento da fatura do cartão: use "Pagar fatura" na tela do cartão para a despesa não contar em dobro.';
+
+// As linhas novas que a conferência já mostra descartadas, com o motivo. A
+// pessoa desfaz com um clique, se a sugestão errar.
+export function sugestoesDeDescarte(linhas: readonly LinhaDaResposta[] = [], { cartao }: { cartao: boolean }): Record<number, string> {
+  const sugestoes: Record<number, string> = {};
+  for (const linha of linhas) {
+    const valor = linha.valor_centavos ?? 0;
+    const descricao = linha.descricao ?? '';
+    if (!editavel(linha)) {
+      continue;
+    }
+    if (cartao && valor > 0 && PAGAMENTO_NA_FATURA.test(descricao)) {
+      sugestoes[linha.linha] = MOTIVO_DO_PAGAMENTO_NA_FATURA;
+    } else if (!cartao && valor < 0 && PAGAMENTO_NA_CONTA.test(descricao)) {
+      sugestoes[linha.linha] = MOTIVO_DO_PAGAMENTO_NA_CONTA;
+    }
+  }
+  return sugestoes;
+}
+
+// Os ajustes iniciais da conferência: as linhas sugeridas já descartadas.
+export function ajustesDasSugestoes(sugestoes: Readonly<Record<number, string>>): Ajustes {
+  return Object.fromEntries(Object.keys(sugestoes).map((linha) => [Number(linha), { descartar: true }]));
+}
+
 // ------------------------------------------------ Resumo
 
 const contar = (quantidade: number, singular: string, plural: string) => `${quantidade} ${quantidade === 1 ? singular : plural}`;
@@ -346,6 +415,7 @@ interface RespostaDaImportacao {
   importadas: number;
   ja_importadas: number;
   invalidas: number;
+  descartadas?: number;
   parcelas_futuras?: number;
   linhas?: LinhaDaResposta[];
 }
@@ -358,6 +428,7 @@ export function resumoDaImportacao({
   importadas,
   ja_importadas: jaImportadas,
   invalidas,
+  descartadas,
   parcelas_futuras: futuras,
 }: RespostaDaImportacao): string {
   const partes = [
@@ -370,6 +441,9 @@ export function resumoDaImportacao({
   }
   if (invalidas) {
     partes.push(contar(invalidas, 'linha com erro', 'linhas com erro'));
+  }
+  if (descartadas) {
+    partes.push(contar(descartadas, 'descartada', 'descartadas'));
   }
   if (futuras) {
     partes.push(contar(futuras, 'parcela futura', 'parcelas futuras'));
