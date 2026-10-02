@@ -197,8 +197,9 @@ export default function Lancamentos() {
     setModalOcupado(false);
   }
 
+  // O modal continua aberto para o próximo lançamento; o extrato atualiza por
+  // trás (e vai para o mês do lançamento, se ele for de outro mês).
   function aposLancar(criado) {
-    fecharModal();
     if (!estaNoMes(criado.data, mes)) {
       setMes(mesDe(criado.data));
     }

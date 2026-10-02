@@ -391,7 +391,7 @@ export default function Cartao() {
           pessoasConhecidas={pessoas}
           familia={familia}
           divisaoPorPessoa={familiaLiberada(planoDoCliente(espacos))}
-          aoComprar={aposMudar}
+          aoComprar={recarregar}
           aoCancelar={fecharModal}
           aoMudarOcupado={setModalOcupado}
         />

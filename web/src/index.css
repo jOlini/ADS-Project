@@ -985,6 +985,20 @@ form {
   white-space: nowrap;
 }
 
+/* Resumo dos lançamentos feitos com o modal aberto (lançar em sequência). A
+   linha existe sempre, vazia até o primeiro: aparecer não empurra os botões. */
+.resumo-da-sequencia {
+  min-height: var(--altura-da-mensagem);
+  margin: 0;
+  overflow: hidden;
+  color: var(--marca-forte);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-medio);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .acoes-do-formulario {
   display: flex;
   gap: var(--espaco-4);
