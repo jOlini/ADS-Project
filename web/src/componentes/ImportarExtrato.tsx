@@ -7,8 +7,12 @@ import MapeamentoDeColunasJs from './MapeamentoDeColunas';
 import Seletor from './Seletor';
 import { semTipos } from './semTipos';
 import { useToast } from './toast/useToast';
-import { lerArquivoDoExtrato } from '../regras/arquivoDoExtrato';
+import { lerArquivoDoExtrato, pareceUmPdf } from '../regras/arquivoDoExtrato';
 import { primeiroCampoComErro } from '../regras/cadastro';
+import { hojeIso } from '../regras/datas';
+import { formatarBRL } from '../regras/dinheiro';
+import { escolherLeitor, LEITOR_AUTOMATICO, opcoesDeLeitor } from '../regras/extratos/leitores';
+import { ErroDoLeitor, type ArquivoLido, type ExtratoPreparado, type LeitorDeExtrato } from '../regras/extratos/tipos';
 import {
   ajustesParaAApi,
   cabecalhoProvavel,
@@ -37,6 +41,7 @@ import {
   type Papel,
   type Papeis,
 } from '../regras/importacao';
+import { lerDocumentoPdf } from '../servicos/leitorDePdf';
 import { estruturaDoExtrato, importarExtrato } from '../servicos/livroCaixa';
 
 const AvisoComAtalho = semTipos(AvisoComAtalhoJs);
@@ -89,12 +94,15 @@ interface Props {
   aoMudarOcupado?: (ocupado: boolean) => void;
 }
 
-// Importação do extrato do banco (CSV), dentro do modal "Importar CSV", em
-// três etapas:
+// Importação do extrato ou da fatura do banco (CSV ou PDF), dentro do modal
+// "Importar extrato", em três etapas:
 // 1. Arquivo, conta e categorias padrão. O arquivo é conferido aqui (tipo,
-//    tamanho, começo dos bytes: planilha ou PDF renomeado não sai do
-//    navegador) e a API reconhece as colunas sozinha, pelo cabeçalho de
-//    vários bancos ou pelo conteúdo das células.
+//    tamanho, começo dos bytes: planilha renomeada não sai do navegador) e um
+//    leitor (regras/extratos, padrão Strategy) o prepara: o do PDF de cada
+//    banco tira as linhas de lançamento no próprio navegador (o PDF não sai
+//    dele); o do CSV o manda inteiro, e a API reconhece as colunas sozinha,
+//    pelo cabeçalho de vários bancos ou pelo conteúdo das células. O leitor é
+//    escolhido sozinho pelo arquivo, e a pessoa pode trocá-lo.
 // 2. Colunas: só aparece quando a API não reconheceu o formato, quando ficou
 //    dúvida (duas colunas "Valor", célula que não confere) ou quando a pessoa
 //    pede para ajustar. Vem preenchida, com a dúvida marcada.
@@ -130,6 +138,9 @@ export default function ImportarExtrato({
     categoria_receita_id: categoriaSugerida(categorias, 'RECEITA'),
   }));
   const [arquivo, setArquivo] = useState<File | null>(null);
+  // O leitor pedido (o automático, por padrão) e o que leu o arquivo.
+  const [leitor, setLeitor] = useState(LEITOR_AUTOMATICO);
+  const [lido, setLido] = useState<{ leitor: LeitorDeExtrato; extrato: ExtratoPreparado } | null>(null);
   const [csv, setCsv] = useState('');
   const [linhas, setLinhas] = useState<LinhaDoArquivo[]>([]);
   const [colunas, setColunas] = useState<{ delimitador: string; cabecalho: number; papeis: Papeis; inverterSinal: boolean }>({
@@ -163,7 +174,32 @@ export default function ImportarExtrato({
 
   function escolherArquivo(evento: ChangeEvent<HTMLInputElement>) {
     setArquivo(evento.target.files?.[0] ?? null);
+    // Outro arquivo, talvez de outro formato: o leitor volta ao automático.
+    setLeitor(LEITOR_AUTOMATICO);
     setErros((atuais) => ({ ...atuais, arquivo: '' }));
+  }
+
+  // O arquivo lido e preparado pelo leitor (o escolhido ou o automático), ou a
+  // mensagem para o campo do arquivo.
+  async function prepararArquivo(escolhido: File): Promise<{ leitor: LeitorDeExtrato; extrato: ExtratoPreparado } | string> {
+    const conteudo = await lerArquivoDoExtrato(escolhido);
+    if (conteudo.formato === null) {
+      return conteudo.erro;
+    }
+    try {
+      const arquivoLido: ArquivoLido =
+        conteudo.formato === 'pdf' ? { formato: 'pdf', documento: await lerDocumentoPdf(conteudo.bytes) } : conteudo;
+      const doArquivo = escolherLeitor(arquivoLido, leitor);
+      if (!doArquivo) {
+        return 'Nenhum leitor reconhece este arquivo. Exporte o extrato em CSV pelo app do banco.';
+      }
+      return { leitor: doArquivo, extrato: doArquivo.preparar(arquivoLido, { cartao: Boolean(contaFixa), hoje: hojeIso() }) };
+    } catch (erro) {
+      if (erro instanceof ErroDoLeitor) {
+        return erro.message;
+      }
+      throw erro;
+    }
   }
 
   // Colunas vindas da API: as reconhecidas, ou um palpite para a pessoa ajustar.
@@ -229,14 +265,26 @@ export default function ImportarExtrato({
     let estrutura: Estrutura;
     let texto: string;
     try {
-      const lido = await lerArquivoDoExtrato(arquivo);
-      if (lido.erro !== undefined) {
+      const preparado = await prepararArquivo(arquivo);
+      if (typeof preparado === 'string') {
         setOcupado(null);
-        setErros({ arquivo: lido.erro });
+        setLido(null);
+        setErros({ arquivo: preparado });
         elementos.arquivo?.focus();
         return;
       }
-      texto = lido.texto;
+      setLido(preparado);
+      texto = preparado.extrato.csv;
+      // O leitor já sabe as colunas (o PDF vira um CSV simples): direto para
+      // a conferência, sem a etapa das colunas.
+      if (preparado.extrato.mapeamento) {
+        setCsv(texto);
+        setLinhas([]);
+        setDuvidas([]);
+        setOrigem('LEITOR');
+        await conferir({ csv: texto, mapeamento: preparado.extrato.mapeamento }, 'arquivo');
+        return;
+      }
       estrutura = await estruturaDoExtrato(espacoId, { csv: texto });
     } catch (erro) {
       setOcupado(null);
@@ -309,6 +357,8 @@ export default function ImportarExtrato({
   const reconhecidas = categoriasReconhecidas(previa?.resposta.linhas);
   const textoDaDuvida = textoDasDuvidas(duvidas);
   const descricaoDoArquivo = [`${idDoArquivo}-dica`, erros.arquivo && `${idDoArquivo}-erro`].filter(Boolean).join(' ');
+  const formatoDoArquivo = arquivo ? (pareceUmPdf(arquivo) ? 'pdf' : 'csv') : null;
+  const pelaLeitura = origem === 'LEITOR' && lido;
 
   return (
     <div className="importacao">
@@ -327,14 +377,14 @@ export default function ImportarExtrato({
         <form onSubmit={continuar} noValidate>
           <div className="campo">
             <span className="rotulo-do-campo" id={`${idDoArquivo}-rotulo`}>
-              {contaFixa ? 'Arquivo CSV da fatura' : 'Arquivo CSV do banco'}
+              {contaFixa ? 'Arquivo da fatura (CSV ou PDF)' : 'Arquivo do banco (CSV ou PDF)'}
             </span>
             <label className={`zona-de-arquivo${erros.arquivo ? ' com-erro' : ''}`}>
               <input
                 id={idDoArquivo}
                 type="file"
                 name="arquivo"
-                accept=".csv,.txt,text/csv,text/plain"
+                accept=".csv,.txt,.pdf,text/csv,text/plain,application/pdf"
                 className="apenas-leitor"
                 aria-labelledby={`${idDoArquivo}-rotulo`}
                 aria-describedby={descricaoDoArquivo}
@@ -345,12 +395,17 @@ export default function ImportarExtrato({
               <span className="texto-da-zona">
                 <b>{arquivo ? arquivo.name : 'Escolher arquivo'}</b>
                 <small>
-                  {arquivo ? 'Clique para trocar' : contaFixa ? 'A fatura exportada pelo banco, em .csv' : 'O extrato exportado pelo banco, em .csv'}
+                  {arquivo
+                    ? 'Clique para trocar'
+                    : contaFixa
+                      ? 'A fatura do banco, em .csv ou .pdf'
+                      : 'O extrato do banco, em .csv ou .pdf'}
                 </small>
               </span>
             </label>
             <span id={`${idDoArquivo}-dica`} className="dica-do-campo">
-              As colunas e as categorias são reconhecidas sozinhas; você confere tudo antes de importar.
+              O banco, as colunas e as categorias são reconhecidos sozinhos; você confere tudo antes de importar. O PDF é
+              lido aqui no navegador: só os lançamentos vão para o servidor.
             </span>
             <span id={`${idDoArquivo}-erro`} className="erro-do-campo">
               {erros.arquivo && (
@@ -361,6 +416,13 @@ export default function ImportarExtrato({
               )}
             </span>
           </div>
+
+          {arquivo && (
+            <Campo elemento={Seletor} rotulo="Leitor do arquivo" name="leitor" value={leitor}
+              opcoes={opcoesDeLeitor(formatoDoArquivo)}
+              dica="Se o banco não for reconhecido certo, escolha o leitor aqui."
+              onChange={(evento: { target: { value: string } }) => setLeitor(evento.target.value)} />
+          )}
 
           {contaFixa ? (
             <p className="dica-do-campo">
@@ -457,13 +519,36 @@ export default function ImportarExtrato({
           <div className="formato-reconhecido">
             <span>
               <small>{ROTULO_DA_ORIGEM_DAS_COLUNAS[origem ?? 'PESSOA']}</small>
-              {descreverMapeamento(previa.mapeamento, nomesDasColunas(linhas, previa.mapeamento.cabecalho))}
+              {pelaLeitura ? lido.leitor.nome : descreverMapeamento(previa.mapeamento, nomesDasColunas(linhas, previa.mapeamento.cabecalho))}
             </span>
-            <button type="button" className="discreto-botao" onClick={() => setEtapa('colunas')} disabled={Boolean(ocupado)}>
-              <Icone nome="colunas" tamanho={16} />
-              Ajustar colunas
-            </button>
+            {!pelaLeitura && (
+              <button type="button" className="discreto-botao" onClick={() => setEtapa('colunas')} disabled={Boolean(ocupado)}>
+                <Icone nome="colunas" tamanho={16} />
+                Ajustar colunas
+              </button>
+            )}
           </div>
+          {lido && (lido.extrato.conferencias.length > 0 || lido.extrato.avisos.length > 0) && (
+            <ul className="conferencia-do-documento" aria-label="Conferência com o documento">
+              {lido.extrato.conferencias.map((item) => {
+                const bate = item.esperadoCentavos === item.lidoCentavos;
+                return (
+                  <li key={item.rotulo} className={bate ? 'bate' : 'nao-bate'}>
+                    <Icone nome={bate ? 'certo' : 'alerta'} tamanho={16} />
+                    {bate
+                      ? `${item.rotulo}: ${formatarBRL(item.lidoCentavos)}, igual ao documento.`
+                      : `${item.rotulo}: lidos ${formatarBRL(item.lidoCentavos)}, o documento diz ${formatarBRL(item.esperadoCentavos)}. Confira se falta alguma linha.`}
+                  </li>
+                );
+              })}
+              {lido.extrato.avisos.map((aviso) => (
+                <li key={aviso}>
+                  <Icone nome="info" tamanho={16} />
+                  {aviso}
+                </li>
+              ))}
+            </ul>
+          )}
           <ConferenciaDaImportacao
             linhas={previa.resposta.linhas}
             categorias={categorias}

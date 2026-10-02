@@ -62,7 +62,7 @@ async function carregarCartao(espacoId, cartaoId) {
 // Cartão de crédito: o painel (limite total, limite disponível, fatura
 // atual, parcelamentos futuros e o que há a pagar), a fatura aberta na tela,
 // com os itens dela, e a lista de faturas ao lado. Compras no crédito,
-// parceladas ou não, e a fatura importada em CSV entram aqui, nunca no extrato
+// parceladas ou não, e a fatura importada (CSV ou PDF) entram aqui, nunca no extrato
 // das contas; o pagamento da fatura sai de uma conta e libera o limite. Os
 // itens da fatura e as faturas inteiras têm seleção em lote para remover.
 export default function Cartao() {

@@ -81,7 +81,7 @@ async function carregarMes(espacoId, mes) {
 // própria. Só dinheiro à vista: PIX, débito, dinheiro, transferências e o
 // pagamento de fatura (que sai de uma conta). As compras no crédito ficam na
 // fatura do cartão, em Contas & Cartões, e não aparecem aqui como saída.
-// No topo, "+ Novo lançamento" e "Importar CSV" (os dois abrem um modal);
+// No topo, "+ Novo lançamento" e "Importar extrato" (os dois abrem um modal);
 // logo abaixo, o mês, a busca e o filtro (com o Modo Família, também "de
 // quem"), e a seleção em lote para remover.
 // Cada linha tem o menu com Editar, Estornar (lançamento inverso, o
@@ -243,7 +243,7 @@ export default function Lancamentos() {
         <div className="acoes-do-extrato" role="toolbar" aria-label="Ações do extrato">
           <button type="button" className="secundario" onClick={() => setModal('importar')}>
             <Icone nome="importar" tamanho={18} />
-            Importar CSV
+            Importar extrato
           </button>
           <button type="button" onClick={() => setModal('novo')}>
             <Icone nome="mais" tamanho={18} />
@@ -319,7 +319,7 @@ export default function Lancamentos() {
                   ? 'Troque a busca ou os filtros para ver os outros lançamentos do mês.'
                   : contasAtivas.length === 0
                     ? 'Os lançamentos aparecem aqui depois que você cadastrar uma conta.'
-                    : 'Use "Novo lançamento" para registrar o que entrou ou saiu, ou traga o extrato do banco com "Importar CSV".'}
+                    : 'Use "Novo lançamento" para registrar o que entrou ou saiu, ou traga o extrato do banco (CSV ou PDF) com "Importar extrato".'}
               </p>
               {!filtrado && contasAtivas.length === 0 && (
                 <Link className="botao" to="/contas?cadastrar=conta">
@@ -348,7 +348,7 @@ export default function Lancamentos() {
         />
       </Modal>
 
-      <Modal aberta={modal === 'importar'} titulo="Importar CSV" largura="extra" aoFechar={fecharModal} ocupado={modalOcupado}
+      <Modal aberta={modal === 'importar'} titulo="Importar extrato" largura="extra" aoFechar={fecharModal} ocupado={modalOcupado}
         descricao="Traga o extrato exportado pelo banco. Nada é gravado antes de você conferir.">
         {contasAtivas.length === 0 ? (
           <AvisoComAtalho

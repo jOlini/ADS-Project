@@ -203,6 +203,8 @@ export const ROTULO_DA_ORIGEM_DAS_COLUNAS: Record<string, string> = {
   CABECALHO: 'Reconhecidas pelo cabeçalho',
   CONTEUDO: 'Reconhecidas pelo conteúdo',
   PESSOA: 'Indicadas por você',
+  // O leitor do banco (regras/extratos) já tirou data, descrição e valor.
+  LEITOR: 'Lido por',
 };
 
 // "Confira a data e o valor": as informações em dúvida, na ordem da tela.
