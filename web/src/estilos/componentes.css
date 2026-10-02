@@ -1184,3 +1184,132 @@ button.botao-do-menu[aria-expanded='true'] > .icone:last-child {
 button.botao-conta-gotas {
   min-height: var(--altura-botao-compacto);
 }
+
+/* ------------------------------------------------------ Convite de plano */
+
+/* O convite para conhecer um plano (componentes/convite): o selo do plano
+   que resolve, o texto sem tom de erro, o que muda e a ação para a seção
+   Planos da landing. Mesmas cores dos selos da landing: verde vivo para o
+   Família, esmeralda e dourado para o Empresarial. */
+.convite-do-plano {
+  display: grid;
+  gap: var(--espaco-8);
+}
+
+.convite-do-plano > p {
+  margin: 0;
+  color: var(--suave);
+  text-wrap: pretty;
+}
+
+p.convite-do-plano-selo {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-3) var(--espaco-4);
+  align-items: center;
+  justify-self: start;
+  padding: var(--espaco-3) var(--espaco-7);
+  border: 1px solid transparent;
+  border-radius: var(--raio-pilula);
+  color: var(--of-tinta-cta);
+  background: linear-gradient(115deg, var(--of-verde-vivo), var(--of-lima));
+  font-weight: var(--peso-forte);
+}
+
+p.convite-do-plano-selo.empresarial {
+  border-color: color-mix(in srgb, var(--of-fruto) 60%, transparent);
+  color: #ecf5f0;
+  background: var(--of-esmeralda-funda);
+}
+
+.convite-do-plano-selo small {
+  font-size: var(--fonte-caps);
+  font-weight: var(--peso-semi);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.convite-do-plano-ganhos {
+  display: grid;
+  gap: var(--espaco-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.convite-do-plano-ganhos li {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: center;
+}
+
+.convite-do-plano-ganhos .icone {
+  flex: none;
+  color: var(--marca);
+}
+
+/* A guarda das rotas da empresa: o convite ocupa o lugar da página. */
+.convite-na-rota {
+  display: grid;
+  gap: var(--espaco-8);
+  max-width: 640px;
+}
+
+.convite-na-rota h1 {
+  font-size: var(--fonte-titulo);
+  text-wrap: balance;
+}
+
+/* /empresarial sem empresa: o cadastro da primeira, na própria página. */
+.pagina-empresarial {
+  display: grid;
+  gap: var(--espaco-8);
+  max-width: 640px;
+}
+
+/* O uso do Plano Free ("Plano Free · 37 de 100 lançamentos este mês"), com a
+   barra: discreto até 80%, âmbar perto do teto, vermelho no teto. */
+.medidor-do-plano {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-3) var(--espaco-5);
+  align-items: center;
+  margin: 0;
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-variant-numeric: tabular-nums;
+}
+
+.medidor-do-plano-barra {
+  width: 72px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--raio-pilula);
+  background: var(--lateral);
+}
+
+.medidor-do-plano-barra i {
+  display: block;
+  width: var(--p);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--marca);
+}
+
+.medidor-do-plano.perto .medidor-do-plano-barra i {
+  background: var(--aviso);
+}
+
+.medidor-do-plano.atingido {
+  color: var(--erro);
+}
+
+.medidor-do-plano.atingido .medidor-do-plano-barra i {
+  background: var(--erro);
+}
+
+.medidor-do-plano a {
+  color: var(--marca-forte);
+  font-weight: var(--peso-semi);
+}

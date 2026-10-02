@@ -1,6 +1,6 @@
 // Testes do saldo por conta da Visão geral: disponível x investido.
 import { describe, expect, it } from 'vitest';
-import { parteInvestida, separarSaldos, sobreOTipo, textoDaFatia, type ContaComSaldo } from './saldos';
+import { liquidezDisponivel, parteInvestida, separarSaldos, sobreOTipo, textoDaFatia, type ContaComSaldo } from './saldos';
 
 const contas: ContaComSaldo[] = [
   { id: 'c', nome: 'Conta corrente', tipo: 'CORRENTE', saldo: 420000 },
@@ -9,6 +9,22 @@ const contas: ContaComSaldo[] = [
   { id: 't', nome: 'Tesouro Selic', tipo: 'INVESTIMENTO', saldo: 2350000 },
   { id: 'x', nome: 'Cartão Verde', tipo: 'CARTAO_CREDITO', saldo: -28469 },
 ];
+
+describe('liquidezDisponivel', () => {
+  it('soma corrente, poupança e carteira, sem o investido e sem o cartão', () => {
+    expect(liquidezDisponivel(contas)).toBe(420000 + 1500000 + 15000);
+  });
+
+  it('conta no negativo (cheque especial) desconta, e sem contas é zero', () => {
+    expect(liquidezDisponivel([{ tipo: 'CORRENTE', saldo: -5000 }, { tipo: 'CARTEIRA', saldo: 2000 }])).toBe(-3000);
+    expect(liquidezDisponivel([])).toBe(0);
+  });
+
+  it('não é o card de receitas: o que entrou no mês não muda a liquidez de hoje', () => {
+    // Só o saldo das contas importa; o investido (uma posição) fica fora.
+    expect(liquidezDisponivel([{ tipo: 'INVESTIMENTO', saldo: 999_999 }])).toBe(0);
+  });
+});
 
 describe('separarSaldos', () => {
   it('separa o disponível (corrente, carteira, poupança) do investido, sem o cartão', () => {

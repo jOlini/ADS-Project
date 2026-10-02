@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import AvisoComAtalho from './AvisoComAtalho';
 import Campo from './Campo';
 import CampoDeResponsavel from './CampoDeResponsavel';
+import { useConviteDoPlano } from './convite/useConviteDoPlano';
 import DivididoEntre from './DivididoEntre';
 import DivisaoEntrePessoas from './DivisaoEntrePessoas';
 import Seletor from './Seletor';
@@ -27,6 +28,8 @@ const formularioVazio = (contas) => ({
   // Vazio = quem lançou.
   responsavel: '',
   divisao: [],
+  // "Receber até" do racha numa despesa (vazio = sem prazo).
+  prazo_da_divisao: '',
   // A divisão do Free: só o número de pessoas (regras/divisao.js).
   dividido_entre: '',
   // O meio mais comum já vem marcado; a pessoa troca com um clique.
@@ -62,6 +65,7 @@ export default function FormularioDeLancamento({
   aoMudarOcupado,
 }) {
   const toast = useToast();
+  const convite = useConviteDoPlano();
   const formularioRef = useRef(null);
   const [formulario, setFormulario] = useState(() => formularioVazio(contas));
   const [erros, setErros] = useState({});
@@ -132,6 +136,11 @@ export default function FormularioDeLancamento({
       // O próximo gasto começa pela descrição, sem tocar no mouse.
       requestAnimationFrame(() => formularioRef.current?.elements.descricao?.focus());
     } catch (erro) {
+      // Teto do Free: no lugar do erro, o convite do plano (o modal fecha).
+      if (convite.abrirSeForLimite(erro)) {
+        aoCancelar();
+        return;
+      }
       const campos = errosDaApi(erro.campos);
       setErros(campos);
       toast.erro(erro.message, { titulo: 'Lançamento não registrado' });
@@ -209,6 +218,10 @@ export default function FormularioDeLancamento({
             erros={erros}
             pessoasConhecidas={pessoasConhecidas}
             aoMudar={(partes, campo) => mudar('divisao', partes, campo)}
+            // Só a despesa dividida é um valor a receber, com prazo.
+            data={formulario.data}
+            prazo={formulario.prazo_da_divisao}
+            aoMudarPrazo={formulario.tipo === 'DESPESA' ? (prazo) => mudar('prazo_da_divisao', prazo) : undefined}
           />
         ) : (
           <DivididoEntre valor={formulario.dividido_entre} total={total || null} erro={erros.dividido_entre}

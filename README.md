@@ -66,9 +66,11 @@ abre um menu. Detalhes em [Como executar](#como-executar).
 - **Clareza em vez de planilha.** A Visão geral começa pelo **saldo livre**, o que decide o que e quando gastar:
   o saldo de hoje mais o que ainda entra, menos o que ainda sai até o fim do mês e sem o dinheiro aplicado. Uma
   frase simples diz o que fazer (verde, "seguro para gastar"; vermelho, quanto falta e o que adiar), e embaixo vêm
-  o **patrimônio total**, o **investido** e o **fechamento previsto** do mês. Depois, receitas e despesas do mês
-  comparadas ao anterior, evolução do saldo e gasto por categoria. Cada card tem o "i" que explica o número (a
-  conta do saldo livre abre ali), e a altura fixa: nada pula na tela quando os números chegam.
+  o **patrimônio total**, o **investido** e o **fechamento previsto** do mês. No vermelho, o número muda de nome e
+  vira **Déficit de caixa**: a falta ganha nome. Depois, o **disponível** em contas e carteiras (sem o investido),
+  as despesas do mês comparadas ao anterior (só a sua parte: o racha fica a receber), evolução do saldo e gasto
+  por categoria. Cada card tem o "i" que explica o número (a conta do saldo livre abre ali), e a altura fixa: nada
+  pula na tela quando os números chegam.
 - **Do seu jeito, sem burocracia.** Contas, carteira de cartões de crédito com fatura e parcelas, categorias, a
   pessoa responsável por cada gasto, racha entre pessoas, edição e remoção em lote e importação do extrato do banco em CSV (as colunas de vários bancos
   reconhecidas sozinhas, a categoria sugerida pela descrição e pelo histórico, editável na conferência, sem
@@ -76,9 +78,11 @@ abre um menu. Detalhes em [Como executar](#como-executar).
 - **Metas que dão vontade de cumprir.** Cada meta é uma árvore: cada aporte rega, ela brota, cresce e, completa,
   dá maçãs. O plano mensal diz quanto guardar para chegar lá no prazo.
 - **A casa e a empresa no mesmo app.** No espaço pessoal, o Modo Família separa o gasto de cada pessoa da casa
-  (uma assinatura só, a do titular, cobre a família). Três planos: **Free** (o essencial; o racha é só a anotação
-  de em quantas pessoas foi dividido), **Família** (as pessoas da casa, o filtro "de quem" e o racha com nome e
-  valor) e **Empresarial** (tudo do Família, mais as empresas); a API confere o plano em cada recurso. No espaço
+  (uma assinatura só, a do titular, cobre a família). Três planos: **Free** (o essencial, até 5 contas e cartões e
+  100 lançamentos à mão por mês; o racha é só a anotação de em quantas pessoas foi dividido), **Família** (as
+  pessoas da casa, o filtro "de quem" e o racha com nome e valor, que vira valor a receber, com prazo e aviso de
+  inadimplência) e **Empresarial** (tudo do Família, mais as empresas); a API confere o plano em cada recurso, e a
+  tela mostra o convite do plano no teto do Free e nas rotas da empresa. No espaço
   empresarial, cada empresa tem custos fixos e
   variáveis com a margem de lucro, o quadro societário com aportes e dividendos, a agenda dos impostos com a
   provisão sobre o faturamento e a folha lançada no fluxo de caixa com um clique.
@@ -464,17 +468,23 @@ sobem juntas, cada uma com a própria forma (duas moedas ou cédulas para cada f
 página fica presa enquanto a rolagem abre a tampa e só volta a descer com ela aberta; aberta, a tela é o app de
 exemplo e responde ao mouse (telas, gráfico, categorias, contas e a meta que cresce a cada rega). Pedindo menos
 movimento ao sistema, tudo fica parado e o notebook já aparece aberto. Os planos sobem de nível da esquerda para
-a direita (Free, Família e o Empresarial em destaque), em cartões da mesma altura, cada um com a lista curta do
+a direita (Free, Família com o selo "Mais popular" e o Empresarial em destaque, com o selo "Mais completo"), em cartões da mesma altura, cada um com a lista curta do
 que inclui (o Família cobre você e mais 4 convidados, até 5 pessoas), e o botão "Comparar todos os planos" abre e recolhe a tabela
-comparativa (começa aberta; folhas sobem da linha sob o mouse). A área logada tem a Visão geral (o saldo
-livre em destaque, com o patrimônio total, o investido, o fechamento e quanto do mês já tem destino, números do mês,
-evolução do saldo, despesas por categoria, últimas transações, metas, o saldo de cada conta em cards, o total das
-faturas com as miniaturas dos cartões e os dados do cadastro), a aba Metas (as metas ficam no navegador até a API de metas e
+comparativa (começa aberta; folhas sobem da linha sob o mouse). A área logada tem a Visão geral (o banner do
+"Olá" com moldura e moedas e cédulas flutuando; o saldo livre em destaque, que vira "Déficit de caixa" no vermelho,
+com o patrimônio total, o investido, o fechamento e quanto do mês já tem destino; o disponível em conta, as
+despesas do mês, evolução do saldo, despesas por categoria (com a divisa de 2 px entre as fatias), os gastos por
+pessoa do racha (a receber, recebido e assumido, com "Recebi", "Não vai pagar" e "Voltar a cobrar"), últimas
+transações, metas, o saldo de cada conta em cards, o total das faturas com as miniaturas dos cartões, que sobem
+ao passar o mouse, e os dados do cadastro), a aba Metas (as metas ficam no navegador até a API de metas e
 saem dele no logout; a meta completa abre a colheita) e, com a API, Lançamentos, Contas & Cartões, Categorias e
 Relatórios. No topo, **Pessoal** e **Empresarial** trocam o espaço na hora. No pessoal, a chave **Família** liga o
 Modo Família: a página Pessoas da casa cadastra quem mora com você (nome e cor), e Visão geral, Lançamentos e
 Relatórios ganham o filtro "de quem" e o gasto por pessoa. No Plano Free, a chave aparece com cadeado e a página
-explica o Plano Família; a landing compara os três planos numa tabela, com o "i" em cada recurso. No empresarial, o seletor ao lado escolhe (ou
+explica o Plano Família; a landing compara os três planos numa tabela, com o "i" em cada recurso. Fora do Plano
+Empresarial, a aba **Empresarial** tem cadeado e abre o convite do plano, e `/empresarial` ou `/empresa/...`
+digitados direto mostram o convite no lugar da página. No Free, Lançamentos e Contas & Cartões mostram o uso do
+plano ("37 de 100 lançamentos este mês") e, no teto, o convite abre no lugar do formulário. No empresarial, o seletor ao lado escolhe (ou
 cadastra, com CNPJ e regime) a empresa, e o menu ganha a Gestão: Fluxo de caixa, DRE, Custos, Sociedade &
 aportes, Impostos (com os alertas de vencimento no sino) e Pessoal (RH). A barra lateral recolhe para uma coluna
 de ícones (o nome aparece ao passar o mouse). O botão de lua ou sol no topo troca o tema. Toda tela fora da Visão
@@ -547,6 +557,7 @@ poucos.
 | API | `api/tests/test_monitoramento.py` | Alertas no Discord: canal certo, repetição a cada 15 minutos, sem menção, falha do Discord que não afeta a API, força bruta e rajada de `401` sem o e-mail nem o token, `500` sem a mensagem da exceção, e-mail que não saiu, cota de e-mails, resumo por rota e webhook fora do Discord recusado sem aparecer no erro |
 | API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, edição, rotas e isolamento entre clientes, importação de CSV de vários bancos (colunas pelo cabeçalho e pelo conteúdo, arquivo que não é CSV, teto de importações), categoria automática (arquivo, histórico, regras) e edição na conferência, racha, exclusão (uma e em lote), cartão de crédito (fatura, parcelas, pagamento, parcelas geradas da fatura importada), relatórios, os dois espaços (empresa com CNPJ e regime, livro-caixa separado, excluir só a sem movimento, limite por pessoa, família que não é mais um tipo), o Modo Família (pessoas, limite da assinatura, nome novo em cascata, relatórios por pessoa), os planos (só o administrador troca; no Free, `403` na família, no filtro por pessoa e na divisão com nome, e a anotação do número de pessoas) e a gestão da empresa (classes de custo, sócios e movimentos, tributos pagos uma vez por competência, folha sem duplicar) |
 | API | `api/tests/test_financeiro_simulacao.py`, `test_financeiro_cores.py`, `test_financeiro_exclusao_de_categoria.py`, `test_financeiro_importacao_descarte.py` e `test_financeiro_responsavel.py` | Modo de teste dos planos (só o super admin simula, o plano gravado não muda, CORS do cabeçalho), cores da paleta ou `#rrggbb`, categoria excluída levando os lançamentos (relatório somando no destino, destino inválido), descarte na importação e o responsável só da família (403 no Free, 400 fora da família) |
+| API | `api/tests/test_financeiro_racha_a_receber.py` e `test_financeiro_limites_do_plano.py` | Racha a receber (prazo, recebido com o reembolso na conta sem virar receita, não pago, voltar a cobrar, excluir e estornar com reembolso, plano) e os limites do Free (5 contas e cartões, 100 lançamentos à mão no mês, a compra parcelada contando uma vez, o que não conta, `403` com o limite e nenhum teto no Família) |
 | API | `api/tests/test_sanitizacao.py` | Texto livre limpo na entrada (XSS, fórmula de planilha, caracteres invisíveis) e operador do MongoDB (`$ne`, `$where`) recusado pelo tipo do campo |
 | Front-end | `web/src/regras/tentativas.test.js` | Tentativas de login: contagem por e-mail, bloqueio na quinta, janela de 15 minutos, o que conta como senha errada e a chave sem o e-mail em texto |
 | Front-end | `web/src/regras/dadosLocais.test.js` e `servicos/dadosLocais.test.js` | O que o logout apaga do navegador (metas, tentativas, sessão) e o que fica (tema e dados de outros sites) |
@@ -560,6 +571,7 @@ poucos.
 | Front-end | `web/src/regras/cores.test.ts`, `faturas.test.ts`, `buscaGlobal.test.ts`, `exclusaoDeCategoria.test.ts`, `lancamentoEmSequencia.test.ts` e `servicos/planoEmTeste.test.ts` | Cor hexadecimal (formato, HSV, contraste do texto, CSS seguro), ciclo da fatura (o mesmo da API), busca do topo por aba e o destino de cada resultado, destino dos lançamentos da categoria excluída, lançar em sequência e o plano em teste guardado na aba |
 | Front-end | `web/src/regras/*.test.js` e `responsavel.test.ts` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, responsável e racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |
 | Front-end | `web/src/regras/espacos.test.ts`, `familia.test.ts`, `planos.test.ts`, `servicos/espacoAtivo.test.ts` e `servicos/lateral.test.ts` | Planos (o plano de cada espaço, o que libera a família, o limite de 4 convidados, a lista curta de cada cartão e a tabela da landing com dica e oferta nos três); espaços: só pessoal e empresarial, qual livro abre em cada um, a última empresa usada, o CNPJ (numérico e alfanumérico), o formulário da empresa, a seção depois da troca e as metas de cada espaço; o Modo Família (de quem é cada lançamento, o filtro, o gasto por pessoa, o cadastro); a barra lateral recolhida (fica depois do logout, como o tema) |
+| Front-end | `web/src/regras/aReceber.test.ts` e `acessoPorPlano.test.ts` | Racha a receber (o estado de cada parte, a inadimplência pelo prazo ou pela baixa, o resumo por pessoa, os totais e só a sua parte nas despesas) e o acesso por plano (a guarda das rotas do espaço empresarial, o teto do Free, o 403 com o limite e o convite de cada motivo) |
 | Front-end | `web/src/servicos/livroCaixa.test.js` e `enderecoDaApi.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar, token que não renova e endereço pela rede local |
 | Front-end | `web/src/olifine/regras/*.test.js` e `*.test.ts` | OliFine: tendência, séries do gráfico de saldo, Visão geral, saldo livre do mês (datas futuras, faturas, falsa folga e a frase de cada estado: positivo, neutro e negativo), metas, a árvore que cresce, o simulador de orçamento, o pomar 3D da landing (câmera, ponto do chão sob o ponteiro, movimento suave, quantas folhas e onde nascem), as folhas ao vento (quantas por tela, margens, paralaxe e o tamanho de cada tipo: folha, moeda e cédula), o notebook preso na rolagem (progresso, abertura só completa antes de soltar), as folhas e moedas em 3D do app (cabeçalho, estado vazio e colheita) e a gestão da empresa (grupo de cada categoria no DRE, com o dinheiro dos sócios fora; fluxo de caixa com investimentos e sócios; classes de custo, margens e ponto de equilíbrio; apuração de dividendos; agenda, provisão e alertas dos impostos; folha e o que falta lançar) |
 | Front-end | `web/src/componentes/*.test.js` | Error Boundary, avisos (toasts) e todo nome de ícone usado nas telas com desenho na família própria |
@@ -685,7 +697,10 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
    frase de quanto falta e o que fazer. O card não muda de altura com isso. No gráfico **Evolução do saldo**, o valor aparece só com o mouse (ou o
    dedo, ou as setas) em cima. As despesas do mês somam o que saiu à vista e as faturas dos cartões que vencem no
    mês (a rosca por categoria também), e o **+ Novo** do topo escolhe entre lançamento, compra no crédito, conta e
-   cartão, cada um no seu modal. Em **Categorias**, crie, renomeie, recolora (sugestões da paleta, código
+   cartão, cada um no seu modal. No Plano Família, divida uma despesa com o nome e a parte de cada pessoa e um
+   prazo em **Receber até**: a parte de cada um sai das despesas e aparece em **Gastos por pessoa**, a receber. No
+   menu **⋯** da parte, **Recebi** pede a conta em que o dinheiro entrou e lança o reembolso nela; **Não vai pagar**
+   devolve a parte às suas despesas, e a parte que passa do prazo sem pagamento vira "assumida" sozinha. Em **Categorias**, crie, renomeie, recolora (sugestões da paleta, código
    `#rrggbb` ou conta-gotas), desative ou remova uma categoria: a que já tem lançamentos pede para qual categoria
    eles vão antes de sair. Na busca do topo, digite `mercado`: os resultados aparecem em abas (lançamentos,
    compras nos cartões, contas e categorias), e a compra no cartão abre a fatura dela.
@@ -754,7 +769,7 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de seguran�
 | `POST` | `/conta/nova-senha` | Mandar o link para criar uma senha nova (resposta igual com e sem conta) | Público | `202 Accepted` |
 | `GET` | `/saude` | Verificação de funcionamento (healthcheck) | Público | `200 OK` |
 | `GET` | `/espacos` | Listar os espaços do cliente (cria o pessoal no primeiro acesso) | Cliente com e-mail confirmado (ID token do Firebase) | `200 OK` |
-| `POST` | `/espacos` | Cadastrar uma empresa no espaço empresarial (com CNPJ e regime opcionais) | Cliente com e-mail confirmado | `201 Created` |
+| `POST` | `/espacos` | Cadastrar uma empresa no espaço empresarial (com CNPJ e regime opcionais; só no Plano Empresarial) | Cliente com e-mail confirmado | `201 Created` |
 | `PATCH`, `DELETE` | `/espacos/{id}` | Editar a empresa; excluir a empresa sem movimento (o pessoal é fixo) | Quem cadastrou a empresa | `200 OK` / `204 No Content` |
 | `GET`, `PUT` | `/espacos/{id}/familia` | Modo Família: consultar, ligar e desligar (ligar pede o Plano Família) | Dono do espaço pessoal | `200 OK` |
 | `POST`, `PUT`, `DELETE` | `/espacos/{id}/familia/pessoas` e `/pessoas/{id}` | Pessoas da família (nome e cor); incluir e editar pedem o Plano Família | Dono do espaço pessoal | `201 Created` / `200 OK` / `204 No Content` |
@@ -767,6 +782,9 @@ A documentação completa (endpoints, JWT, RBAC, OAuth 2.0, análise de seguran�
 | `PATCH`, `DELETE` | `/espacos/{id}/lancamentos/{id}` | Editar lançamento; excluir (e o estorno dele) | Membro do espaço | `200 OK` / `204 No Content` |
 | `POST` | `/espacos/{id}/lancamentos/exclusao-em-lote` | Excluir vários lançamentos de uma vez | Membro do espaço | `200 OK` |
 | `GET` | `/espacos/{id}/pessoas` | Nomes já usados em divisões | Membro do espaço | `200 OK` |
+| `GET` | `/espacos/{id}/rachas` | Despesas divididas com nome (o racha a receber) | Membro do espaço | `200 OK` |
+| `PATCH` | `/espacos/{id}/lancamentos/{id}/divisao/{indice}` | Parte do racha recebida (com o reembolso na conta), não paga ou pendente | Membro do espaço, Plano Família | `200 OK` |
+| `GET` | `/espacos/{id}/uso-do-plano` | Uso do plano: contas e lançamentos do mês, com o teto do Free | Membro do espaço | `200 OK` |
 | `POST` | `/espacos/{id}/importacoes` e `/importacoes/estrutura` | Importar extrato em CSV; mostrar o começo do arquivo e as colunas | Membro do espaço | `200 OK` |
 | `GET` | `/espacos/{id}/relatorios/mensal`, `/relatorios/categorias` e `/relatorios/cartoes` | Relatórios: receita × despesa e saldo por mês, gasto por categoria (os dois com o filtro por pessoa da família) e compromisso nos cartões | Membro do espaço | `200 OK` |
 | `PUT` | `/espacos/{id}/custos/classes` | Classe de custo de cada despesa da empresa | Membro da empresa | `200 OK` |

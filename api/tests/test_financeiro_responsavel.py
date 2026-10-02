@@ -83,7 +83,8 @@ def test_no_free_o_responsavel_e_recusado_mesmo_burlando_a_tela(bruno):
     assert resposta.json()["detail"] == servicos.RESPONSAVEL_SO_NO_FAMILIA
 
 
-def test_na_empresa_nao_ha_responsavel(api, ana):
+def test_na_empresa_nao_ha_responsavel(api, ana, assinar):
+    assinar("uid-ana", "EMPRESARIAL")
     empresa = api.post("/espacos", headers=ana.cabecalho, json={"tipo": "PJ", "nome": "Oficina"}).json()["id"]
     base = f"/espacos/{empresa}"
     conta = api.post(f"{base}/contas", headers=ana.cabecalho, json={"nome": "PJ", "tipo": "CORRENTE"}).json()["id"]

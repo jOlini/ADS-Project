@@ -34,13 +34,20 @@ describe('TIPOS_DE_ESPACO', () => {
 });
 
 describe('escolherEspacoAtivo', () => {
+  const EMPRESARIAL: Espaco = { ...PESSOAL, plano: 'EMPRESARIAL' };
+
   it('abre o último escolhido quando ele ainda existe', () => {
-    expect(escolherEspacoAtivo([PESSOAL, OFICINA, LOJA], 'e2')).toBe(LOJA);
+    expect(escolherEspacoAtivo([EMPRESARIAL, OFICINA, LOJA], 'e2')).toBe(LOJA);
   });
 
   it('sem escolha, ou com uma empresa que foi excluída, abre o pessoal', () => {
-    expect(escolherEspacoAtivo([OFICINA, PESSOAL], null)).toBe(PESSOAL);
-    expect(escolherEspacoAtivo([PESSOAL, OFICINA], 'apagada')).toBe(PESSOAL);
+    expect(escolherEspacoAtivo([OFICINA, EMPRESARIAL], null)).toBe(EMPRESARIAL);
+    expect(escolherEspacoAtivo([EMPRESARIAL, OFICINA], 'apagada')).toBe(EMPRESARIAL);
+  });
+
+  it('fora do Plano Empresarial, uma empresa guardada não abre: abre o pessoal', () => {
+    expect(escolherEspacoAtivo([PESSOAL, OFICINA, LOJA], 'e2')).toBe(PESSOAL);
+    expect(escolherEspacoAtivo([{ ...PESSOAL, plano: 'FAMILIA' }, OFICINA], 'e1')?.tipo).toBe('PF');
   });
 
   it('sem pessoal na lista, abre o primeiro; lista vazia, nenhum', () => {

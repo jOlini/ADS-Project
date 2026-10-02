@@ -2185,7 +2185,9 @@ button.lp-simulador-refazer:hover:not(:disabled) {
 }
 
 /* O selo fica sobre a borda de cima, fora do fluxo: o conteúdo dos três
-   cartões começa na mesma altura. */
+   cartões começa na mesma altura. Família e Empresarial levam o selo no
+   mesmo lugar e na mesma medida, cada um no seu tom: o equilíbrio vem da
+   forma igual, e a diferença, da cor. */
 .lp-plano-selo {
   position: absolute;
   top: 0;
@@ -2194,14 +2196,43 @@ button.lp-simulador-refazer:hover:not(:disabled) {
   gap: var(--espaco-3);
   align-items: center;
   padding: var(--espaco-2) var(--espaco-6);
+  border: 1px solid transparent;
   border-radius: var(--raio-pilula);
-  background: var(--lp-verde-na-esmeralda);
-  color: var(--of-esmeralda);
   translate: 0 -50%;
   font-size: var(--fonte-micro);
   font-weight: var(--peso-forte);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* "Mais popular" (Família): degradê vivo, do verde ao lima da folha, com a
+   tinta escura por cima (contraste de 7:1 no verde) e um brilho curto. Puxa
+   o olhar para a adesão, sem a solenidade da esmeralda. */
+.lp-plano-selo.popular {
+  background: linear-gradient(115deg, var(--of-verde-vivo), var(--of-lima));
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--of-verde) 85%, transparent);
+  color: var(--of-tinta-cta);
+}
+
+/* "Mais completo" (Empresarial): sóbrio e corporativo. Fundo da esmeralda
+   funda (cobre a borda do cartão), contorno fino dourado e a estrela no
+   dourado do fruto: hierarquia sem gritar. */
+.lp-plano-selo.completo {
+  border-color: color-mix(in srgb, var(--of-fruto) 60%, transparent);
+  background: var(--of-esmeralda-funda);
+  color: var(--lp-sobre-esmeralda);
+  letter-spacing: 0.12em;
+}
+
+.lp-plano-selo.completo .icone {
+  color: var(--of-fruto);
+}
+
+/* O Família com o selo ganha a borda um tom mais forte, para o cartão
+   acompanhar o selo (a menta continua). */
+.lp-plano.nivel-intermediario:has(.lp-plano-selo) {
+  border-color: color-mix(in srgb, var(--of-verde) 55%, var(--linha));
 }
 
 .lp-plano.destaque .lp-plano-apoio,

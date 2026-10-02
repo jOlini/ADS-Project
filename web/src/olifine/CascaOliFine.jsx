@@ -15,6 +15,7 @@ import BuscaGlobal from './componentes/BuscaGlobal';
 import ChaveDoPlanoEmTeste from './componentes/ChaveDoPlanoEmTeste';
 import Flutuante from './componentes/Flutuante';
 import AlternadorDeTema from '../componentes/AlternadorDeTema';
+import ConviteProvider from '../componentes/convite/ConviteProvider';
 import Icone from '../componentes/Icone';
 import LimiteDeErro from '../componentes/LimiteDeErro';
 import Logo from './componentes/Logo';
@@ -218,207 +219,211 @@ export default function CascaOliFine({ contexto }) {
   );
 
   return (
-    <div className={`of-app${recolhida ? ' lateral-recolhida' : ''}`}>
-      <aside className="of-lateral" id="barra-lateral">
-        <div className="of-lateral-topo">
-          <Link to="/principal" className="of-lateral-marca" aria-label="OliFine, Visão geral" {...dicaDoItem?.('Visão geral')}>
-            <Logo tamanho={30} />
-          </Link>
-          <button
-            type="button"
-            className="botao-icone of-lateral-alternar"
-            aria-pressed={recolhida}
-            aria-controls="barra-lateral"
-            aria-label="Recolher o menu"
-            title={recolhida ? undefined : 'Recolher o menu'}
-            onClick={alternarLateral}
-            {...dicaDoItem?.('Abrir o menu')}
-          >
-            <Icone nome="lateral" />
-          </button>
-        </div>
-
-        <nav className="of-menu" aria-label="Navegação principal">
-          {itens.map((item) =>
-            item.grupo ? <GrupoDoMenu key={item.grupo} item={item} /> : <ItemDoMenu key={item.rotulo} item={item} dica={dicaDoItem} />,
-          )}
-        </nav>
-
-        <div className="of-lateral-pe">
-          <p className="of-lateral-usuario" {...dicaDoItem?.(`${nome} · ${nomeDoAtivo}`)}>
-            <span className="of-avatar" aria-hidden="true">
-              {iniciais}
-            </span>
-            <span className="of-lateral-usuario-textos">
-              <b title={nome}>{nome}</b>
-              <small title={nomeDoAtivo}>{nomeDoAtivo}</small>
-            </span>
-          </p>
-          <button type="button" className="discreto-botao of-lateral-sair" onClick={sairDaConta} {...dicaDoItem?.('Sair')}>
-            <Icone nome="sair" tamanho={16} />
-            <span className="of-menu-rotulo">Sair</span>
-          </button>
-        </div>
-      </aside>
-
-      {recolhida && dica && (
-        <span className="of-dica-lateral" style={{ left: `${dica.x}px`, top: `${dica.y}px` }} aria-hidden="true">
-          {dica.texto}
-        </span>
-      )}
-
-      <div className="of-coluna">
-        <header className="of-topo">
-          <Link to="/principal" className="of-topo-marca" aria-label="OliFine, Visão geral">
-            <Logo tamanho={28} />
-          </Link>
-
-          {apiConfigurada && espaco.dados && (
-            <SeletorDeEspaco
-              espacos={espacos}
-              ativo={espaco.dados}
-              trocarEspaco={trocarEspaco}
-              trocarContexto={trocarContexto}
-              recarregarEspacos={recarregarEspacos}
-            />
-          )}
-
-          {/* Busca em tudo (lançamentos, compras nos cartões, contas e
-              categorias), com os resultados em abas logo abaixo. */}
-          {apiConfigurada && <BuscaGlobal key={espacoId ?? 'sem-espaco'} espacoId={espacoId} />}
-
-          <div className="of-topo-acoes">
-            {superAdmin && <ChaveDoPlanoEmTeste plano={planoEmTeste} aoTrocar={trocarPlanoEmTeste} />}
-            <AlternadorDeTema />
-            <Flutuante
-              rotulo={quantosAvisos > 0 ? `Avisos: ${quantosAvisos} conta(s) a pagar` : 'Avisos'}
-              className="botao-icone of-sino"
-              classeDoPainel="of-avisos"
-              botao={
-                <>
-                  <Icone nome="sino" />
-                  {quantosAvisos > 0 && <span className="of-sino-contador">{quantosAvisos}</span>}
-                </>
-              }
+    // O convite de plano (guarda da empresa, teto do Free) vale para a área
+    // logada inteira: topo e páginas abrem o mesmo modal.
+    <ConviteProvider>
+      <div className={`of-app${recolhida ? ' lateral-recolhida' : ''}`}>
+        <aside className="of-lateral" id="barra-lateral">
+          <div className="of-lateral-topo">
+            <Link to="/principal" className="of-lateral-marca" aria-label="OliFine, Visão geral" {...dicaDoItem?.('Visão geral')}>
+              <Logo tamanho={30} />
+            </Link>
+            <button
+              type="button"
+              className="botao-icone of-lateral-alternar"
+              aria-pressed={recolhida}
+              aria-controls="barra-lateral"
+              aria-label="Recolher o menu"
+              title={recolhida ? undefined : 'Recolher o menu'}
+              onClick={alternarLateral}
+              {...dicaDoItem?.('Abrir o menu')}
             >
-              {(fechar) => (
-                <>
-                  <p className="of-flutuante-titulo">Avisos</p>
-                  {quantosAvisos > 0 ? (
-                    <ul>
-                      {guias.map((guia) => (
-                        <li key={`${guia.tributo.id}-${guia.competencia}`}>
-                          <Link to="/empresa/impostos" onClick={fechar}>
-                            <span className={`of-aviso-marca${guia.situacao === 'ATRASADA' ? ' vencida' : ''}`} aria-hidden="true">
-                              <Icone nome="guia" tamanho={16} />
-                            </span>
-                            <span>
-                              <b>
-                                {guia.tributo.nome} de {textoDaCompetencia(guia.competencia, guia.tributo.periodicidade)}
-                              </b>
-                              <small>
-                                {guia.situacao === 'ATRASADA' ? 'Venceu em' : 'Vence em'} {dataCurta(guia.vencimento)}
-                              </small>
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
-                      {avisos.map((aviso) => (
-                        <li key={aviso.id}>
-                          <Link to={`/contas/cartoes/${aviso.id}`} onClick={fechar}>
-                            <span className={`of-aviso-marca${aviso.vencida ? ' vencida' : ''}`} aria-hidden="true">
-                              <Icone nome="cartao" tamanho={16} />
-                            </span>
-                            <span>
-                              <b>{aviso.descricao}</b>
-                              <small>
-                                {aviso.vencida ? 'Venceu em' : 'Vence em'} {dataCurta(aviso.data)} · {formatarBRL(aviso.valor)}
-                              </small>
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="of-flutuante-vazio">
-                      {empresa
-                        ? 'Nada a pagar agora. Faturas de cartão fechadas e guias de imposto perto do vencimento aparecem aqui.'
-                        : 'Nenhuma fatura a pagar. Faturas de cartão fechadas aparecem aqui com o vencimento.'}
-                    </p>
-                  )}
-                </>
-              )}
-            </Flutuante>
-
-            <Flutuante rotulo={`Conta de ${nome}`} className="of-avatar-botao" classeDoPainel="of-painel-conta" botao={<span className="of-avatar">{iniciais}</span>}>
-              {conta}
-            </Flutuante>
+              <Icone nome="lateral" />
+            </button>
           </div>
-        </header>
 
-        <main className="area of-area">
-          {/* Uma tela que falha ao desenhar troca só o conteúdo pelo aviso: o
-              menu continua e abrir outra rota desenha a tela nova. */}
-          <LimiteDeErro chave={pathname}>
-            {/* Outro espaço, tela nova: nada do livro anterior (filtros,
-                listas, seleção) sobra no estado da página. A tela nova
-                chega por opacidade (movimento.css), sem piscar. */}
-            <div key={`${espacoId ?? 'sem-espaco'}:${planoEmTeste ?? 'real'}`} className="of-troca-de-espaco">
-              {voltar && (
-                // Toda tela fora da Visão geral começa pelo caminho de volta,
-                // com alvo grande (44 px de altura, a linha inteira do texto).
-                <Link to={voltar.para} className="of-voltar" aria-label={`Voltar para ${voltar.rotulo}`}>
-                  <span aria-hidden="true">←</span>
-                  Voltar
-                </Link>
-              )}
-              <Outlet context={contexto} />
-            </div>
-          </LimiteDeErro>
-        </main>
-      </div>
+          <nav className="of-menu" aria-label="Navegação principal">
+            {itens.map((item) =>
+              item.grupo ? <GrupoDoMenu key={item.grupo} item={item} /> : <ItemDoMenu key={item.rotulo} item={item} dica={dicaDoItem} />,
+            )}
+          </nav>
 
-      <nav className="of-abas" aria-label="Navegação principal">
-        <NavLink to="/principal" className="of-aba">
-          <Icone nome="resumo" />
-          <span>Início</span>
-        </NavLink>
-        {apiConfigurada && (
-          <NavLink to="/lancamentos" className="of-aba">
-            <Icone nome="lancamentos" />
-            <span>Lançamentos</span>
-          </NavLink>
+          <div className="of-lateral-pe">
+            <p className="of-lateral-usuario" {...dicaDoItem?.(`${nome} · ${nomeDoAtivo}`)}>
+              <span className="of-avatar" aria-hidden="true">
+                {iniciais}
+              </span>
+              <span className="of-lateral-usuario-textos">
+                <b title={nome}>{nome}</b>
+                <small title={nomeDoAtivo}>{nomeDoAtivo}</small>
+              </span>
+            </p>
+            <button type="button" className="discreto-botao of-lateral-sair" onClick={sairDaConta} {...dicaDoItem?.('Sair')}>
+              <Icone nome="sair" tamanho={16} />
+              <span className="of-menu-rotulo">Sair</span>
+            </button>
+          </div>
+        </aside>
+
+        {recolhida && dica && (
+          <span className="of-dica-lateral" style={{ left: `${dica.x}px`, top: `${dica.y}px` }} aria-hidden="true">
+            {dica.texto}
+          </span>
         )}
-        <NavLink to="/metas" className="of-aba">
-          <Icone nome="broto" />
-          <span>Metas</span>
-        </NavLink>
-        <Flutuante
-          rotulo="Mais opções"
-          className="of-aba"
-          classeDoPainel="of-painel-mais"
-          botao={
-            <>
-              <Icone nome="menuLinhas" />
-              <span>Mais</span>
-            </>
-          }
-        >
-          {(fechar) => (
-            <nav className="of-mais" aria-label="Mais opções">
-              {itens
-                .filter((item) => item.grupo || !['/principal', '/metas', apiConfigurada ? '/lancamentos' : ''].includes(item.para))
-                .map((item) =>
-                  item.grupo ? (
-                    <GrupoDoMenu key={item.grupo} item={item} />
-                  ) : (
-                    <ItemDoMenu key={item.rotulo} item={item} aoEscolher={fechar} />
-                  ),
+
+        <div className="of-coluna">
+          <header className="of-topo">
+            <Link to="/principal" className="of-topo-marca" aria-label="OliFine, Visão geral">
+              <Logo tamanho={28} />
+            </Link>
+
+            {apiConfigurada && espaco.dados && (
+              <SeletorDeEspaco
+                espacos={espacos}
+                ativo={espaco.dados}
+                trocarEspaco={trocarEspaco}
+                trocarContexto={trocarContexto}
+                recarregarEspacos={recarregarEspacos}
+              />
+            )}
+
+            {/* Busca em tudo (lançamentos, compras nos cartões, contas e
+                categorias), com os resultados em abas logo abaixo. */}
+            {apiConfigurada && <BuscaGlobal key={espacoId ?? 'sem-espaco'} espacoId={espacoId} />}
+
+            <div className="of-topo-acoes">
+              {superAdmin && <ChaveDoPlanoEmTeste plano={planoEmTeste} aoTrocar={trocarPlanoEmTeste} />}
+              <AlternadorDeTema />
+              <Flutuante
+                rotulo={quantosAvisos > 0 ? `Avisos: ${quantosAvisos} conta(s) a pagar` : 'Avisos'}
+                className="botao-icone of-sino"
+                classeDoPainel="of-avisos"
+                botao={
+                  <>
+                    <Icone nome="sino" />
+                    {quantosAvisos > 0 && <span className="of-sino-contador">{quantosAvisos}</span>}
+                  </>
+                }
+              >
+                {(fechar) => (
+                  <>
+                    <p className="of-flutuante-titulo">Avisos</p>
+                    {quantosAvisos > 0 ? (
+                      <ul>
+                        {guias.map((guia) => (
+                          <li key={`${guia.tributo.id}-${guia.competencia}`}>
+                            <Link to="/empresa/impostos" onClick={fechar}>
+                              <span className={`of-aviso-marca${guia.situacao === 'ATRASADA' ? ' vencida' : ''}`} aria-hidden="true">
+                                <Icone nome="guia" tamanho={16} />
+                              </span>
+                              <span>
+                                <b>
+                                  {guia.tributo.nome} de {textoDaCompetencia(guia.competencia, guia.tributo.periodicidade)}
+                                </b>
+                                <small>
+                                  {guia.situacao === 'ATRASADA' ? 'Venceu em' : 'Vence em'} {dataCurta(guia.vencimento)}
+                                </small>
+                              </span>
+                            </Link>
+                          </li>
+                        ))}
+                        {avisos.map((aviso) => (
+                          <li key={aviso.id}>
+                            <Link to={`/contas/cartoes/${aviso.id}`} onClick={fechar}>
+                              <span className={`of-aviso-marca${aviso.vencida ? ' vencida' : ''}`} aria-hidden="true">
+                                <Icone nome="cartao" tamanho={16} />
+                              </span>
+                              <span>
+                                <b>{aviso.descricao}</b>
+                                <small>
+                                  {aviso.vencida ? 'Venceu em' : 'Vence em'} {dataCurta(aviso.data)} · {formatarBRL(aviso.valor)}
+                                </small>
+                              </span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="of-flutuante-vazio">
+                        {empresa
+                          ? 'Nada a pagar agora. Faturas de cartão fechadas e guias de imposto perto do vencimento aparecem aqui.'
+                          : 'Nenhuma fatura a pagar. Faturas de cartão fechadas aparecem aqui com o vencimento.'}
+                      </p>
+                    )}
+                  </>
                 )}
-            </nav>
+              </Flutuante>
+
+              <Flutuante rotulo={`Conta de ${nome}`} className="of-avatar-botao" classeDoPainel="of-painel-conta" botao={<span className="of-avatar">{iniciais}</span>}>
+                {conta}
+              </Flutuante>
+            </div>
+          </header>
+
+          <main className="area of-area">
+            {/* Uma tela que falha ao desenhar troca só o conteúdo pelo aviso: o
+                menu continua e abrir outra rota desenha a tela nova. */}
+            <LimiteDeErro chave={pathname}>
+              {/* Outro espaço, tela nova: nada do livro anterior (filtros,
+                  listas, seleção) sobra no estado da página. A tela nova
+                  chega por opacidade (movimento.css), sem piscar. */}
+              <div key={`${espacoId ?? 'sem-espaco'}:${planoEmTeste ?? 'real'}`} className="of-troca-de-espaco">
+                {voltar && (
+                  // Toda tela fora da Visão geral começa pelo caminho de volta,
+                  // com alvo grande (44 px de altura, a linha inteira do texto).
+                  <Link to={voltar.para} className="of-voltar" aria-label={`Voltar para ${voltar.rotulo}`}>
+                    <span aria-hidden="true">←</span>
+                    Voltar
+                  </Link>
+                )}
+                <Outlet context={contexto} />
+              </div>
+            </LimiteDeErro>
+          </main>
+        </div>
+
+        <nav className="of-abas" aria-label="Navegação principal">
+          <NavLink to="/principal" className="of-aba">
+            <Icone nome="resumo" />
+            <span>Início</span>
+          </NavLink>
+          {apiConfigurada && (
+            <NavLink to="/lancamentos" className="of-aba">
+              <Icone nome="lancamentos" />
+              <span>Lançamentos</span>
+            </NavLink>
           )}
-        </Flutuante>
-      </nav>
-    </div>
+          <NavLink to="/metas" className="of-aba">
+            <Icone nome="broto" />
+            <span>Metas</span>
+          </NavLink>
+          <Flutuante
+            rotulo="Mais opções"
+            className="of-aba"
+            classeDoPainel="of-painel-mais"
+            botao={
+              <>
+                <Icone nome="menuLinhas" />
+                <span>Mais</span>
+              </>
+            }
+          >
+            {(fechar) => (
+              <nav className="of-mais" aria-label="Mais opções">
+                {itens
+                  .filter((item) => item.grupo || !['/principal', '/metas', apiConfigurada ? '/lancamentos' : ''].includes(item.para))
+                  .map((item) =>
+                    item.grupo ? (
+                      <GrupoDoMenu key={item.grupo} item={item} />
+                    ) : (
+                      <ItemDoMenu key={item.rotulo} item={item} aoEscolher={fechar} />
+                    ),
+                  )}
+              </nav>
+            )}
+          </Flutuante>
+        </nav>
+      </div>
+    </ConviteProvider>
   );
 }

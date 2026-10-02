@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Campo from './Campo';
+import { useConviteDoPlano } from './convite/useConviteDoPlano';
 import Seletor from './Seletor';
 import SeletorDeCorHex from './SeletorDeCorHex';
 import { useToast } from './toast/useToast';
@@ -19,6 +20,7 @@ const NOVA = { nome: '', tipo: 'CORRENTE', saldoInicial: '', ativa: true, cor: '
 // recebe a conta salva.
 export default function FormularioDeConta({ espacoId, emEdicao = null, aoSalvar, aoCancelar, aoMudarOcupado }) {
   const toast = useToast();
+  const convite = useConviteDoPlano();
   const [formulario, setFormulario] = useState(() =>
     emEdicao ? { nome: emEdicao.nome, tipo: emEdicao.tipo, saldoInicial: '', ativa: emEdicao.ativa, cor: emEdicao.cor ?? '' } : NOVA,
   );
@@ -69,10 +71,15 @@ export default function FormularioDeConta({ espacoId, emEdicao = null, aoSalvar,
     try {
       aoSalvar(await salvar());
     } catch (erro) {
-      setErros(errosDaApi(erro.campos));
-      toast.erro(erro.message, { titulo: 'Conta não salva' });
       setEnviando(false);
       aoMudarOcupado?.(false);
+      // Teto do Free: no lugar do erro, o convite do plano (o modal fecha).
+      if (convite.abrirSeForLimite(erro)) {
+        aoCancelar();
+        return;
+      }
+      setErros(errosDaApi(erro.campos));
+      toast.erro(erro.message, { titulo: 'Conta não salva' });
     }
   }
 

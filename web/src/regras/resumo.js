@@ -9,9 +9,18 @@
 // - estorno: true: desfaz um lançamento anterior. O estorno de uma despesa
 //   (valor positivo) diminui as saídas, em vez de contar como entrada; o de
 //   uma receita (valor negativo) diminui as entradas.
+// - reembolso: true: a parte do racha que outra pessoa devolveu (um estorno
+//   parcial da despesa, regras/aReceber.ts). Conta como o estorno: diminui as
+//   saídas e a categoria da despesa, e não vira receita.
 
 export function ehTransferencia(lancamento) {
   return lancamento.tipo === 'transferencia';
+}
+
+// Desfaz (no todo ou em parte) um lançamento anterior: o estorno e o
+// reembolso do racha.
+function desfaz(lancamento) {
+  return Boolean(lancamento.estorno || lancamento.reembolso);
 }
 
 // { entradas, saidas, sobra }: sobra é entradas menos saídas.
@@ -23,7 +32,7 @@ export function somarMes(lancamentos) {
     if (ehTransferencia(lancamento)) {
       continue;
     }
-    if (lancamento.estorno) {
+    if (desfaz(lancamento)) {
       if (lancamento.valor > 0) {
         saidas -= lancamento.valor;
       } else {
@@ -73,7 +82,8 @@ export function usoDaRenda({ entradas, saidas }) {
 }
 
 // Gasto por categoria, da maior para a menor, com a fatia em porcentagem.
-// O estorno de uma despesa devolve o valor à categoria dela.
+// O estorno de uma despesa (e o reembolso do racha) devolve o valor à
+// categoria dela.
 export function gastoPorCategoria(lancamentos) {
   const totais = new Map();
 
@@ -81,7 +91,7 @@ export function gastoPorCategoria(lancamentos) {
     if (ehTransferencia(lancamento)) {
       continue;
     }
-    const gasto = lancamento.estorno ? (lancamento.valor > 0 ? -lancamento.valor : 0) : Math.max(0, -lancamento.valor);
+    const gasto = desfaz(lancamento) ? (lancamento.valor > 0 ? -lancamento.valor : 0) : Math.max(0, -lancamento.valor);
     if (gasto !== 0) {
       totais.set(lancamento.categoria, (totais.get(lancamento.categoria) ?? 0) + gasto);
     }

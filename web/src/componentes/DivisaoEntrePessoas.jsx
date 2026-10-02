@@ -1,6 +1,9 @@
 import { useId, useState } from 'react';
+import Campo from './Campo';
 import Icone from './Icone';
 import { propsDaMascara } from './mascara';
+import SeletorDeData from './SeletorDeData';
+import { prazoSugerido } from '../regras/aReceber';
 import { formatarBRL } from '../regras/dinheiro';
 import { MAXIMO_DE_PESSOAS, parteVazia, pessoasParaSugerir, repartirIgualmente, somaDaDivisao } from '../regras/divisao';
 
@@ -15,7 +18,21 @@ import { MAXIMO_DE_PESSOAS, parteVazia, pessoasParaSugerir, repartirIgualmente, 
 // parte, um erro): o resumo existe desde a primeira pessoa, com "—" até haver
 // total, e as linhas de erro de cada pessoa e do conjunto ficam reservadas,
 // como a do Campo. Assim os campos em volta não pulam.
-export default function DivisaoEntrePessoas({ partes, aoMudar, total, erros = {}, pessoasConhecidas = [] }) {
+//
+// Numa despesa, a parte de cada pessoa é um valor a receber: "Receber até" é
+// o prazo combinado (sugerido 30 dias depois da data). Depois dele, quem não
+// pagou vira inadimplência e a parte volta para as despesas de quem lançou
+// (regras/aReceber.ts). Vazio é sem prazo.
+export default function DivisaoEntrePessoas({
+  partes,
+  aoMudar,
+  total,
+  erros = {},
+  pessoasConhecidas = [],
+  data = '',
+  prazo = '',
+  aoMudarPrazo,
+}) {
   const idDoTitulo = useId();
   const [comMinhaParte, setComMinhaParte] = useState(true);
   const soma = somaDaDivisao(partes);
@@ -30,6 +47,10 @@ export default function DivisaoEntrePessoas({ partes, aoMudar, total, erros = {}
   function adicionar(pessoa = '') {
     if (!cheia) {
       aoMudar([...partes, parteVazia(pessoa)], 'divisao');
+      // A primeira pessoa traz o prazo sugerido, que a pessoa troca ou apaga.
+      if (partes.length === 0 && !prazo && data) {
+        aoMudarPrazo?.(prazoSugerido(data));
+      }
     }
   }
 
@@ -111,6 +132,12 @@ export default function DivisaoEntrePessoas({ partes, aoMudar, total, erros = {}
               <b>{sobra === null ? '—' : formatarBRL(Math.abs(sobra))}</b>
             </span>
           </p>
+
+          {aoMudarPrazo && (
+            <Campo elemento={SeletorDeData} rotulo="Receber até" name="prazo_da_divisao" value={prazo}
+              onChange={(evento) => aoMudarPrazo(evento.target.value)} erro={erros.prazo_da_divisao}
+              dica="Até essa data, as partes ficam a receber. Depois, quem não pagou vira inadimplência e a parte volta para as suas despesas." />
+          )}
         </>
       )}
 

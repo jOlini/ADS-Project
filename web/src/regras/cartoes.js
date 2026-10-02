@@ -5,7 +5,7 @@
 // de ir à rede.
 import { formatarData, hojeIso } from './datas';
 import { formatarBRL, lerValor, valorParaCampo } from './dinheiro';
-import { corpoDaDivisao, erroDoDivididoEntre, lerDivididoEntre, validarDivisao } from './divisao';
+import { corpoDaDivisao, erroDoDivididoEntre, erroDoPrazo, lerDivididoEntre, validarDivisao } from './divisao';
 import { erroDoResponsavel, responsavelParaApi } from './responsavel';
 
 // Mesmos limites da API.
@@ -85,6 +85,8 @@ export const compraVazia = () => ({
   parcelas: '1',
   responsavel: '',
   divisao: [],
+  // "Receber até" do racha (vazio = sem prazo).
+  prazo_da_divisao: '',
   // A divisão do Free: só o número de pessoas (regras/divisao.js).
   dividido_entre: '',
 });
@@ -127,6 +129,10 @@ export function validarCompra(formulario) {
   // Racha só na compra à vista (a API recusa nas parceladas).
   if (aVista(formulario) && formulario.divisao?.length > 0) {
     Object.assign(erros, validarDivisao(formulario.divisao, valor || null));
+    const erroDoPrazoDoRacha = erroDoPrazo(formulario.prazo_da_divisao, formulario.data);
+    if (erroDoPrazoDoRacha) {
+      erros.prazo_da_divisao = erroDoPrazoDoRacha;
+    }
   }
   const erroDaDivisao = aVista(formulario) ? erroDoDivididoEntre(formulario.dividido_entre) : '';
   if (erroDaDivisao) {
@@ -144,7 +150,7 @@ export function corpoDaCompra(formulario) {
     parcelas: Number(formulario.parcelas),
   };
   if (aVista(formulario) && formulario.divisao?.length > 0) {
-    corpo.divisao = corpoDaDivisao(formulario.divisao);
+    corpo.divisao = corpoDaDivisao(formulario.divisao, formulario.prazo_da_divisao);
   }
   const divididoEntre = aVista(formulario) ? lerDivididoEntre(formulario.dividido_entre) : null;
   if (divididoEntre) {

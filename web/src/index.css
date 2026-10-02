@@ -907,6 +907,10 @@ form {
 .campo {
   display: grid;
   gap: var(--espaco-3);
+  /* As linhas ficam no topo: ao lado de um campo com a dica reservada (as
+     Parcelas da compra), o vizinho mais baixo não estica o rótulo nem
+     desce o controle, e os dois controles ficam na mesma altura. */
+  align-content: start;
   min-width: 0;
   /* A linha da mensagem de erro fica reservada embaixo do controle, vazia até
      haver um erro (componentes/Campo.tsx): mostrar ou tirar a mensagem não

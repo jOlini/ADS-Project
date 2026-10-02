@@ -13,9 +13,10 @@ from tests.test_financeiro_api import Cliente
 
 
 @pytest.fixture
-def empresa(api, cabecalho_do_cliente):
-    """A Ana com uma empresa (regime Simples) e uma conta corrente nela."""
-    cabecalho = cabecalho_do_cliente("uid-ana")
+def empresa(api, no_empresarial):
+    """A Ana (Plano Empresarial) com uma empresa (regime Simples) e uma conta
+    corrente nela."""
+    cabecalho = no_empresarial("uid-ana")
     espaco = api.post("/espacos", headers=cabecalho, json={"tipo": "PJ", "nome": "Oficina", "regime": "SIMPLES"}).json()
     categorias = api.get(f"/espacos/{espaco['id']}/categorias", headers=cabecalho).json()
     cliente = Cliente(api, cabecalho, f"/espacos/{espaco['id']}", {c["nome"]: c["id"] for c in categorias})
@@ -461,8 +462,8 @@ def test_empresa_de_outra_pessoa_nao_se_ve(empresa, cabecalho_do_cliente, caminh
     assert empresa.api.post(empresa.base + caminho, headers=bruno, json={}).status_code in (400, 404)
 
 
-def test_excluir_a_empresa_sem_movimento_leva_os_cadastros(api, cabecalho_do_cliente, livro_caixa):
-    cabecalho = cabecalho_do_cliente("uid-ana")
+def test_excluir_a_empresa_sem_movimento_leva_os_cadastros(api, no_empresarial, livro_caixa):
+    cabecalho = no_empresarial("uid-ana")
     espaco = api.post("/espacos", headers=cabecalho, json={"tipo": "PJ", "nome": "Loja"}).json()["id"]
     base = f"/espacos/{espaco}"
     api.post(f"{base}/socios", headers=cabecalho, json={"nome": "Ana", "participacao_centesimos": 10_000})

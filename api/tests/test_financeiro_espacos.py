@@ -7,6 +7,7 @@ Sobe a API de verdade com os repositórios em memória (conftest.py).
 
 import pytest
 
+from app.financeiro import servicos
 from app.financeiro.modelos import MAXIMO_DE_EMPRESAS
 from app.financeiro.regras import CATEGORIAS_DA_EMPRESA
 
@@ -17,8 +18,8 @@ CNPJ_ALFANUMERICO = "12.ABC.345/01DE-35"
 
 
 @pytest.fixture
-def cabecalho(cabecalho_do_cliente):
-    return cabecalho_do_cliente("uid-ana")
+def cabecalho(no_empresarial):
+    return no_empresarial("uid-ana")
 
 
 def criar(api, cabecalho, nome="Ateliê da Ana", **dados):
@@ -71,7 +72,7 @@ def test_cnpj_com_digito_errado_e_recusado(api, cabecalho, cnpj):
 
 
 def test_o_pessoal_continua_primeiro_na_lista(api, cabecalho):
-    # Sem nenhum GET antes: o POST garante o pessoal e ele sai primeiro.
+    # O pessoal nasce no primeiro acesso, antes de qualquer empresa.
     criar(api, cabecalho, "Oficina")
     criar(api, cabecalho, "Loja")
 
@@ -201,6 +202,19 @@ def test_empresa_de_outra_pessoa_nao_se_ve_nem_se_mexe(api, cabecalho, cabecalho
     assert api.delete(f"/espacos/{oficina}", headers=bruno).status_code == 404
     assert [e["tipo"] for e in api.get("/espacos", headers=bruno).json()] == ["PF"]
     assert api.get(f"/espacos/{oficina}", headers=cabecalho).json()["nome"] == "Ateliê da Ana"
+
+
+@pytest.mark.parametrize("plano", ["FREE", "FAMILIA"])
+def test_empresa_so_no_plano_empresarial(api, cabecalho_do_cliente, assinar, plano):
+    bruno = cabecalho_do_cliente("uid-bruno")
+    api.get("/espacos", headers=bruno)
+    assinar("uid-bruno", plano)
+
+    resposta = criar(api, bruno, "Oficina do Bruno")
+
+    assert resposta.status_code == 403
+    assert resposta.json()["detail"] == servicos.EMPRESA_SO_NO_EMPRESARIAL
+    assert [e["tipo"] for e in api.get("/espacos", headers=bruno).json()] == ["PF"]
 
 
 def test_cadastrar_empresa_exige_login(api):

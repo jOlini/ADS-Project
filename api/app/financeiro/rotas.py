@@ -27,6 +27,7 @@ from app.financeiro.modelos import (
     AcessoResposta,
     AtualizacaoCategoria,
     AtualizacaoConta,
+    AtualizacaoDaParte,
     AtualizacaoEspaco,
     AtualizacaoLancamento,
     CartaoResposta,
@@ -53,6 +54,8 @@ from app.financeiro.modelos import (
     PedidoDeEstrutura,
     PeriodoDaFaturaResposta,
     ResumoDaFaturaResposta,
+    UsoDoPlanoResposta,
+    UsoResposta,
 )
 from app.financeiro.repositorio import RepositorioLivroCaixa
 from app.financeiro.servicos import ServicoLivroCaixa
@@ -65,6 +68,12 @@ ERRO_409_ESPACO = {
     409: {"description": "Espaço pessoal (fixo), empresa com contas ou lançamentos, ou limite de empresas atingido"}
 }
 ERRO_403_ESPACO = {403: {"description": "Só quem cadastrou a empresa pode editá-la ou excluí-la"}}
+ERRO_403_LANCAR = {
+    403: {
+        "description": "Recurso do Plano Família (divisão por pessoa, responsável) ou limite de lançamentos "
+        "do mês do Plano Free (membro `limite`)"
+    }
+}
 REFERENCIA = Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="Ano e mês do vencimento (AAAA-MM)")
 
 rotas_livro_caixa = APIRouter(
@@ -116,7 +125,11 @@ def acesso_da_conta(
     response_model=EspacoResposta,
     status_code=status.HTTP_201_CREATED,
     summary="Cadastrar uma empresa no espaço empresarial",
-    responses={**ERRO_400, 409: ERRO_409_ESPACO[409]},
+    responses={
+        **ERRO_400,
+        403: {"description": "O espaço empresarial é do Plano Empresarial"},
+        409: ERRO_409_ESPACO[409],
+    },
 )
 def criar_espaco(
     dados: NovoEspaco,
@@ -128,8 +141,9 @@ def criar_espaco(
     """Nova empresa (`tipo: PJ`), com livro-caixa próprio, quem cadastrou como dono e as
     categorias de empresa. `cnpj` (com ou sem pontuação, numérico ou alfanumérico) e
     `regime` (`MEI`, `SIMPLES`, `PRESUMIDO`, `REAL`) são opcionais. O pessoal (`PF`) não
-    entra por aqui: já existe desde o primeiro acesso. Cada pessoa cadastra até 5 empresas."""
-    espaco = servico.criar_espaco(cliente.uid, dados)
+    entra por aqui: já existe desde o primeiro acesso. Cada pessoa cadastra até 5 empresas,
+    e só no Plano Empresarial (`403` nos outros)."""
+    espaco = servico.criar_espaco(cliente.uid, dados, simulacao.plano_simulado(requisicao, cliente))
     resposta.headers["Location"] = str(requisicao.url_for("buscar_espaco", espaco_id=espaco.id))
     return EspacoResposta.de(espaco, cliente.uid)
 
@@ -195,16 +209,17 @@ def listar_contas(espaco: Espaco = Depends(espaco_do_cliente), servico: ServicoL
     response_model=ContaResposta,
     status_code=status.HTTP_201_CREATED,
     summary="Criar conta",
-    responses={**ERRO_400, **ERRO_404},
+    responses={**ERRO_400, 403: {"description": "Limite de contas do Plano Free (membro `limite`)"}, **ERRO_404},
 )
 def criar_conta(
     dados: NovaConta,
     requisicao: Request,
     resposta: Response,
     espaco: Espaco = Depends(espaco_do_cliente),
+    cliente: ClienteFirebase = Depends(cliente_autenticado),
     servico: ServicoLivroCaixa = Depends(obter_servico),
 ):
-    conta = servico.criar_conta(espaco, dados)
+    conta = servico.criar_conta(espaco, dados, cliente.uid)
     resposta.headers["Location"] = str(requisicao.url_for("buscar_conta", espaco_id=espaco.id, conta_id=conta.id))
     return ContaResposta.de(conta, conta.saldo_inicial_centavos)
 
@@ -340,7 +355,7 @@ def excluir_fatura(
     response_model=list[LancamentoResposta],
     status_code=status.HTTP_201_CREATED,
     summary="Lançar compra no cartão, à vista ou parcelada",
-    responses={**ERRO_400, **ERRO_404},
+    responses={**ERRO_400, **ERRO_403_LANCAR, **ERRO_404},
 )
 def comprar_no_cartao(
     cartao_id: str,
@@ -495,7 +510,7 @@ def listar_lancamentos(
     response_model=LancamentoResposta,
     status_code=status.HTTP_201_CREATED,
     summary="Lançar receita, despesa ou transferência",
-    responses={**ERRO_400, **ERRO_404},
+    responses={**ERRO_400, **ERRO_403_LANCAR, **ERRO_404},
 )
 def lancar(
     dados: NovoLancamento,
@@ -611,6 +626,78 @@ def excluir_lancamento(
 )
 def listar_pessoas(espaco: Espaco = Depends(espaco_do_cliente), servico: ServicoLivroCaixa = Depends(obter_servico)):
     return servico.pessoas(espaco)
+
+
+# --- Racha a receber -------------------------------------------------------------
+
+
+@rotas_livro_caixa.get(
+    "/{espaco_id}/rachas",
+    response_model=list[LancamentoResposta],
+    summary="Listar as despesas divididas (o racha a receber)",
+    responses=ERRO_404,
+)
+def listar_rachas(espaco: Espaco = Depends(espaco_do_cliente), servico: ServicoLivroCaixa = Depends(obter_servico)):
+    """As despesas com `divisao` (nome e parte de cada pessoa), da mais nova para a mais antiga,
+    sem os estornos (as estornadas vêm com `estornado_por`). Cada parte traz `situacao`
+    (`PENDENTE`, `RECEBIDO`, `NAO_PAGO`), `vencimento` (o prazo para a pessoa pagar),
+    `recebido_em` e `reembolso_id`. A parte pendente com o prazo vencido é inadimplência: a tela
+    a trata como despesa de quem lançou, sem gravar nada."""
+    return [LancamentoResposta.de(lancamento) for lancamento in servico.rachas(espaco)]
+
+
+@rotas_livro_caixa.patch(
+    "/{espaco_id}/lancamentos/{lancamento_id}/divisao/{indice}",
+    response_model=LancamentoResposta,
+    summary="Marcar uma parte do racha como recebida, não paga ou pendente",
+    responses={
+        **ERRO_400,
+        403: {"description": "Racha com nome e parte de cada pessoa é do Plano Família"},
+        **ERRO_404,
+        409: {"description": "O lançamento não é uma despesa dividida, ou foi estornado"},
+    },
+)
+def atualizar_parte(
+    lancamento_id: str,
+    dados: AtualizacaoDaParte,
+    indice: int = Path(ge=0, lt=20, description="Posição da parte na divisão (0 = primeira)"),
+    espaco: Espaco = Depends(espaco_do_cliente),
+    cliente: ClienteFirebase = Depends(cliente_autenticado),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
+):
+    """- `RECEBIDO` pede `conta_id` (a conta em que o dinheiro entrou, nunca um cartão) e aceita
+      `data` (sem ela, hoje): a API lança o **reembolso**, um estorno parcial da despesa na conta
+      (`reembolso_de` aponta a despesa). A categoria fica só com a parte de quem lançou.
+    - `NAO_PAGO` dá baixa: a parte volta a ser despesa de quem lançou.
+    - `PENDENTE` volta a cobrar; vindo de `RECEBIDO`, o reembolso é apagado.
+
+    `vencimento`, quando enviado, troca o prazo (`null` tira o prazo). Devolve a despesa com as
+    partes atualizadas."""
+    return LancamentoResposta.de(servico.atualizar_parte(espaco, lancamento_id, indice, dados, cliente.uid))
+
+
+@rotas_livro_caixa.get(
+    "/{espaco_id}/uso-do-plano",
+    response_model=UsoDoPlanoResposta,
+    summary="Quanto do plano já foi usado neste espaço",
+    responses=ERRO_404,
+)
+def uso_do_plano(
+    espaco: Espaco = Depends(espaco_do_cliente),
+    cliente: ClienteFirebase = Depends(cliente_autenticado),
+    servico: ServicoLivroCaixa = Depends(obter_servico),
+):
+    """`contas` (contas e cartões, ativos ou não) e `lancamentos_do_mes` (feitos à mão desde o dia 1,
+    no fuso do espaço; a compra parcelada conta uma vez, e o extrato importado, o estorno, o
+    reembolso do racha e o pagamento de fatura não contam). `maximo` é o teto do plano: só o Free
+    tem (5 contas e 100 lançamentos por mês); nos outros, `null`. No teto, criar conta, lançar e
+    comprar no cartão respondem `403` com o membro `limite` (`recurso`, `usado`, `maximo`, `plano`)."""
+    uso = servico.uso_do_plano(espaco, cliente.uid)
+    return UsoDoPlanoResposta(
+        plano=uso.plano,
+        contas=UsoResposta(usado=uso.contas.usado, maximo=uso.contas.maximo),
+        lancamentos_do_mes=UsoResposta(usado=uso.lancamentos_do_mes.usado, maximo=uso.lancamentos_do_mes.maximo),
+    )
 
 
 # --- Importação de extrato ----------------------------------------------------

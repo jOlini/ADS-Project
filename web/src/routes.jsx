@@ -4,6 +4,7 @@ import { lazy, Suspense } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AreaDoCliente from './componentes/AreaDoCliente';
 import Esqueleto from './componentes/Esqueleto';
+import GuardaDoPlano from './componentes/GuardaDoPlano';
 import Layout from './componentes/Layout';
 import LimiteDeErro from './componentes/LimiteDeErro';
 import AcaoDaConta from './paginas/AcaoDaConta';
@@ -11,6 +12,7 @@ import Cadastro from './paginas/Cadastro';
 import Cartao from './paginas/Cartao';
 import Categorias from './paginas/Categorias';
 import Contas from './paginas/Contas';
+import Empresarial from './paginas/Empresarial';
 import EsqueciASenha from './paginas/EsqueciASenha';
 import Lancamentos from './paginas/Lancamentos';
 import Login from './paginas/Login';
@@ -67,13 +69,19 @@ export default function AppRoutes() {
             <Route path="relatorios" element={sobDemanda(<Relatorios />)} />
             {/* Modo Família do espaço pessoal: numa empresa, volta à Visão geral. */}
             <Route path="familia" element={sobDemanda(<Familia />)} />
-            {/* Gestão da empresa: no espaço pessoal, volta à Visão geral. */}
-            <Route path="empresa/fluxo" element={sobDemanda(<FluxoDeCaixa />)} />
-            <Route path="empresa/dre" element={sobDemanda(<Dre />)} />
-            <Route path="empresa/custos" element={sobDemanda(<Custos />)} />
-            <Route path="empresa/sociedade" element={sobDemanda(<Sociedade />)} />
-            <Route path="empresa/impostos" element={sobDemanda(<Impostos />)} />
-            <Route path="empresa/pessoal" element={sobDemanda(<Pessoal />)} />
+            {/* Espaço empresarial: só no Plano Empresarial. Nos outros planos,
+                a guarda mostra o convite do plano no lugar da página, mesmo
+                com o endereço digitado direto. */}
+            <Route element={<GuardaDoPlano />}>
+              <Route path="empresarial" element={<Empresarial />} />
+              {/* Gestão da empresa: no espaço pessoal, volta à Visão geral. */}
+              <Route path="empresa/fluxo" element={sobDemanda(<FluxoDeCaixa />)} />
+              <Route path="empresa/dre" element={sobDemanda(<Dre />)} />
+              <Route path="empresa/custos" element={sobDemanda(<Custos />)} />
+              <Route path="empresa/sociedade" element={sobDemanda(<Sociedade />)} />
+              <Route path="empresa/impostos" element={sobDemanda(<Impostos />)} />
+              <Route path="empresa/pessoal" element={sobDemanda(<Pessoal />)} />
+            </Route>
           </Route>
           {/* Qualquer outro endereço volta para o login. */}
           <Route path="*" element={<Navigate to="/login" replace />} />

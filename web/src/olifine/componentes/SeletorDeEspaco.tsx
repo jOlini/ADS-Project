@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ConfirmacaoJs from '../../componentes/Confirmacao';
+import { useConviteDoPlano } from '../../componentes/convite/useConviteDoPlano';
 import FormularioDeEmpresa from '../../componentes/FormularioDeEmpresa';
 import Icone from '../../componentes/Icone';
 import ModalJs from '../../componentes/Modal';
 import { semTipos } from '../../componentes/semTipos';
 import { useToast } from '../../componentes/toast/useToast';
+import { empresarialLiberado } from '../../regras/acessoPorPlano';
+import { planoDoCliente } from '../../regras/planos';
 import {
   empresasDe,
   nomeDoEspaco,
@@ -62,8 +65,10 @@ export default function SeletorDeEspaco({ espacos, ativo, trocarEspaco, trocarCo
   const { pathname } = useLocation();
   const [janela, setJanela] = useState<Janela>(null);
   const [ocupado, setOcupado] = useState(false);
+  const convite = useConviteDoPlano();
   const empresas = empresasDe(espacos);
   const contexto: TipoDeEspaco = ativo?.tipo ?? 'PF';
+  const empresarial = empresarialLiberado(planoDoCliente(espacos));
 
   // Troca o livro e volta ao começo da seção: o cartão ou a busca abertos
   // eram do espaço anterior.
@@ -76,6 +81,12 @@ export default function SeletorDeEspaco({ espacos, ativo, trocarEspaco, trocarCo
 
   function escolherContexto(tipo: TipoDeEspaco) {
     if (tipo === contexto) {
+      return;
+    }
+    // Fora do Plano Empresarial, a aba abre o convite do plano (a API recusa
+    // a empresa nova do mesmo jeito).
+    if (tipo === 'PJ' && !empresarial) {
+      convite.abrir('empresarial');
       return;
     }
     if (trocarContexto(tipo)) {
@@ -126,11 +137,17 @@ export default function SeletorDeEspaco({ espacos, ativo, trocarEspaco, trocarCo
             key={tipo}
             type="button"
             aria-pressed={contexto === tipo}
-            title={tipo === 'PF' ? 'Espaço pessoal' : 'Espaço empresarial'}
+            title={tipo === 'PF' ? 'Espaço pessoal' : empresarial ? 'Espaço empresarial' : 'Espaço empresarial (Plano Empresarial)'}
             onClick={() => escolherContexto(tipo)}
           >
             <Icone nome={TIPOS_DE_ESPACO[tipo].icone} tamanho={16} />
             <span className="of-alternador-rotulo">{TIPOS_DE_ESPACO[tipo].rotulo}</span>
+            {tipo === 'PJ' && !empresarial && (
+              <span className="of-alternador-cadeado">
+                <Icone nome="cadeado" tamanho={12} />
+                <span className="apenas-leitor">(Plano Empresarial)</span>
+              </span>
+            )}
           </button>
         ))}
       </div>

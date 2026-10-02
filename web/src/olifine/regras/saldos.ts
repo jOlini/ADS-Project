@@ -56,6 +56,14 @@ export function separarSaldos(contas: ContaComSaldo[]): Saldos {
   return { total: disponivel.total + investido.total, disponivel, investido };
 }
 
+// Liquidez disponível: o dinheiro que dá para usar já, somado de todas as
+// contas correntes, carteiras e poupanças, inclusive as desativadas com saldo
+// (o dinheiro continua lá). O investido (uma posição, não dinheiro à mão) e o
+// cartão (dívida) ficam de fora. É o número do card Disponível da Visão geral.
+export function liquidezDisponivel(contas: readonly Pick<ContaComSaldo, 'tipo' | 'saldo'>[]): number {
+  return contas.filter((conta) => TIPOS_DISPONIVEIS.includes(conta.tipo)).reduce((soma, conta) => soma + conta.saldo, 0);
+}
+
 // Quanto do patrimônio está aplicado (0 a 100, inteiro), ou null sem saldo
 // positivo para comparar.
 export function parteInvestida({ disponivel, investido }: Saldos): number | null {

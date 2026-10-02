@@ -339,7 +339,7 @@ export default function Metas() {
                 <Icone nome="cadeado" tamanho={14} />
                 Salvas neste navegador
               </span>
-              <button type="button" className="secundario" onClick={() => setCriando(true)}>
+              <button type="button" onClick={() => setCriando(true)}>
                 <Icone nome="mais" tamanho={16} />
                 Nova meta
               </button>

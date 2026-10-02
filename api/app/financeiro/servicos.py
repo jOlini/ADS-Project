@@ -4,19 +4,21 @@ Quem pode entrar em cada espaço é decidido antes, em acesso.py. Aqui chegam
 só o espaço já liberado e o uid de quem pede.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from app.erros import ErroConflito, ErroNaoEncontrado, ErroPermissao, ErroValidacao
-from app.financeiro import cartoes, importacao, parcelamento, regras, relatorios
+from app.financeiro import cartoes, importacao, limites_do_plano, parcelamento, regras, relatorios
 from app.financeiro.categorizacao import AJUSTE, Categorizador
 from app.financeiro.cartoes import PeriodoDaFatura, Referencia, ResumoDaFatura, ResumoDoCartao
+from app.financeiro.limites_do_plano import Recurso, UsoDoPlano
 from app.financeiro.modelos import (
     MAXIMO_DE_EMPRESAS,
     AtualizacaoCategoria,
     AtualizacaoConta,
+    AtualizacaoDaParte,
     AtualizacaoEspaco,
     AtualizacaoLancamento,
     Categoria,
@@ -40,6 +42,7 @@ from app.financeiro.modelos import (
     ResultadoDaLinha,
     SituacaoDaFatura,
     SituacaoDaLinha,
+    SituacaoDaParte,
     TipoCategoria,
     TipoConta,
     TipoEspaco,
@@ -77,6 +80,15 @@ RESPONSAVEL_NA_EMPRESA = "Na empresa, o lançamento não tem responsável."
 LIMITE_DE_EMPRESAS = (
     f"Você já cadastrou {MAXIMO_DE_EMPRESAS} empresas. Exclua uma empresa sem movimento para cadastrar outra."
 )
+EMPRESA_SO_NO_EMPRESARIAL = (
+    "O espaço empresarial (o caixa de cada empresa, DRE, custos, impostos e folha) faz parte do Plano Empresarial."
+)
+DESFAZER_O_RACHA_ANTES = (
+    "Uma parte do racha já foi recebida. Volte a cobrá-la em Gastos por pessoa antes de estornar a despesa."
+)
+REEMBOLSO_NAO_ESTORNA = "O reembolso do racha não se estorna: volte a cobrar a parte em Gastos por pessoa."
+# Despesas divididas lidas de uma vez para o painel do racha (as mais novas).
+LIMITE_DO_RACHA = 1000
 
 
 def agora() -> datetime:
@@ -85,6 +97,12 @@ def agora() -> datetime:
     diferente do que o GET devolve depois."""
     instante = datetime.now(UTC)
     return instante.replace(microsecond=instante.microsecond // 1000 * 1000)
+
+
+def _partes(divisao: list) -> list[Parte]:
+    """As partes do corpo como ficam gravadas: todas a receber, com o prazo
+    pedido (ou sem prazo)."""
+    return [Parte(parte.pessoa, parte.valor_centavos, vencimento=parte.vencimento) for parte in divisao]
 
 
 class ServicoLivroCaixa:
@@ -147,17 +165,52 @@ class ServicoLivroCaixa:
         if divisao and not libera_familia(self.plano_do_cliente(espaco, uid)):
             raise ErroPermissao(DIVISAO_SO_NO_FAMILIA)
 
-    def criar_espaco(self, uid: str, dados: NovoEspaco) -> Espaco:
+    # --- Limites do plano (limites_do_plano.py) ---
+
+    def uso_do_plano(self, espaco: Espaco, uid: str) -> UsoDoPlano:
+        """Quanto do plano de quem pede já foi usado neste espaço: contas e
+        cartões cadastrados e lançamentos feitos à mão no mês."""
+        plano = self.plano_do_cliente(espaco, uid)
+        contas = self.repositorio.listar_contas(espaco.id)
+        desde = limites_do_plano.inicio_do_mes(self.hoje(espaco), espaco.fuso)
+        cartoes_do_espaco = [conta.id for conta in contas if conta.cartao]
+        lancados = self.repositorio.contar_lancamentos_manuais(espaco.id, desde, cartoes_do_espaco)
+        return limites_do_plano.uso_do_plano(plano, len(contas), lancados)
+
+    def _conferir_limite(self, espaco: Espaco, uid: str, recurso: Recurso) -> None:
+        """403 quando o plano tem teto e ele já foi atingido. O corpo leva o
+        membro "limite" (recurso, uso e teto), para a tela mostrar o convite
+        do plano no lugar de um erro comum. Plano sem teto nem conta nada."""
+        if limites_do_plano.limites_do_plano(self.plano_do_cliente(espaco, uid)) is None:
+            return
+        uso = self.uso_do_plano(espaco, uid)
+        do_recurso = getattr(uso, recurso.value)
+        if do_recurso.atingido:
+            raise ErroPermissao(
+                limites_do_plano.mensagem_do_limite(recurso, do_recurso.maximo),
+                limite={
+                    "recurso": recurso.value,
+                    "usado": do_recurso.usado,
+                    "maximo": do_recurso.maximo,
+                    "plano": uso.plano.value,
+                },
+            )
+
+    def criar_espaco(self, uid: str, dados: NovoEspaco, plano_simulado: Plano | None = None) -> Espaco:
         """Empresa do espaço empresarial, com quem cadastrou como dono e as
         categorias de empresa. Cada empresa é um livro-caixa separado do
-        pessoal e das outras empresas."""
+        pessoal e das outras empresas. Só no Plano Empresarial (a tela mostra o
+        convite do plano; aqui é a trava de verdade). plano_simulado é o do
+        modo de teste de um super admin (simulacao.py)."""
         if dados.tipo == TipoEspaco.PF:
             raise ErroValidacao({"tipo": PESSOAL_JA_EXISTE})
         # Garante o pessoal antes (e primeiro na lista, que sai por data).
+        espacos = self.espacos_do_cliente(uid)
+        pessoal = next(espaco for espaco in espacos if espaco.tipo == TipoEspaco.PF)
+        if (plano_simulado or pessoal.plano) != Plano.EMPRESARIAL:
+            raise ErroPermissao(EMPRESA_SO_NO_EMPRESARIAL)
         empresas = [
-            espaco
-            for espaco in self.espacos_do_cliente(uid)
-            if espaco.tipo == TipoEspaco.PJ and espaco.papel_de(uid) == Papel.DONO
+            espaco for espaco in espacos if espaco.tipo == TipoEspaco.PJ and espaco.papel_de(uid) == Papel.DONO
         ]
         if len(empresas) >= MAXIMO_DE_EMPRESAS:
             raise ErroConflito(LIMITE_DE_EMPRESAS)
@@ -246,9 +299,10 @@ class ServicoLivroCaixa:
         conta = self._conta(espaco, id)
         return conta, regras.saldo_da_conta(conta, self.repositorio.somar_partidas_por_conta(espaco.id))
 
-    def criar_conta(self, espaco: Espaco, dados: NovaConta) -> Conta:
+    def criar_conta(self, espaco: Espaco, dados: NovaConta, uid: str) -> Conta:
         if erros := regras.conferir_conta(dados):
             raise ErroValidacao(erros)
+        self._conferir_limite(espaco, uid, Recurso.CONTAS)
         conta = Conta(
             espaco_id=espaco.id,
             nome=dados.nome,
@@ -363,6 +417,7 @@ class ServicoLivroCaixa:
         if erros := regras.conferir_compra(dados, cartao, categoria):
             raise ErroValidacao(erros)
         responsavel = self._responsavel_da_familia(espaco, dados.responsavel)
+        self._conferir_limite(espaco, uid, Recurso.LANCAMENTOS_DO_MES)
 
         parcelada = dados.parcelas > 1
         compra_id = uuid4().hex if parcelada else None
@@ -390,7 +445,7 @@ class ServicoLivroCaixa:
                 partidas=regras.montar_partidas(despesa),
                 criado_em=instante,
                 criado_por=uid,
-                divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
+                divisao=_partes(dados.divisao),
                 dividido_entre=dados.dividido_entre,
                 responsavel=responsavel,
                 compra_id=compra_id,
@@ -535,6 +590,7 @@ class ServicoLivroCaixa:
         if erros:
             raise ErroValidacao(erros)
         responsavel = self._responsavel_da_familia(espaco, dados.responsavel)
+        self._conferir_limite(espaco, uid, Recurso.LANCAMENTOS_DO_MES)
 
         lancamento = Lancamento(
             espaco_id=espaco.id,
@@ -548,7 +604,7 @@ class ServicoLivroCaixa:
             partidas=regras.montar_partidas(dados),
             criado_em=agora(),
             criado_por=uid,
-            divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
+            divisao=_partes(dados.divisao),
             dividido_entre=dados.dividido_entre,
             responsavel=responsavel,
             meio=dados.meio,
@@ -604,8 +660,100 @@ class ServicoLivroCaixa:
         if lancamento.compra_id:
             return self.repositorio.excluir_compra(espaco.id, lancamento.compra_id)
         excluidos = self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
+        # Os reembolsos do racha saem com a despesa, como os estornos: sozinhos,
+        # tirariam da categoria um gasto que não existe mais.
+        for parte in lancamento.divisao:
+            if parte.reembolso_id:
+                excluidos += int(self.repositorio.excluir_lancamento(espaco.id, parte.reembolso_id))
         excluidos += int(self.repositorio.excluir_lancamento(espaco.id, lancamento.id))
+        if lancamento.reembolso_de:
+            # Reembolso apagado: a parte volta a ser cobrada. Ele sai antes;
+            # se parar no meio, a parte fica "recebida" sem o dinheiro, e
+            # voltar a cobrá-la na tela termina (o reembolso já não existe).
+            self._voltar_a_cobrar(espaco, lancamento)
         return excluidos + self.repositorio.excluir_estornos_de(espaco.id, lancamento.id)
+
+    def _voltar_a_cobrar(self, espaco: Espaco, reembolso: Lancamento) -> None:
+        despesa = self.repositorio.buscar_lancamento(espaco.id, reembolso.reembolso_de)
+        if despesa is None:
+            return
+        despesa.divisao = [
+            replace(parte, situacao=SituacaoDaParte.PENDENTE, recebido_em=None, reembolso_id=None)
+            if parte.reembolso_id == reembolso.id
+            else parte
+            for parte in despesa.divisao
+        ]
+        self.repositorio.atualizar_divisao(despesa)
+
+    # --- Racha a receber (regras.py, "Racha a receber") ---
+
+    def rachas(self, espaco: Espaco) -> list[Lancamento]:
+        """As despesas divididas com nome e parte de cada pessoa, da mais nova
+        para a mais antiga, sem os estornos: a tela monta o que cada pessoa
+        deve. Ler é livre (os dados são da pessoa); mudar uma parte é do Plano
+        Família, como dividir."""
+        return self._marcar_estornados(espaco, self.repositorio.listar_rachas(espaco.id, LIMITE_DO_RACHA))
+
+    def atualizar_parte(
+        self, espaco: Espaco, id: str, indice: int, dados: AtualizacaoDaParte, uid: str
+    ) -> Lancamento:
+        """Marca uma parte do racha como recebida (com o reembolso na conta em
+        que o dinheiro entrou), não paga (a parte volta a ser despesa de quem
+        lançou) ou pendente de novo (o reembolso, se houver, sai). Devolve a
+        despesa com as partes atualizadas."""
+        if not libera_familia(self.plano_do_cliente(espaco, uid)):
+            raise ErroPermissao(DIVISAO_SO_NO_FAMILIA)
+        lancamento = self.lancamento(espaco, id)
+        if not 0 <= indice < len(lancamento.divisao):
+            raise ErroNaoEncontrado(regras.PARTE_NAO_ENCONTRADA)
+        if motivo := regras.motivo_sem_racha(lancamento):
+            raise ErroConflito(motivo)
+        parte = lancamento.divisao[indice]
+        conta = self.repositorio.buscar_conta(espaco.id, dados.conta_id) if dados.conta_id else None
+        if erros := regras.conferir_parte(lancamento, parte, dados, conta):
+            raise ErroValidacao(erros)
+
+        # Saindo de RECEBIDO, o dinheiro "devolvido" deixa de existir.
+        if parte.reembolso_id and dados.situacao != SituacaoDaParte.RECEBIDO:
+            self.repositorio.excluir_lancamento(espaco.id, parte.reembolso_id)
+        recebido_em, reembolso = None, None
+        if dados.situacao == SituacaoDaParte.RECEBIDO:
+            recebido_em = dados.data or self.hoje(espaco)
+            reembolso = self._gravar(self._reembolso(espaco, lancamento, parte, conta, recebido_em, uid))
+        divisao = list(lancamento.divisao)
+        divisao[indice] = regras.mudar_parte(parte, dados, recebido_em, reembolso.id if reembolso else None)
+        lancamento.divisao = divisao
+        try:
+            self.repositorio.atualizar_divisao(lancamento)
+        except Exception:
+            # Sem a parte marcada, o reembolso contaria a mesma parte duas
+            # vezes (a receber e já devolvida): ele sai junto.
+            if reembolso:
+                self.repositorio.excluir_lancamento(espaco.id, reembolso.id)
+            raise
+        return self.lancamento(espaco, id)
+
+    @staticmethod
+    def _reembolso(
+        espaco: Espaco, despesa: Lancamento, parte: Parte, conta: Conta, data: date, uid: str
+    ) -> Lancamento:
+        """A parte que voltou para uma conta: estorno parcial da despesa (a
+        categoria dela diminui), com o mesmo responsável, na data do
+        recebimento."""
+        return Lancamento(
+            espaco_id=espaco.id,
+            tipo=TipoLancamento.DESPESA,
+            descricao=f"Reembolso de {parte.pessoa}: {despesa.descricao}"[:TAMANHO_MAXIMO_DA_DESCRICAO],
+            data=data,
+            valor_centavos=parte.valor_centavos,
+            conta_id=conta.id,
+            categoria_id=despesa.categoria_id,
+            partidas=regras.partidas_do_reembolso(parte.valor_centavos, conta.id, despesa.categoria_id),
+            criado_em=agora(),
+            criado_por=uid,
+            responsavel=despesa.responsavel,
+            reembolso_de=despesa.id,
+        )
 
     def pessoas(self, espaco: Espaco) -> list[str]:
         """Nomes já usados em divisões e como responsável, para a tela
@@ -626,6 +774,12 @@ class ServicoLivroCaixa:
             raise ErroConflito("Um estorno não pode ser estornado.")
         if original.estornado_por:
             raise ErroConflito("Este lançamento já foi estornado.")
+        if original.reembolso_de:
+            raise ErroConflito(REEMBOLSO_NAO_ESTORNA)
+        # O estorno devolve a despesa inteira à conta; com uma parte já
+        # devolvida pelo reembolso, o mesmo dinheiro voltaria duas vezes.
+        if any(parte.situacao == SituacaoDaParte.RECEBIDO for parte in original.divisao):
+            raise ErroConflito(DESFAZER_O_RACHA_ANTES)
 
         estorno = Lancamento(
             espaco_id=espaco.id,

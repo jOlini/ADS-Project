@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Campo from './Campo';
+import { useConviteDoPlano } from './convite/useConviteDoPlano';
 import Seletor from './Seletor';
 import SeletorDeCorHex from './SeletorDeCorHex';
 import { useToast } from './toast/useToast';
@@ -28,6 +29,7 @@ function formularioDe(cartao) {
 // recebe compras novas). aoSalvar recebe o cartão salvo.
 export default function FormularioDeCartao({ espacoId, emEdicao = null, aoSalvar, aoCancelar, aoMudarOcupado }) {
   const toast = useToast();
+  const convite = useConviteDoPlano();
   const [formulario, setFormulario] = useState(() => (emEdicao ? formularioDe(emEdicao) : NOVO));
   const [erros, setErros] = useState({});
   const [enviando, setEnviando] = useState(false);
@@ -66,10 +68,15 @@ export default function FormularioDeCartao({ espacoId, emEdicao = null, aoSalvar
     try {
       aoSalvar(await salvar());
     } catch (erro) {
-      setErros(errosDaApi(erro.campos));
-      toast.erro(erro.message, { titulo: 'Cartão não salvo' });
       setEnviando(false);
       aoMudarOcupado?.(false);
+      // Teto do Free: no lugar do erro, o convite do plano (o modal fecha).
+      if (convite.abrirSeForLimite(erro)) {
+        aoCancelar();
+        return;
+      }
+      setErros(errosDaApi(erro.campos));
+      toast.erro(erro.message, { titulo: 'Cartão não salvo' });
     }
   }
 

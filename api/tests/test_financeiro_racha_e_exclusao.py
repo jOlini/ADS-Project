@@ -37,6 +37,12 @@ def partes(*pares):
     return [{"pessoa": pessoa, "valor_centavos": valor} for pessoa, valor in pares]
 
 
+def quem_e_quanto(divisao):
+    # A resposta traz também o racha a receber (situação, prazo): aqui só
+    # importa quem ficou com quanto.
+    return [{"pessoa": parte["pessoa"], "valor_centavos": parte["valor_centavos"]} for parte in divisao]
+
+
 # --- Racha ---------------------------------------------------------------------
 
 
@@ -46,7 +52,8 @@ def test_divide_o_churrasco_entre_tres_pessoas_com_valores_diferentes(ana):
     resposta = churrasco(ana, conta, partes(("Ana", 10000), ("Bruno", 15000), ("Carla", 5000)))
 
     assert resposta.status_code == 201
-    assert resposta.json()["divisao"] == partes(("Ana", 10000), ("Bruno", 15000), ("Carla", 5000))
+    assert quem_e_quanto(resposta.json()["divisao"]) == partes(("Ana", 10000), ("Bruno", 15000), ("Carla", 5000))
+    assert {parte["situacao"] for parte in resposta.json()["divisao"]} == {"PENDENTE"}
     lido = ana.get(f"/lancamentos/{resposta.json()['id']}").json()
     assert lido["divisao"] == resposta.json()["divisao"]
     # A divisão é informação do lançamento: o saldo muda pelo valor inteiro.
@@ -110,7 +117,7 @@ def test_estorno_leva_a_divisao_junto(ana):
 
     estorno = ana.post(f"/lancamentos/{original['id']}/estorno").json()
 
-    assert estorno["divisao"] == partes(("Bruno", 15000))
+    assert quem_e_quanto(estorno["divisao"]) == partes(("Bruno", 15000))
 
 
 def test_pessoas_ja_usadas_voltam_sem_repeticao_e_em_ordem(ana, bruno, assinar):

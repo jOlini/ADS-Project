@@ -50,7 +50,7 @@ describe('paraExtrato', () => {
     expect(linha).toEqual({
       id: 'l1', data: '2026-09-19', descricao: 'Supermercado', tipo: 'despesa', categoria: 'Mercado', cor: 'mercado',
       conta: 'Conta corrente', valor: -21437, pessoas: [], divididoEntre: null, responsavel: null, estorno: false, estornado: false,
-      parcela: null,
+      reembolso: false, parcela: null,
       noCartao: false, meio: '', original: expect.objectContaining({ id: 'l1' }),
     });
   });
@@ -253,8 +253,35 @@ describe('validarLancamento', () => {
     expect(validarLancamento({ ...churrasco, tipo: 'TRANSFERENCIA', categoria_id: '', conta_destino_id: 'c2' })).toEqual({});
   });
 
-  it('põe os campos da divisão no fim da ordem de foco', () => {
-    expect(ordemDoLancamento({ divisao: [{ pessoa: '', valor: '' }] }).slice(-3)).toEqual(['divisao.0.pessoa', 'divisao.0.valor', 'divisao']);
+  it('põe os campos da divisão no fim da ordem de foco, com o prazo do racha', () => {
+    expect(ordemDoLancamento({ divisao: [{ pessoa: '', valor: '' }] }).slice(-4)).toEqual([
+      'divisao.0.pessoa',
+      'divisao.0.valor',
+      'prazo_da_divisao',
+      'divisao',
+    ]);
+  });
+
+  it('só a despesa dividida leva o prazo do racha à API, e o prazo antes da data é recusado', () => {
+    const base = {
+      tipo: 'DESPESA',
+      descricao: 'Jantar',
+      valor: '300,00',
+      data: '2026-10-02',
+      conta_id: 'c1',
+      categoria_id: 'lazer',
+      divisao: [{ pessoa: 'Bruno', valor: '100,00' }],
+      prazo_da_divisao: '2026-11-01',
+    };
+
+    expect(corpoDoLancamento(base).divisao).toEqual([{ pessoa: 'Bruno', valor_centavos: 10000, vencimento: '2026-11-01' }]);
+    expect(corpoDoLancamento({ ...base, tipo: 'RECEITA' }).divisao).toEqual([{ pessoa: 'Bruno', valor_centavos: 10000 }]);
+    expect(validarLancamento({ ...base, prazo_da_divisao: '2026-10-01' }).prazo_da_divisao).toBe(
+      'O prazo vem antes da data do lançamento.',
+    );
+    expect(errosDaApi({ 'divisao.0.vencimento': 'O prazo para receber vem antes da data do lançamento.' })).toEqual({
+      prazo_da_divisao: 'O prazo para receber vem antes da data do lançamento.',
+    });
   });
 
   it('transferência pede destino diferente da origem e dispensa categoria', () => {

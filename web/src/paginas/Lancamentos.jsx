@@ -9,6 +9,7 @@ import Extrato from '../componentes/Extrato';
 import FiltroDePessoa from '../componentes/FiltroDePessoa';
 import FormularioDeLancamento from '../componentes/FormularioDeLancamento';
 import Icone from '../componentes/Icone';
+import MedidorDoPlano from '../componentes/MedidorDoPlano';
 import SimboloDoVazio from '../olifine/componentes/SimboloDoVazio';
 import ImportarExtrato from '../componentes/ImportarExtrato';
 import AcoesDaLinha from '../componentes/AcoesDaLinha';
@@ -18,6 +19,7 @@ import { useToast } from '../componentes/toast/useToast';
 import { useAcoesDoExtrato } from '../componentes/useAcoesDoExtrato';
 import { useCarga } from '../componentes/useCarga';
 import { useSelecao } from '../componentes/useSelecao';
+import { useUsoDoPlano } from '../componentes/useUsoDoPlano';
 import { buscarNoExtrato } from '../regras/busca';
 import { nomeDoMes } from '../regras/calendario';
 import { mesDaReferencia } from '../regras/cartoes';
@@ -124,6 +126,8 @@ export default function Lancamentos() {
   const buscarMes = useMemo(() => (espacoId ? () => carregarMes(espacoId, mes) : null), [espacoId, mes]);
   const cadastros = useCarga(buscarCadastros);
   const extrato = useCarga(buscarMes);
+  // Lançamentos do mês no teto do Free: o convite abre no lugar do formulário.
+  const plano = useUsoDoPlano(espacoId);
 
   const contas = useMemo(() => cadastros.dados?.contas ?? [], [cadastros.dados]);
   const categorias = useMemo(() => cadastros.dados?.categorias ?? [], [cadastros.dados]);
@@ -199,6 +203,7 @@ export default function Lancamentos() {
   function recarregar() {
     cadastros.recarregar();
     extrato.recarregar();
+    plano.recarregar();
   }
 
   function fecharModal() {
@@ -249,12 +254,16 @@ export default function Lancamentos() {
     <div className="pagina-do-extrato">
       <header className="barra-do-extrato">
         <h1>Extrato</h1>
+        <MedidorDoPlano uso={plano.uso} recurso="lancamentos_do_mes" />
+        {/* As duas no verde da marca, o tom das ações utilitárias e
+            positivas do design system. O extrato importado não conta no teto
+            do Free; o lançamento à mão, sim. */}
         <div className="acoes-do-extrato" role="toolbar" aria-label="Ações do extrato">
-          <button type="button" className="secundario" onClick={() => setModal('importar')}>
+          <button type="button" onClick={() => setModal('importar')}>
             <Icone nome="importar" tamanho={18} />
             Importar extrato
           </button>
-          <button type="button" onClick={() => setModal('novo')}>
+          <button type="button" onClick={() => plano.seCouber('lancamentos_do_mes', () => setModal('novo'))}>
             <Icone nome="mais" tamanho={18} />
             Novo lançamento
           </button>

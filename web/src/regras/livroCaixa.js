@@ -4,7 +4,7 @@
 // aqui só poupa uma ida ao servidor e põe a mensagem no campo certo.
 import { lerValor } from './dinheiro';
 import { dataExiste } from './datas';
-import { camposDaDivisao, corpoDaDivisao, erroDoDivididoEntre, lerDivididoEntre, validarDivisao } from './divisao';
+import { camposDaDivisao, corpoDaDivisao, erroDoDivididoEntre, erroDoPrazo, lerDivididoEntre, validarDivisao } from './divisao';
 import { erroDoResponsavel, responsavelParaApi } from './responsavel';
 
 // Tipos de conta onde o dinheiro está. O cartão de crédito também é uma
@@ -114,6 +114,8 @@ export function paraExtrato(lancamentos, contas, categorias, { pontoDeVista } = 
       responsavel: lancamento.responsavel ?? null,
       estorno: Boolean(lancamento.estorno_de),
       estornado: Boolean(lancamento.estornado_por),
+      // A parte do racha devolvida: diminui a despesa, não vira receita.
+      reembolso: Boolean(lancamento.reembolso_de),
       parcela: lancamento.compra_id ? { numero: lancamento.parcela, total: lancamento.parcelas } : null,
       noCartao: ehCartao(contaPorId.get(lancamento.conta_id)),
       meio: rotuloDoMeio(lancamento.meio),
@@ -239,6 +241,10 @@ export function validarLancamento(formulario) {
 
   if (temDivisao(formulario)) {
     Object.assign(erros, validarDivisao(formulario.divisao, valor || null));
+    const erroDoPrazoDoRacha = formulario.tipo === 'DESPESA' ? erroDoPrazo(formulario.prazo_da_divisao, formulario.data) : '';
+    if (erroDoPrazoDoRacha) {
+      erros.prazo_da_divisao = erroDoPrazoDoRacha;
+    }
   }
   // A divisão do Free (só o número de pessoas), também fora da transferência.
   const erroDaDivisao = formulario.tipo === 'TRANSFERENCIA' ? '' : erroDoDivididoEntre(formulario.dividido_entre);
@@ -265,7 +271,8 @@ export function corpoDoLancamento(formulario) {
     corpo.categoria_id = formulario.categoria_id;
   }
   if (temDivisao(formulario)) {
-    corpo.divisao = corpoDaDivisao(formulario.divisao);
+    // Só a despesa dividida é um valor a receber, com prazo.
+    corpo.divisao = corpoDaDivisao(formulario.divisao, formulario.tipo === 'DESPESA' ? formulario.prazo_da_divisao : '');
   }
   const divididoEntre = formulario.tipo === 'TRANSFERENCIA' ? null : lerDivididoEntre(formulario.dividido_entre);
   if (divididoEntre) {
@@ -353,6 +360,10 @@ const CAMPO_DO_FORMULARIO = {
 };
 
 function campoDoFormulario(campo) {
+  // O prazo vai em cada parte, mas a tela tem um campo só para ele.
+  if (/^divisao\.\d+\.vencimento$/.test(campo)) {
+    return 'prazo_da_divisao';
+  }
   const partes = campo.split('.');
   const ultimo = partes.at(-1);
   return [...partes.slice(0, -1), CAMPO_DO_FORMULARIO[ultimo] ?? ultimo].join('.');

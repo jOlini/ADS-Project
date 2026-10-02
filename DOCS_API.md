@@ -449,12 +449,12 @@ tipos, e só dois: o **pessoal** (`PF`), criado no primeiro acesso, com o Modo F
 |---|---|---|---|---|
 | `GET` | `/espacos` | Listar meus espaços; no primeiro acesso, cria o espaço pessoal com as categorias iniciais | `200 OK` | `401`, `403` (e-mail não confirmado), `503` |
 | `GET` | `/espacos/acesso` | O que a conta pode fazer além do uso normal: `super_admin` (modo de teste dos planos) e o `plano_simulado` do pedido | `200 OK` | `401`, `403` |
-| `POST` | `/espacos` | Cadastrar uma empresa no espaço empresarial (`tipo: PJ`, `nome`, `cnpj` e `regime` opcionais), com as categorias de empresa | `201 Created` + `Location` | `400`, `401`, `409` (limite de empresas) |
+| `POST` | `/espacos` | Cadastrar uma empresa no espaço empresarial (`tipo: PJ`, `nome`, `cnpj` e `regime` opcionais), com as categorias de empresa; só no Plano Empresarial | `201 Created` + `Location` | `400`, `401`, `403` (fora do Empresarial), `409` (limite de empresas) |
 | `GET` | `/espacos/{espaco_id}` | Consultar um espaço | `200 OK` | `401`, `404` |
 | `PATCH` | `/espacos/{espaco_id}` | Editar o nome, o CNPJ ou o regime de uma empresa (só os campos enviados) | `200 OK` | `400`, `401`, `403`, `404`, `409` (pessoal) |
 | `DELETE` | `/espacos/{espaco_id}` | Excluir uma empresa sem movimento (sem contas nem lançamentos), com as categorias e os cadastros dela | `204 No Content` | `401`, `403`, `404`, `409` (pessoal ou com dados) |
 | `GET` | `/espacos/{espaco_id}/contas` | Listar contas com o saldo de cada uma | `200 OK` | `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial e cor opcional) ou cartão de crédito (tipo `CARTAO_CREDITO`, com limite, fechamento, vencimento e cor) | `201 Created` + `Location` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/contas` | Criar conta (nome, tipo, saldo inicial e cor opcional) ou cartão de crédito (tipo `CARTAO_CREDITO`, com limite, fechamento, vencimento e cor) | `201 Created` + `Location` | `400`, `401`, `403` (teto do Free), `404` |
 | `GET` | `/espacos/{espaco_id}/contas/{conta_id}` | Consultar conta e saldo | `200 OK` | `401`, `404` |
 | `PUT` | `/espacos/{espaco_id}/contas/{conta_id}` | Renomear, trocar o tipo, recolorir, desativar ou reativar; no cartão, também limite e dias da fatura | `200 OK` | `400`, `401`, `404` |
 | `DELETE` | `/espacos/{espaco_id}/contas/{conta_id}` | Excluir conta ou cartão com todos os lançamentos dela (`excluidos` na resposta) | `200 OK` | `401`, `404` |
@@ -463,7 +463,7 @@ tipos, e só dois: o **pessoal** (`PF`), criado no primeiro acesso, com o Modo F
 | `GET` | `/espacos/{espaco_id}/cartoes/{cartao_id}/faturas` | Listar as faturas do cartão (as que têm lançamentos e a atual), com total, pagamentos e quantidade | `200 OK` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/cartoes/{cartao_id}/faturas/{AAAA-MM}` | Consultar uma fatura (mês do vencimento): compras, créditos e pagamentos do período | `200 OK` | `400`, `401`, `404` |
 | `DELETE` | `/espacos/{espaco_id}/cartoes/{cartao_id}/faturas/{AAAA-MM}` | Excluir as compras e os créditos da fatura (compra parcelada sai inteira; pagamentos ficam) | `200 OK` | `400`, `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/cartoes/{cartao_id}/compras` | Lançar compra no cartão, à vista ou parcelada (uma despesa por parcela) | `201 Created` (parcelas criadas) | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/cartoes/{cartao_id}/compras` | Lançar compra no cartão, à vista ou parcelada (uma despesa por parcela) | `201 Created` (parcelas criadas) | `400`, `401`, `403` (plano ou teto do Free), `404` |
 | `POST` | `/espacos/{espaco_id}/cartoes/{cartao_id}/pagamentos` | Pagar a fatura: sai da conta indicada e libera o limite | `201 Created` + `Location` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/categorias` | Listar categorias | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/categorias` | Criar categoria (nome, tipo, cor da paleta ou `#rrggbb`) | `201 Created` + `Location` | `400`, `401`, `404` |
@@ -471,13 +471,16 @@ tipos, e só dois: o **pessoal** (`PF`), criado no primeiro acesso, com o Modo F
 | `PUT` | `/espacos/{espaco_id}/categorias/{categoria_id}` | Renomear, recolorir, desativar ou reativar | `200 OK` | `400`, `401`, `404` |
 | `DELETE` | `/espacos/{espaco_id}/categorias/{categoria_id}?mover_para=` | Excluir categoria; com lançamentos, só com `mover_para` (a categoria que os recebe) | `204 No Content`; com `mover_para`, `200 OK` (`lancamentos_movidos`) | `400`, `401`, `404`, `409` (em uso, sem destino) |
 | `GET` | `/espacos/{espaco_id}/lancamentos?de=&ate=&limite=&conta_id=` | Listar lançamentos do mais recente ao mais antigo (período e conta opcionais, até 1000) | `200 OK` | `400`, `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência à vista nas contas (com meio, responsável e divisão entre pessoas, opcionais) | `201 Created` + `Location` | `400`, `401`, `404` |
+| `POST` | `/espacos/{espaco_id}/lancamentos` | Lançar receita, despesa ou transferência à vista nas contas (com meio, responsável e divisão entre pessoas, opcionais) | `201 Created` + `Location` | `400`, `401`, `403` (plano ou teto do Free), `404` |
 | `POST` | `/espacos/{espaco_id}/lancamentos/exclusao-em-lote` | Excluir vários lançamentos de uma vez (`ids`), com as regras da exclusão de um | `200 OK` | `400`, `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Consultar lançamento | `200 OK` | `401`, `404` |
 | `PATCH` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Editar descrição, data, valor, categoria, meio ou responsável (só os campos enviados) | `200 OK` | `400`, `401`, `404` |
-| `POST` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}/estorno` | Estornar: cria o lançamento inverso, com a data de hoje (parcela de compra no cartão: `409`) | `201 Created` + `Location` | `401`, `404`, `409` |
+| `POST` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}/estorno` | Estornar: cria o lançamento inverso, com a data de hoje (parcela de compra no cartão, reembolso do racha ou despesa com parte já recebida: `409`) | `201 Created` + `Location` | `401`, `404`, `409` |
 | `DELETE` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}` | Excluir: apaga o lançamento de vez (e o estorno dele, se houver; numa parcela, a compra inteira) | `204 No Content` | `401`, `404` |
 | `GET` | `/espacos/{espaco_id}/pessoas` | Listar os nomes já usados em divisões e como responsável (para a tela sugerir) | `200 OK` | `401`, `404` |
+| `GET` | `/espacos/{espaco_id}/rachas` | Listar as despesas divididas com nome (o racha a receber), sem os estornos | `200 OK` | `401`, `404` |
+| `PATCH` | `/espacos/{espaco_id}/lancamentos/{lancamento_id}/divisao/{indice}` | Marcar uma parte do racha como `RECEBIDO` (lança o reembolso na conta), `NAO_PAGO` (baixa) ou `PENDENTE` (volta a cobrar) | `200 OK` | `400`, `401`, `403` (Free), `404`, `409` |
+| `GET` | `/espacos/{espaco_id}/uso-do-plano` | Quanto do plano já foi usado: contas e lançamentos do mês, com o teto (só no Free) | `200 OK` | `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/importacoes/estrutura` | Mostrar o começo do CSV em células e sugerir as colunas (nada é gravado) | `200 OK` | `400`, `401`, `404` |
 | `POST` | `/espacos/{espaco_id}/importacoes` | Importar o extrato do banco em CSV, ou só simular (`simular: true`); linhas descartadas na conferência ficam de fora | `200 OK` (relatório por linha) | `400`, `401`, `404` |
 
@@ -529,6 +532,10 @@ Location: /espacos/6ab54bfb5b2393fd604e53b1
   sugeridos na aba Impostos.
 - **Nome:** de 1 a 60 caracteres, limpo como os outros textos livres (sem `<`, `>`, fórmula de planilha nem
   caractere invisível).
+- **Plano:** o espaço empresarial é do Plano Empresarial. No Free e no Família, `403` ("O espaço empresarial (o caixa
+  de cada empresa, DRE, custos, impostos e folha) faz parte do Plano Empresarial."). A tela mostra o convite do
+  plano no lugar das rotas `/empresarial` e `/empresa/...`, e a empresa cadastrada antes de mudar de plano não abre
+  (os dados ficam guardados para quando o plano voltar).
 - **Limite:** 5 empresas por pessoa (`409` com a mensagem). Excluir uma sem movimento libera a vaga.
 - **Editar e excluir:** só quem cadastrou (`403` para outro papel) e nunca o pessoal (`409`). O `PATCH` muda só os
   campos enviados (`cnpj: null` tira o CNPJ). A exclusão só aceita a empresa sem contas e sem lançamentos (`409`
@@ -593,6 +600,28 @@ Content-Type: application/json
 | Divisão do gasto (`divisao`, com nome e parte de cada pessoa) | `403`; só `dividido_entre` | ✔ | ✔ |
 | Modo Família: ligar, incluir e editar pessoas | `403` | ✔ | ✔ |
 | Filtro por pessoa nos relatórios (`membro`) | `403` | ✔ | ✔ |
+| Racha a receber: marcar a parte recebida, não paga ou pendente | `403` | ✔ | ✔ |
+| Espaço empresarial (cadastrar empresa) | `403` | `403` | ✔ |
+| Contas e cartões | até 5 (`403` com `limite`) | sem teto | sem teto |
+| Lançamentos feitos à mão no mês | até 100 (`403` com `limite`) | sem teto | sem teto |
+
+**Limites do Free.** O Free guarda até 5 contas e cartões (ativos ou desativados: desativar não abre vaga) e faz
+até 100 lançamentos à mão por mês, contados desde o dia 1 no fuso do espaço. A compra parcelada conta uma vez; o
+extrato importado, o estorno, o reembolso do racha, o pagamento da fatura e o que a gestão da empresa gera não
+contam (e nunca são barrados: travá-los deixaria a pessoa sem pagar a fatura). No teto, criar conta, lançar e
+comprar no cartão respondem `403` com o membro `limite`, que a tela usa para mostrar o convite do plano no lugar de
+um erro:
+
+```json
+{ "status": 403, "detail": "O Plano Free guarda até 5 contas e cartões. Para cadastrar mais, conheça o Plano Família ou o Empresarial.",
+  "limite": { "recurso": "contas", "usado": 5, "maximo": 5, "plano": "FREE" } }
+```
+
+`GET /espacos/{espaco_id}/uso-do-plano` mostra o uso antes do teto (`maximo: null` nos outros planos):
+
+```json
+{ "plano": "FREE", "contas": { "usado": 4, "maximo": 5 }, "lancamentos_do_mes": { "usado": 37, "maximo": 100 } }
+```
 
 - O Empresarial inclui tudo do Família. Numa empresa, vale o plano do espaço pessoal de quem lança.
 - Voltar ao Free esconde a família sem apagar ninguém; com o plano de volta, o modo gravado volta junto.
@@ -858,6 +887,40 @@ cada pessoa é do Plano Família ou do Empresarial: no Free, `403` (seção "Pla
 | Mais de 20 pessoas | `divisao` | Use no máximo 20 itens. |
 | `divisao` e `dividido_entre` juntos | `dividido_entre` | Use a divisão por pessoa ou o número de pessoas, não os dois. |
 | `dividido_entre` numa compra parcelada | `dividido_entre` | A divisão entre pessoas vale só para compra à vista. |
+| Prazo antes da data do lançamento | `divisao.<n>.vencimento` | O prazo para receber vem antes da data do lançamento. |
+
+### Racha a receber e inadimplência
+
+Numa **despesa** dividida, a parte de cada pessoa é dinheiro de quem lançou nas mãos de outra pessoa: um valor a
+receber (ativo de curto prazo), e não uma despesa de quem lançou. Cada parte (`NovaParte`) aceita o `vencimento`,
+o prazo combinado para a pessoa pagar, e a resposta traz `situacao` (`PENDENTE`, `RECEBIDO` ou `NAO_PAGO`),
+`vencimento`, `recebido_em` e `reembolso_id`. Parte gravada antes disso sai `PENDENTE` e sem prazo.
+
+```http
+PATCH /espacos/{espaco_id}/lancamentos/{lancamento_id}/divisao/0
+Content-Type: application/json
+
+{ "situacao": "RECEBIDO", "conta_id": "<id da conta>", "data": "2026-10-02" }
+```
+
+- **`RECEBIDO`:** pede a conta em que o dinheiro entrou (nunca um cartão; `400` em `conta_id`) e aceita a `data`
+  (sem ela, hoje; antes da despesa, `400`). A API lança o **reembolso** nessa conta: um estorno parcial da despesa
+  (`tipo: DESPESA`, a conta `+` e a categoria da despesa `−`, `reembolso_de` com o id da despesa). Ele não vira
+  receita: os relatórios tiram o valor das despesas da categoria no mês do recebimento. A mesma parte não é
+  recebida duas vezes (`400` em `situacao`).
+- **`NAO_PAGO`:** a baixa. A parte volta a ser despesa de quem lançou (a provisão de devedor duvidoso de uma
+  empresa, em ponto pequeno).
+- **`PENDENTE`:** volta a cobrar; vindo de `RECEBIDO`, o reembolso é apagado. `vencimento` no corpo troca o prazo
+  (`null` tira).
+- **Inadimplência pelo prazo:** a parte pendente com o `vencimento` passado é tratada pela tela como não paga, sem
+  gravar nada: o dia em que vence muda sozinho o que a Visão geral mostra (as despesas, o a receber e o saldo
+  livre).
+- **Reembolso:** só muda a descrição (`400` nos outros campos) e não se estorna (`409`). Excluí-lo volta a parte a
+  `PENDENTE`. Excluir a despesa leva os reembolsos dela, como os estornos. Despesa com parte recebida só se estorna
+  depois de voltar a cobrar a parte (`409`): o estorno devolveria a despesa inteira e a parte duas vezes.
+- **Plano:** mudar uma parte é do Plano Família ou do Empresarial, como dividir (`403` no Free). Receita dividida,
+  estorno e despesa estornada não têm parte a receber (`409`). `GET /rachas` lista as despesas divididas, da mais
+  nova para a mais antiga, para a tela montar o "Gastos por pessoa".
 
 ### Responsável pelo lançamento
 

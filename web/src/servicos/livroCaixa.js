@@ -270,6 +270,33 @@ export function listarPessoas(espacoId) {
   return chamar(doEspaco(espacoId, '/pessoas'));
 }
 
+// ------------------------------------------------------ Racha a receber
+// A parte de cada pessoa numa despesa dividida é um valor a receber
+// (regras/aReceber.ts monta o que cada uma deve).
+
+// As despesas divididas com nome, da mais nova para a mais antiga.
+export function listarRachas(espacoId) {
+  return chamar(doEspaco(espacoId, '/rachas'));
+}
+
+// { situacao: 'RECEBIDO', conta_id, data? } lança o reembolso na conta;
+// { situacao: 'NAO_PAGO' } dá baixa; { situacao: 'PENDENTE', vencimento? }
+// volta a cobrar. Devolve a despesa com as partes atualizadas.
+export function atualizarParte(espacoId, lancamentoId, indice, mudanca) {
+  return chamar(doEspaco(espacoId, `/lancamentos/${encodeURIComponent(lancamentoId)}/divisao/${indice}`), {
+    metodo: 'PATCH',
+    corpo: mudanca,
+  });
+}
+
+// ------------------------------------------------------ Uso do plano
+// { plano, contas: { usado, maximo }, lancamentos_do_mes: { usado, maximo } }:
+// só o Free tem maximo (regras/acessoPorPlano.ts lê o teto). No teto, criar
+// conta, lançar e comprar respondem 403 com detalhes.limite.
+export function usoDoPlano(espacoId) {
+  return chamar(doEspaco(espacoId, '/uso-do-plano'));
+}
+
 // Começo do CSV em células e o mapeamento das colunas, quando a API as
 // reconhece pelo nome: { csv, delimitador? }. Nada é gravado.
 export function estruturaDoExtrato(espacoId, pedido) {

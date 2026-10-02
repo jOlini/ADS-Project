@@ -6,8 +6,39 @@ import {
   dividaDasFaturas,
   fimDoMes,
   leituraDoSaldoLivre,
+  rotuloDoSaldo,
   type LinhaDaConta,
 } from './saldoLivre';
+
+describe('rotuloDoSaldo', () => {
+  it('com sobra (ou zero, ou sem números) é o Saldo livre', () => {
+    expect(rotuloDoSaldo(120_000)).toMatchObject({ titulo: 'Saldo livre', deficit: false });
+    expect(rotuloDoSaldo(0)).toMatchObject({ titulo: 'Saldo livre', deficit: false });
+    expect(rotuloDoSaldo(null)).toMatchObject({ titulo: 'Saldo livre', deficit: false });
+  });
+
+  it('no vermelho vira Déficit de caixa, explicando a necessidade de caixa', () => {
+    const rotulo = rotuloDoSaldo(-1);
+
+    expect(rotulo).toMatchObject({ titulo: 'Déficit de caixa', deficit: true });
+    expect(rotulo.explicacao).toContain('necessidade de caixa');
+  });
+});
+
+describe('racha a receber no saldo livre', () => {
+  it('o que vão te devolver até o fim do mês entra no a receber e no livre', () => {
+    const sem = calcularSaldoLivre({ saldo: 50_000, linhasDasContas: [], hoje: '2026-09-20' });
+    const com = calcularSaldoLivre({ saldo: 50_000, linhasDasContas: [], aReceberDoRacha: 12_000, hoje: '2026-09-20' });
+
+    expect(com.doRacha).toBe(12_000);
+    expect(com.aReceber - sem.aReceber).toBe(12_000);
+    expect(com.livre - sem.livre).toBe(12_000);
+  });
+
+  it('valor negativo do racha não tira dinheiro', () => {
+    expect(calcularSaldoLivre({ saldo: 1_000, linhasDasContas: [], aReceberDoRacha: -500, hoje: '2026-09-20' }).doRacha).toBe(0);
+  });
+});
 
 const HOJE = '2026-09-20';
 const reais = (centavos: number) => `R$ ${(centavos / 100).toFixed(2)}`;

@@ -194,6 +194,21 @@ class FuncaoDaCategoria(StrEnum):
     IMPOSTOS = "IMPOSTOS"
 
 
+class SituacaoDaParte(StrEnum):
+    """Se a pessoa do racha já pagou a parte dela. A parte pendente é um valor
+    a receber (dinheiro de quem lançou, nas mãos de outra pessoa): fica fora
+    das despesas de quem lançou. Pendente com o prazo vencido é tratada como
+    inadimplência pela tela, sem gravar nada: o dia em que vence muda sozinho
+    o que ela mostra."""
+
+    PENDENTE = "PENDENTE"
+    # O dinheiro entrou numa conta: a API lançou o reembolso nela.
+    RECEBIDO = "RECEBIDO"
+    # Baixa: a pessoa não vai pagar, e a parte volta a ser despesa de quem
+    # lançou (a provisão de devedor duvidoso de uma empresa, em ponto pequeno).
+    NAO_PAGO = "NAO_PAGO"
+
+
 class TipoDeOrigem(StrEnum):
     """O que gerou um lançamento da gestão da empresa."""
 
@@ -411,10 +426,19 @@ class Origem:
 @dataclass(frozen=True)
 class Parte:
     """Quanto de um lançamento cabe a uma pessoa (racha). A soma das partes
-    vai até o valor do lançamento; o que sobra é a parte de quem lançou."""
+    vai até o valor do lançamento; o que sobra é a parte de quem lançou.
+
+    Numa despesa, a parte é um valor a receber: vencimento é o prazo
+    combinado para a pessoa pagar (None = sem prazo), situacao diz se ela
+    pagou e reembolso_id aponta o lançamento que trouxe o dinheiro de volta
+    para uma conta (só com RECEBIDO)."""
 
     pessoa: str
     valor_centavos: int
+    vencimento: date | None = None
+    situacao: SituacaoDaParte = SituacaoDaParte.PENDENTE
+    recebido_em: date | None = None
+    reembolso_id: str | None = None
 
 
 @dataclass
@@ -458,6 +482,10 @@ class Lancamento:
     chave_parcelamento: str | None = None
     meio: MeioDePagamento | None = None
     origem: Origem | None = None
+    # Reembolso de uma parte do racha: o id da despesa dividida. É um estorno
+    # parcial na conta em que o dinheiro entrou (a categoria da despesa
+    # diminui, a conta aumenta): não vira receita.
+    reembolso_de: str | None = None
     id: str | None = None
     # Calculado na leitura (id do estorno deste lançamento); não é gravado.
     estornado_por: str | None = field(default=None, compare=False)
@@ -631,8 +659,12 @@ class AtualizacaoCategoria(Entrada):
 
 
 class NovaParte(Entrada):
+    """Uma pessoa do racha. vencimento (opcional) é o prazo para ela pagar a
+    parte: depois dele, sem pagamento, a parte conta como inadimplência."""
+
     pessoa: Nome
     valor_centavos: CentavosPositivos
+    vencimento: Data | None = None
 
 
 class NovoLancamento(Entrada):
@@ -676,6 +708,23 @@ class AtualizacaoLancamento(Entrada):
     categoria_id: Identificador | None = None
     meio: MeioDePagamento | None = None
     responsavel: Nome | None = None
+
+
+class AtualizacaoDaParte(Entrada):
+    """PATCH de uma parte do racha (a posição dela na divisão, que não muda
+    depois de lançada).
+
+    - RECEBIDO pede a conta em que o dinheiro entrou (conta_id, nunca um
+      cartão) e a data (sem ela, hoje): a API lança o reembolso nessa conta.
+    - NAO_PAGO dá baixa: a parte volta a ser despesa de quem lançou.
+    - PENDENTE volta a cobrar; vindo de RECEBIDO, o reembolso é apagado.
+
+    vencimento, quando enviado, troca o prazo (null tira o prazo)."""
+
+    situacao: SituacaoDaParte
+    conta_id: Identificador | None = None
+    data: Data | None = None
+    vencimento: Data | None = None
 
 
 class ExclusaoEmLote(Entrada):
@@ -854,6 +903,21 @@ class AcessoResposta(BaseModel):
     plano_simulado: Plano | None = None
 
 
+class UsoResposta(BaseModel):
+    usado: int
+    # null: o plano não tem teto para este recurso.
+    maximo: int | None
+
+
+class UsoDoPlanoResposta(BaseModel):
+    """Quanto do plano já foi usado neste espaço (limites_do_plano.py). Só o
+    Free tem teto; nos outros planos, maximo sai null."""
+
+    plano: Plano
+    contas: UsoResposta
+    lancamentos_do_mes: UsoResposta
+
+
 class ContaResposta(BaseModel):
     id: str
     nome: str
@@ -919,6 +983,23 @@ class PartidaResposta(BaseModel):
 class ParteResposta(BaseModel):
     pessoa: str
     valor_centavos: int
+    # Prazo para a pessoa pagar (null = sem prazo).
+    vencimento: date | None = None
+    situacao: SituacaoDaParte = SituacaoDaParte.PENDENTE
+    recebido_em: date | None = None
+    # O lançamento do reembolso, quando RECEBIDO.
+    reembolso_id: str | None = None
+
+    @classmethod
+    def de(cls, parte: Parte) -> "ParteResposta":
+        return cls(
+            pessoa=parte.pessoa,
+            valor_centavos=parte.valor_centavos,
+            vencimento=parte.vencimento,
+            situacao=parte.situacao,
+            recebido_em=parte.recebido_em,
+            reembolso_id=parte.reembolso_id,
+        )
 
 
 class OrigemResposta(BaseModel):
@@ -949,6 +1030,8 @@ class LancamentoResposta(BaseModel):
     meio: MeioDePagamento | None
     # Tributo pago ou folha lançada pela gestão da empresa; null nos outros.
     origem: OrigemResposta | None = None
+    # Reembolso de uma parte do racha: o id da despesa dividida.
+    reembolso_de: str | None = None
     criado_em: datetime
 
     @classmethod
@@ -970,7 +1053,7 @@ class LancamentoResposta(BaseModel):
                 )
                 for partida in lancamento.partidas
             ],
-            divisao=[ParteResposta(pessoa=parte.pessoa, valor_centavos=parte.valor_centavos) for parte in lancamento.divisao],
+            divisao=[ParteResposta.de(parte) for parte in lancamento.divisao],
             dividido_entre=lancamento.dividido_entre,
             responsavel=lancamento.responsavel,
             estorno_de=lancamento.estorno_de,
@@ -980,6 +1063,7 @@ class LancamentoResposta(BaseModel):
             parcelas=lancamento.parcelas,
             meio=lancamento.meio,
             origem=OrigemResposta(**vars(lancamento.origem)) if lancamento.origem else None,
+            reembolso_de=lancamento.reembolso_de,
             criado_em=lancamento.criado_em,
         )
 

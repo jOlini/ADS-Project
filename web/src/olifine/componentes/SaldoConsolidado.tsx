@@ -4,6 +4,7 @@ import { formatarData } from '../../regras/datas';
 import { formatarBRL } from '../../regras/dinheiro';
 import {
   leituraDoSaldoLivre,
+  rotuloDoSaldo,
   type EstadoDoSaldoLivre,
   type SaldoLivre,
   type SaudeDoMes,
@@ -59,30 +60,42 @@ const SEM_NUMEROS = {
 // A conta aberta fica no "i" (Dica), que flutua por cima da página. O card tem
 // sempre as mesmas partes, com ou sem números, e altura fixa no CSS: nada
 // aparece nem some depois de carregar, então o layout não pula.
+//
+// O nome muda com o sinal (regras/saldoLivre.ts, rotuloDoSaldo): "Saldo
+// livre" com sobra, "Déficit de caixa" no vermelho, para a falta ter nome.
 export default function SaldoConsolidado({ saldo, resultado, investido, investida, rodape, children }: Props) {
   const ate = resultado ? formatarData(resultado.fimDoMes).slice(0, 5) : '';
   const leitura = resultado ? leituraDoSaldoLivre(resultado, formatarBRL, ate) : SEM_NUMEROS;
+  const rotulo = rotuloDoSaldo(resultado?.livreSemInvestido);
   const saude = resultado?.saude;
   const fechamento = saude ? FECHAMENTO[saude] : null;
   const comprometido = resultado ? Math.round(resultado.comprometido * 100) : 0;
   const ateQuando = ate ? `até ${ate}` : 'até o fim do mês';
 
   return (
-    <article className={`of-kpi of-kpi-saldo of-consolidado borda-viva ${leitura.estado}`} aria-labelledby="titulo-saldo-livre">
+    <article
+      className={`of-kpi of-kpi-saldo of-consolidado borda-viva ${leitura.estado}${rotulo.deficit ? ' deficit' : ''}`}
+      aria-labelledby="titulo-saldo-livre"
+    >
       <div className="of-kpi-topo">
-        <h2 id="titulo-saldo-livre" className="of-kpi-rotulo">
+        {/* O nome é anunciado quando muda (o saldo virou déficit ou voltou). */}
+        <h2 id="titulo-saldo-livre" className="of-kpi-rotulo" aria-live="polite">
           <span className="of-kpi-icone" aria-hidden="true">
-            <Icone nome="alvo" tamanho={18} />
+            <Icone nome={rotulo.deficit ? 'alerta' : 'alvo'} tamanho={18} />
           </span>
-          Saldo livre
+          {rotulo.titulo}
         </h2>
-        <Dica titulo="Saldo livre">
-          <p>
-            Quanto dá para gastar {ateQuando} sem faltar dinheiro para as contas que ainda vão chegar. O dinheiro
-            investido fica de fora: ele é para não mexer.
-          </p>
+        <Dica titulo={rotulo.titulo}>
+          <p>{rotulo.explicacao}</p>
           {resultado && (
-            <ContaDoMes resultado={resultado} investido={investido} ate={ate} comprometido={comprometido} estado={leitura.estado} />
+            <ContaDoMes
+              resultado={resultado}
+              investido={investido}
+              ate={ate}
+              comprometido={comprometido}
+              estado={leitura.estado}
+              rotulo={rotulo.titulo}
+            />
           )}
         </Dica>
       </div>
@@ -172,10 +185,11 @@ interface PropsDaConta {
   ate: string;
   comprometido: number;
   estado: EstadoDoSaldoLivre;
+  rotulo: string;
 }
 
 // A conta dos números, de cima para baixo, dentro da dica do saldo livre.
-function ContaDoMes({ resultado, investido, ate, comprometido, estado }: PropsDaConta) {
+function ContaDoMes({ resultado, investido, ate, comprometido, estado, rotulo }: PropsDaConta) {
   return (
     <>
       <dl className="of-conta-do-mes">
@@ -186,6 +200,7 @@ function ContaDoMes({ resultado, investido, ate, comprometido, estado }: PropsDa
         <div className="soma">
           <dt>
             <span aria-hidden="true">+</span> A receber até {ate}
+            {resultado.doRacha > 0 && <small>{formatarBRL(resultado.doRacha)} do racha (o que vão te devolver)</small>}
           </dt>
           <dd>{formatarBRL(resultado.aReceber)}</dd>
         </div>
@@ -212,7 +227,7 @@ function ContaDoMes({ resultado, investido, ate, comprometido, estado }: PropsDa
         </div>
         <div className="resultado">
           <dt>
-            <span aria-hidden="true">=</span> Saldo livre
+            <span aria-hidden="true">=</span> {rotulo}
           </dt>
           <dd>{formatarBRL(resultado.livreSemInvestido)}</dd>
         </div>

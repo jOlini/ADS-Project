@@ -6,7 +6,7 @@
 // abre, como chamar cada um, quem pode mexer, o formulário da empresa (nome,
 // CNPJ, regime) e onde as metas de cada um ficam. Testado em espacos.test.ts.
 
-import type { Plano } from './planos';
+import { planoDoEspaco, type Plano } from './planos';
 import { limparTexto } from './sanitizacao';
 
 export type TipoDeEspaco = 'PF' | 'PJ';
@@ -78,14 +78,15 @@ export function empresasDe(espacos: readonly Espaco[]): Espaco[] {
 }
 
 // O espaço que abre: o último escolhido (se ainda existe), senão o pessoal,
-// senão o primeiro da lista.
+// senão o primeiro da lista. Fora do Plano Empresarial, as empresas (de antes
+// de mudar de plano) não abrem: o espaço empresarial é do Empresarial, e a
+// API não deixa criar outra (regras/acessoPorPlano.ts). Os dados delas ficam
+// guardados para quando o plano voltar.
 export function escolherEspacoAtivo(espacos: readonly Espaco[], guardado: string | null | undefined): Espaco | null {
-  return (
-    espacos.find((espaco) => espaco.id === guardado) ??
-    espacos.find((espaco) => espaco.tipo === 'PF') ??
-    espacos[0] ??
-    null
-  );
+  const pessoal = espacos.find((espaco) => espaco.tipo === 'PF');
+  const abriveis =
+    pessoal && planoDoEspaco(pessoal) !== 'EMPRESARIAL' ? espacos.filter((espaco) => espaco.tipo !== 'PJ') : espacos;
+  return abriveis.find((espaco) => espaco.id === guardado) ?? pessoal ?? abriveis[0] ?? null;
 }
 
 // O livro que abre ao trocar de Pessoal para Empresarial (ou o contrário): o

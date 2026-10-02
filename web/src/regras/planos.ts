@@ -38,6 +38,16 @@ export function familiaLiberada(plano: Plano): boolean {
 // (o que tem tudo), que leva o maior destaque visual.
 export type NivelDoPlano = 'entrada' | 'intermediario' | 'principal';
 
+// Os dois selos convivem sem um apagar o outro: "popular" puxa a adesão
+// (degradê vivo de verde, o custo-benefício do Família) e "completo" fala de
+// hierarquia (contorno fino e sóbrio sobre a esmeralda do Empresarial).
+export type TomDoSelo = 'popular' | 'completo';
+
+export interface SeloDoPlano {
+  texto: string;
+  tom: TomDoSelo;
+}
+
 export interface DescricaoDoPlano {
   id: Plano;
   nome: string;
@@ -45,8 +55,8 @@ export interface DescricaoDoPlano {
   // Sem preço decidido ainda: "Em breve" no lugar (D-F6 no cofre).
   preco: string | null;
   nivel: NivelDoPlano;
-  // O selo acima do nome (só no principal).
-  selo?: string;
+  // O selo acima do nome (Família e Empresarial).
+  selo?: SeloDoPlano;
   destaque?: boolean;
   // A lista curta do cartão: os principais benefícios, do que o plano tem de
   // próprio (o resto está na tabela comparativa).
@@ -73,6 +83,7 @@ export const PLANOS: readonly DescricaoDoPlano[] = [
     apoio: 'O dinheiro da casa, com o gasto de cada pessoa separado.',
     preco: null,
     nivel: 'intermediario',
+    selo: { texto: 'Mais popular', tom: 'popular' },
     beneficios: [
       'Tudo do Free',
       `Você + ${CONVIDADOS_DA_FAMILIA} convidados: até ${CONVIDADOS_DA_FAMILIA + 1} pessoas`,
@@ -86,7 +97,7 @@ export const PLANOS: readonly DescricaoDoPlano[] = [
     apoio: 'Tudo do Família, mais as suas empresas.',
     preco: null,
     nivel: 'principal',
-    selo: 'O mais completo',
+    selo: { texto: 'Mais completo', tom: 'completo' },
     destaque: true,
     beneficios: ['Tudo do Família', 'Caixa de cada empresa (CNPJ)', 'DRE e fluxo de caixa', 'Custos, impostos, sócios e folha'],
   },

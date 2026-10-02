@@ -2183,8 +2183,8 @@ button.of-dica-botao:focus-visible {
 }
 
 /* As miniaturas lado a lado; a legenda embaixo de cada uma leva à tela do
-   cartão (o link cobre a miniatura e a legenda): é o único movimento da
-   seção, o clique. A miniatura é um container (as medidas dela são em cqi):
+   cartão (o link cobre a miniatura e a legenda), e o hover deixa claro que o
+   cartão inteiro é clicável. A miniatura é um container (as medidas dela são em cqi):
    com o mínimo da coluna em porcentagem (min(100%, 200px)), cada layout da
    página refazia a grade várias vezes para medir as miniaturas, e passava de
    130 ms no trace. Com o mínimo fixo, o layout volta a uns poucos ms; os
@@ -2200,10 +2200,53 @@ button.of-dica-botao:focus-visible {
 
 .of-cartoes li {
   position: relative;
+  isolation: isolate;
   display: grid;
   gap: var(--espaco-4);
   align-content: start;
   min-width: 0;
+  /* O link da legenda cobre o cartão inteiro: a mão aparece em todo ele. */
+  cursor: pointer;
+  transition: transform var(--tempo-medio) var(--curva);
+}
+
+/* A sombra do hover mora num pseudo-elemento que só acende (opacity): o
+   cartão sobe e cresce por transform, e nada repinta a grade a cada quadro
+   (DA-130). */
+.of-cartoes li::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--espaco-4) * -1);
+  z-index: -1;
+  border-radius: var(--raio-grande);
+  background: var(--superficie);
+  box-shadow:
+    0 18px 34px -20px rgb(16 60 44 / 0.5),
+    0 0 0 1px color-mix(in srgb, var(--of-verde) 30%, var(--linha));
+  opacity: 0;
+  transition: opacity var(--tempo-medio) var(--curva);
+  pointer-events: none;
+}
+
+.of-cartoes li:focus-within::before {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .of-cartoes li:hover {
+    transform: translateY(-3px) scale(1.02);
+  }
+
+  .of-cartoes li:hover::before {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .of-cartoes li,
+  .of-cartoes li:hover {
+    transform: none;
+  }
 }
 
 .of-cartoes-legenda {
@@ -2443,6 +2486,25 @@ button.of-dica-botao:focus-visible {
 
 .of-rosca-fatia.apagada {
   opacity: 0.25;
+}
+
+/* Divisa entre as fatias: 2 px na cor do fundo do card (a mesma nos dois
+   temas, porque é o token), sem escalar com o tamanho da rosca. Não recebe o
+   ponteiro: passar o mouse continua destacando a fatia de baixo. */
+.of-rosca-divisa {
+  stroke: var(--superficie);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* Contorno fino do anel: a fatia de cor parecida com o fundo não some. */
+.of-rosca-contorno {
+  fill: none;
+  stroke: var(--linha);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }
 
 .of-rosca-miolo {
@@ -3263,6 +3325,225 @@ a.of-regar-convite-link:hover {
   }
 }
 
+/* -------------------------------------------- Gastos por pessoa (racha) */
+
+/* O racha de cada pessoa (componentes/RachaPorPessoa.jsx): três totais em
+   cima (a receber, recebido e assumido) e uma linha por pessoa, que abre as
+   partes dela. Cores dos estados: verde a receber, cinza recebido, vermelho
+   assumido (a inadimplência que voltou para as suas despesas). */
+.of-painel-racha {
+  grid-column: 1 / -1;
+  gap: var(--espaco-7);
+}
+
+.of-painel-racha.bloqueado {
+  justify-items: start;
+}
+
+.of-racha-totais {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--espaco-6);
+  margin: 0;
+}
+
+.of-racha-totais > div {
+  display: grid;
+  gap: var(--espaco-2);
+  padding: var(--espaco-6) var(--espaco-8);
+  border: var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+
+.of-racha-totais dt {
+  display: flex;
+  gap: var(--espaco-3);
+  align-items: center;
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+  font-weight: var(--peso-semi);
+}
+
+.of-racha-totais dd {
+  margin: 0;
+  font-size: var(--fonte-numero);
+  font-weight: var(--peso-forte);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-racha-totais .a-receber {
+  border-color: color-mix(in srgb, var(--of-verde) 45%, var(--linha));
+  background: color-mix(in srgb, var(--of-menta) 55%, var(--superficie));
+}
+
+.of-racha-totais .a-receber dd {
+  color: var(--of-sobre-menta);
+}
+
+.of-racha-totais .inadimplente dd {
+  color: var(--of-saida);
+}
+
+.of-racha-pessoas,
+.of-racha-partes {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.of-racha-pessoas {
+  gap: var(--espaco-3);
+}
+
+.of-racha-pessoas > li {
+  border: var(--borda);
+  border-radius: var(--raio);
+}
+
+.of-racha-pessoas > li.com-atraso {
+  border-color: color-mix(in srgb, var(--of-saida) 40%, var(--linha));
+}
+
+.of-racha-pessoas summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: var(--espaco-6);
+  align-items: center;
+  min-height: var(--altura-botao);
+  padding: var(--espaco-4) var(--espaco-7);
+  border-radius: inherit;
+  cursor: pointer;
+  list-style: none;
+}
+
+.of-racha-pessoas summary::-webkit-details-marker {
+  display: none;
+}
+
+.of-racha-pessoas summary:hover {
+  background: var(--fundo-ao-passar);
+}
+
+.of-racha-pessoas summary:focus-visible {
+  outline: var(--espessura-do-foco) solid var(--of-verde);
+  outline-offset: var(--afastamento-do-foco);
+}
+
+.of-racha-pessoas summary > .icone {
+  color: var(--suave);
+  transition: transform var(--transicao);
+}
+
+.of-racha-pessoas details[open] summary > .icone {
+  transform: rotate(180deg);
+}
+
+.of-racha-avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--of-menta);
+  color: var(--of-sobre-menta);
+  font-size: var(--fonte-micro);
+  font-weight: var(--peso-forte);
+}
+
+.com-atraso .of-racha-avatar {
+  background: var(--of-rosa-suave);
+  color: var(--of-sobre-rosa);
+}
+
+.of-racha-nome {
+  display: grid;
+  min-width: 0;
+}
+
+.of-racha-nome b,
+.of-racha-nome small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-racha-nome small {
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-racha-valor {
+  font-weight: var(--peso-forte);
+  font-variant-numeric: tabular-nums;
+}
+
+.of-racha-valor.quitado {
+  color: var(--suave);
+}
+
+.of-racha-partes {
+  gap: var(--espaco-2);
+  padding: 0 var(--espaco-7) var(--espaco-5);
+}
+
+.of-racha-partes > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--espaco-6);
+  align-items: center;
+  padding: var(--espaco-4) 0;
+  border-top: var(--borda);
+}
+
+.of-racha-parte-textos {
+  display: grid;
+  min-width: 0;
+}
+
+.of-racha-parte-textos b {
+  overflow: hidden;
+  font-weight: var(--peso-semi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.of-racha-parte-textos small {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+  align-items: center;
+  color: var(--suave);
+  font-size: var(--fonte-apoio);
+}
+
+.of-racha-partes .inadimplente .of-racha-parte-textos small {
+  color: var(--of-sobre-rosa);
+}
+
+.of-racha-partes .recebido .of-racha-parte-valor {
+  color: var(--suave);
+  text-decoration: line-through;
+}
+
+.of-racha-parte-valor {
+  font-weight: var(--peso-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+@container (max-width: 560px) {
+  .of-racha-totais {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A aba Empresarial fora do plano: o cadeado diz que ela abre o convite. */
+.of-alternador-cadeado {
+  display: inline-flex;
+  color: var(--suave);
+}
+
 /* ------------------------------------------------ Folhas em volta (3D) */
 
 /* As folhas e moedas da landing dentro do app (componentes/FolhasEmVolta.tsx):
@@ -3294,18 +3575,55 @@ a.of-regar-convite-link:hover {
   box-shadow: inset 0 0 0 1.5px rgb(176 135 59 / 0.9);
 }
 
-/* Cabeçalho da Visão geral: folhas subindo e virando no próprio eixo à
-   direita do "Olá", atrás do texto, apagando nas pontas. */
+/* A cédula do céu da landing em CSS: deitada (quase duas vezes mais larga),
+   com a moldura clara, o medalhão no meio e os dois selos nas pontas. */
+.of-folhas-3d i.nota {
+  width: calc(var(--tamanho) * 1.9);
+  border-radius: 2px;
+  background:
+    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.6) 0 18%, transparent 19%),
+    radial-gradient(circle at 16% 50%, rgb(255 255 255 / 0.35) 0 9%, transparent 10%),
+    radial-gradient(circle at 84% 50%, rgb(255 255 255 / 0.35) 0 9%, transparent 10%),
+    linear-gradient(135deg, #8fd0a9, #3f8f68 75%);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.55),
+    inset 0 0 0 2.5px rgb(32 93 68 / 0.35);
+}
+
+/* Banner da Visão geral: do "Olá" ao "+ Novo" numa área com moldura, o
+   fundo de menta e o dinheiro flutuando por trás (moedas e cédulas). A
+   borda acende quando o foco está dentro (o "+ Novo" pelo teclado) e ao
+   passar o mouse: é a área de entrada da tela. */
 .of-cabecalho.com-folhas {
   position: relative;
   isolation: isolate;
+  padding: var(--espaco-10) var(--espaco-11);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--of-verde) 32%, var(--linha));
+  border-radius: 20px;
+  background:
+    radial-gradient(70% 140% at 100% 0%, color-mix(in srgb, var(--of-menta) 85%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--superficie), color-mix(in srgb, var(--of-menta-clara) 70%, var(--superficie)));
+  box-shadow: var(--sombra);
+  transition:
+    border-color var(--transicao),
+    box-shadow var(--transicao);
+}
+
+.of-cabecalho.com-folhas:hover,
+.of-cabecalho.com-folhas:focus-within {
+  border-color: color-mix(in srgb, var(--of-verde) 70%, var(--linha));
+  box-shadow:
+    var(--sombra),
+    0 0 0 3px color-mix(in srgb, var(--of-verde) 22%, transparent);
 }
 
 .of-folhas-3d.cabecalho {
-  inset: -18px 0 -6px;
+  inset: 0;
   z-index: -1;
   overflow: hidden;
-  mask-image: linear-gradient(to right, transparent, #000 34%, #000 88%, transparent);
+  border-radius: inherit;
+  mask-image: linear-gradient(to right, transparent, #000 30%, #000 92%, transparent);
 }
 
 .of-folhas-3d.cabecalho i {
@@ -3313,6 +3631,32 @@ a.of-regar-convite-link:hover {
   top: var(--y);
   opacity: 0;
   animation: of-folha-sobe var(--duracao) linear var(--atraso) infinite;
+}
+
+/* A cédula sobe balançando de um lado para o outro, como papel no ar. */
+.of-folhas-3d.cabecalho i.nota {
+  animation-name: of-nota-flutua;
+}
+
+@keyframes of-nota-flutua {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 34px, var(--z)) rotateZ(var(--giro)) rotateX(24deg) rotateY(-18deg);
+  }
+  16%,
+  80% {
+    opacity: 0.7;
+  }
+  33% {
+    transform: translate3d(18px, -6px, var(--z)) rotateZ(calc(var(--giro) + 14deg)) rotateX(-20deg) rotateY(22deg);
+  }
+  66% {
+    transform: translate3d(-14px, -52px, var(--z)) rotateZ(calc(var(--giro) - 10deg)) rotateX(22deg) rotateY(-24deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(8px, -104px, var(--z)) rotateZ(calc(var(--giro) + 8deg)) rotateX(-18deg) rotateY(20deg);
+  }
 }
 
 @keyframes of-folha-sobe {
@@ -3817,6 +4161,11 @@ button.of-chip:hover:not(:disabled) {
 @media (max-width: 900px) {
   .of-cabecalho h1 {
     font-size: 1.5rem;
+  }
+
+  .of-cabecalho.com-folhas {
+    padding: var(--espaco-8);
+    border-radius: 16px;
   }
 
   /* Saldo em campo esmeralda, com os atalhos, como no app do celular. */

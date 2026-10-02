@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import CompraNoCartao from '../../componentes/CompraNoCartao';
+import { useConviteDoPlano } from '../../componentes/convite/useConviteDoPlano';
 import Esqueleto from '../../componentes/Esqueleto';
 import FiltroDePessoa from '../../componentes/FiltroDePessoa';
 import FormularioDeCartao from '../../componentes/FormularioDeCartao';
@@ -10,6 +11,8 @@ import MiniaturaDoCartao from '../../componentes/MiniaturaDoCartao';
 import Menu from '../../componentes/Menu';
 import Modal from '../../componentes/Modal';
 import { useCarga } from '../../componentes/useCarga';
+import { useUsoDoPlano } from '../../componentes/useUsoDoPlano';
+import { descontarAReceber, partesDoRacha, rachaPorPessoa, totaisDoRacha } from '../../regras/aReceber';
 import { resumoDasFaturas, usoDoLimite } from '../../regras/cartoes';
 import { corDaCategoria } from '../../regras/cores';
 import { formatarBRL, formatarComSinal } from '../../regras/dinheiro';
@@ -34,6 +37,7 @@ import {
   listarContas,
   listarLancamentos,
   listarPessoas,
+  listarRachas,
   relatorioMensal,
 } from '../../servicos/livroCaixa';
 import Arvore from '../componentes/Arvore';
@@ -42,6 +46,7 @@ import GraficoDeSaldo from '../componentes/GraficoDeSaldo';
 import Icone from '../../componentes/Icone';
 import Rosca from '../componentes/Rosca';
 import Dica from '../componentes/Dica';
+import RachaPorPessoa from '../componentes/RachaPorPessoa';
 import SaldoConsolidado from '../componentes/SaldoConsolidado';
 import SimboloDoVazio from '../componentes/SimboloDoVazio';
 import {
@@ -55,8 +60,8 @@ import {
 } from '../dados/exemplo';
 import { iconeDaLinha } from '../regras/icones';
 import { inicioDaCarga, linhasDoMes, mesAnterior as mesQueVeioAntes } from '../regras/despesasDoMes';
-import { calcularSaldoLivre } from '../regras/saldoLivre';
-import { parteInvestida, separarSaldos, sobreOTipo, textoDaFatia } from '../regras/saldos';
+import { calcularSaldoLivre, fimDoMes } from '../regras/saldoLivre';
+import { liquidezDisponivel, parteInvestida, separarSaldos, sobreOTipo, textoDaFatia } from '../regras/saldos';
 import { guardado, porcentagem, progresso, proximaFase, resumoDasMetas, sementeDaMeta } from '../regras/metas';
 import { somarDias } from '../regras/serie';
 import { leituraDaVariacao, textoDaVariacao, variacaoPercentual } from '../regras/tendencia';
@@ -94,17 +99,20 @@ function rotuloDoDia(data, hoje) {
 // anterior, despesasDoMes.ts) e o relatório de 12 meses. Sem o relatório (API
 // antiga, erro), a tela abre do mesmo jeito, só sem a comparação das receitas.
 // Os cartões trazem as faturas (sem eles, a tela abre do mesmo jeito); as
-// pessoas dos rachas são só sugestão no formulário do "+ Novo".
+// pessoas dos rachas são só sugestão no formulário do "+ Novo". Os rachas
+// (as despesas divididas de qualquer data) montam o "Gastos por pessoa"; sem
+// eles (API antiga, erro), o painel fica vazio.
 async function carregarVisao(espacoId, hoje) {
-  const [contas, categorias, lancamentos, relatorio, cartoes, pessoas] = await Promise.all([
+  const [contas, categorias, lancamentos, relatorio, cartoes, pessoas, rachas] = await Promise.all([
     listarContas(espacoId),
     listarCategorias(espacoId),
     listarLancamentos(espacoId, { de: inicioDaCarga(hoje.slice(0, 7)) }),
     relatorioMensal(espacoId).catch(() => null),
     listarCartoes(espacoId).catch(() => []),
     listarPessoas(espacoId).catch(() => []),
+    listarRachas(espacoId).catch(() => []),
   ]);
-  return { contas, categorias, lancamentos, relatorio, cartoes, pessoas };
+  return { contas, categorias, lancamentos, relatorio, cartoes, pessoas, rachas };
 }
 
 // As últimas transações em grupos por dia, na ordem da lista.
@@ -134,13 +142,14 @@ function destaquesDasMetas(metas) {
   return { resumo: resumoDasMetas(metas), metasEmDestaque, pertoDeCrescer };
 }
 
-// Gasto de cada pessoa da casa no mês (Modo Família, visão consolidada).
+// Gasto de cada pessoa da casa no mês (Modo Família, visão consolidada). O
+// nome diz "da casa" para não confundir com o "Gastos por pessoa" do racha.
 const GastoPorPessoa = memo(function GastoPorPessoa({ gastos, mes }) {
   const maior = gastos[0]?.valor ?? 0;
   return (
     <section className="cartao of-painel of-painel-gasto-por-pessoa" aria-labelledby="titulo-gasto-por-pessoa">
       <div className="of-painel-cabecalho">
-        <h2 id="titulo-gasto-por-pessoa">Gasto por pessoa</h2>
+        <h2 id="titulo-gasto-por-pessoa">Gasto da casa por pessoa</h2>
         <small>{mes}</small>
       </div>
       {gastos.length > 0 ? (
@@ -166,6 +175,27 @@ const GastoPorPessoa = memo(function GastoPorPessoa({ gastos, mes }) {
   );
 });
 
+// "Gastos por pessoa" no Free: o que o racha com nome faz, e o convite do
+// Plano Família (a divisão com o nome e a parte de cada pessoa é dele).
+const ConviteDoRacha = memo(function ConviteDoRacha({ aoConhecer }) {
+  return (
+    <section className="cartao of-painel of-painel-racha bloqueado" aria-labelledby="titulo-racha">
+      <div className="of-painel-cabecalho">
+        <h2 id="titulo-racha">Gastos por pessoa</h2>
+        <small>Plano Família</small>
+      </div>
+      <p className="of-discreto">
+        Dividiu um jantar ou uma viagem? Com o nome e a parte de cada pessoa, o app separa o que é seu do que vão te
+        devolver, com o prazo para pagar e o aviso de quem passou dele.
+      </p>
+      <button type="button" onClick={aoConhecer}>
+        <Icone nome="pessoas" tamanho={16} />
+        Conhecer o Plano Família
+      </button>
+    </section>
+  );
+});
+
 // Uma linha só (o texto cortado com reticências no card estreito): a altura
 // do card não muda com o tamanho do mês por extenso.
 function SeloDeTendencia({ variacao, maiorEhMelhor = true, referencia }) {
@@ -186,9 +216,12 @@ function SeloDeTendencia({ variacao, maiorEhMelhor = true, referencia }) {
 }
 
 // Visão geral da OliFine: o saldo livre como card principal (com o
-// patrimônio total, o investido e o fechamento previsto do mês), os números
-// do mês com a tendência (cada card com o "i" que explica o número), a evolução do saldo, as despesas por categoria, as últimas
-// transações, as metas e o compromisso nos cartões. Com a API, dados de verdade; sem ela
+// patrimônio total, o investido e o fechamento previsto do mês; no vermelho,
+// ele vira "Déficit de caixa"), o disponível em conta, as despesas do mês (só
+// a parte de quem lançou: o racha fica a receber) e as metas, cada card com o
+// "i" que explica o número; a evolução do saldo, as despesas por categoria,
+// os gastos por pessoa (o racha, com a inadimplência), as últimas transações,
+// as metas e o compromisso nos cartões. Com a API, dados de verdade; sem ela
 // (Pages), a tela vazia oferece o modo de exemplo, sempre marcado.
 //
 // O "+ Novo" do topo deixa a pessoa escolher o que criar (lançamento à
@@ -223,6 +256,9 @@ export default function VisaoGeral() {
     [espacoId, hojeReal],
   );
   const livro = useCarga(buscar);
+  // O teto do Free no "+ Novo" e o convite do plano (racha com nome no Free).
+  const plano = useUsoDoPlano(exemplo ? null : espacoId);
+  const convite = useConviteDoPlano();
   const { metas } = useMetas(donoDasMetas(usuario?.uid, espaco?.dados), { exemplo });
   const pessoasDaCasa = useMemo(() => pessoasDaFamilia(espaco.dados), [espaco.dados]);
   // Pessoa tirada da família (ou modo desligado) volta o filtro para a casa toda.
@@ -230,15 +266,6 @@ export default function VisaoGeral() {
     pessoasDaCasa.length > 0 && (filtroEscolhido === TITULAR || pessoasDaCasa.some((alvo) => alvo.id === filtroEscolhido))
       ? filtroEscolhido
       : TODOS;
-  // A comparação com o mês anterior de uma pessoa sai do relatório dela.
-  const buscarDaPessoa = useMemo(
-    () =>
-      apiConfigurada && espacoId && filtroDePessoa !== TODOS
-        ? () => relatorioMensal(espacoId, { membro: filtroDePessoa }).catch(() => null)
-        : null,
-    [espacoId, filtroDePessoa],
-  );
-  const relatorioDaPessoa = useCarga(buscarDaPessoa);
 
   const visao = useMemo(() => {
     if (exemplo) {
@@ -267,10 +294,15 @@ export default function VisaoGeral() {
     const mes = hojeReal.slice(0, 7);
     const dasContas = paraExtrato(lancamentosDasContas(lancamentos, contas), contas, categorias);
     const comCartoes = paraExtrato(lancamentos, contas, categorias);
+    // As despesas são só as suas: numa despesa dividida, a parte que outra
+    // pessoa ainda vai pagar é um valor a receber e sai do mês; a vencida sem
+    // pagamento volta (regras/aReceber.ts). O saldo e as últimas transações
+    // continuam com o que mexeu de verdade nas contas.
+    const soMinhaParte = descontarAReceber(comCartoes, hojeReal);
     // O mês: o à vista com data nele e as faturas dos cartões que vencem nele
     // (todas as compras delas, de qualquer data), sem o pagamento da fatura.
     const ciclos = cartoesDe(contas);
-    const doMes = linhasDoMes(comCartoes, ciclos, mes);
+    const doMes = linhasDoMes(soMinhaParte, ciclos, mes);
     // Com uma pessoa escolhida, os números do mês, as categorias e as últimas
     // transações são só dela; o saldo e o gráfico continuam os das contas,
     // que são da casa toda.
@@ -285,17 +317,9 @@ export default function VisaoGeral() {
     });
     // As despesas do mês anterior pela mesma regra (à vista + faturas que
     // venceram nele), para a comparação não misturar duas contas diferentes.
-    const anteriores = somarPorOrigem(daPessoa(linhasDoMes(comCartoes, ciclos, mesQueVeioAntes(mes))));
+    const anteriores = somarPorOrigem(daPessoa(linhasDoMes(soMinhaParte, ciclos, mesQueVeioAntes(mes))));
     const despesasAntes = anteriores.aVista + anteriores.noCredito;
     base.variacao = { ...base.variacao, despesas: despesasAntes > 0 ? variacaoPercentual(base.totais.saidas, despesasAntes) : null };
-    if (filtroDePessoa !== TODOS) {
-      const meses = relatorioDaPessoa.dados?.meses;
-      const anterior = meses && meses.length >= 2 ? meses[meses.length - 2] : null;
-      base.variacao = {
-        ...base.variacao,
-        receitas: anterior ? variacaoPercentual(base.totais.entradas, anterior.receitas_centavos) : null,
-      };
-    }
     return {
       ...base,
       gastoPorPessoa: pessoasDaCasa.length > 0 ? gastoPorPessoa(doMes, pessoasDaCasa) : [],
@@ -312,11 +336,17 @@ export default function VisaoGeral() {
       // futuras (a listagem não tem data final) e as faturas dos cartões.
       projecao: { saldo: saldoTotal(contas), linhas: dasContas, cartoes },
     };
-  }, [exemplo, livro.dados, hojeReal, filtroDePessoa, pessoasDaCasa, relatorioDaPessoa.dados]);
+  }, [exemplo, livro.dados, hojeReal, filtroDePessoa, pessoasDaCasa]);
 
   const real = apiConfigurada && !exemplo;
   const semContas = real && Boolean(livro.dados) && livro.dados.contas.length === 0;
   const comNumeros = Boolean(visao) && !semContas;
+  // O racha de cada pessoa (de qualquer data) e os totais: a receber,
+  // recebido e assumido (regras/aReceber.ts).
+  const racha = useMemo(() => {
+    const partes = partesDoRacha(real ? (livro.dados?.rachas ?? []) : [], hojeReal);
+    return { devedores: rachaPorPessoa(partes), totais: totaisDoRacha(partes, fimDoMes(hojeReal)) };
+  }, [real, livro.dados, hojeReal]);
 
   // Tudo o que sai dos dados, calculado só quando eles mudam (e não a cada
   // abertura de modal, troca de filtro ou de período do gráfico).
@@ -332,28 +362,36 @@ export default function VisaoGeral() {
     [cadastros],
   );
   // Disponível (corrente, carteira, poupança) x investido (regras/saldos.ts)
-  // e quanto sobra até o fim do mês (regras/saldoLivre.ts).
-  const { saldos, investida, livreDoMes } = useMemo(() => {
+  // e quanto sobra até o fim do mês (regras/saldoLivre.ts), com o racha que
+  // vence até lá entrando como dinheiro a receber.
+  const { saldos, investida, livreDoMes, disponivel } = useMemo(() => {
     if (!comNumeros) {
-      return { saldos: null, investida: null, livreDoMes: null };
+      return { saldos: null, investida: null, livreDoMes: null, disponivel: null };
     }
     const separados = separarSaldos(visao.contas);
     return {
       saldos: separados,
       investida: parteInvestida(separados),
+      disponivel: liquidezDisponivel(visao.contas),
       livreDoMes: calcularSaldoLivre({
         saldo: visao.projecao.saldo,
         linhasDasContas: visao.projecao.linhas,
         cartoes: visao.projecao.cartoes,
         investido: separados.investido.total,
+        aReceberDoRacha: racha.totais.aReceberNoMes,
         hoje,
       }),
     };
-  }, [comNumeros, visao, hoje]);
+  }, [comNumeros, visao, hoje, racha]);
 
   // Ações estáveis: o menu "+ Novo", os formulários e o vazio do gráfico não
   // redesenham só porque a Visão geral redesenhou.
-  const { recarregar } = livro;
+  const { recarregar: recarregarLivro } = livro;
+  const { recarregar: recarregarPlano, seCouber } = plano;
+  const recarregar = useCallback(() => {
+    recarregarLivro();
+    recarregarPlano();
+  }, [recarregarLivro, recarregarPlano]);
   const fecharModal = useCallback(() => {
     setModal(null);
     setModalOcupado(false);
@@ -366,8 +404,10 @@ export default function VisaoGeral() {
   // da tela atualizam por trás).
   const aposLancar = useCallback(() => recarregar(), [recarregar]);
   const verExemplo = useCallback(() => setExemplo(true), []);
-  const cadastrarConta = useCallback(() => setModal('conta'), []);
+  const conhecerRacha = useCallback(() => convite.abrir('racha'), [convite]);
+  const cadastrarConta = useCallback(() => seCouber('contas', () => setModal('conta')), [seCouber]);
   const temCartoes = cartoes.length > 0;
+  // No teto do Free, cada opção abre o convite do plano no lugar do modal.
   const opcoesDoNovo = useMemo(
     () => [
       {
@@ -375,7 +415,7 @@ export default function VisaoGeral() {
         rotulo: 'Novo lançamento manual',
         descricao: 'PIX, débito, dinheiro ou TED, direto no saldo da conta.',
         icone: 'lancamentos',
-        aoEscolher: () => setModal('lancamento'),
+        aoEscolher: () => seCouber('lancamentos_do_mes', () => setModal('lancamento')),
       },
       ...(temCartoes
         ? [
@@ -384,14 +424,26 @@ export default function VisaoGeral() {
               rotulo: 'Nova compra no crédito',
               descricao: 'Entra na fatura do cartão, à vista ou parcelada.',
               icone: 'cartao',
-              aoEscolher: () => setModal('compra'),
+              aoEscolher: () => seCouber('lancamentos_do_mes', () => setModal('compra')),
             },
           ]
         : []),
-      { id: 'conta', rotulo: 'Cadastrar conta', descricao: 'Corrente, poupança, carteira ou investimento.', icone: 'contas', aoEscolher: () => setModal('conta') },
-      { id: 'cartao', rotulo: 'Cadastrar cartão', descricao: 'Limite, fechamento, vencimento e a cor.', icone: 'cartao', aoEscolher: () => setModal('cartao') },
+      {
+        id: 'conta',
+        rotulo: 'Cadastrar conta',
+        descricao: 'Corrente, poupança, carteira ou investimento.',
+        icone: 'contas',
+        aoEscolher: () => seCouber('contas', () => setModal('conta')),
+      },
+      {
+        id: 'cartao',
+        rotulo: 'Cadastrar cartão',
+        descricao: 'Limite, fechamento, vencimento e a cor.',
+        icone: 'cartao',
+        aoEscolher: () => seCouber('contas', () => setModal('cartao')),
+      },
     ],
-    [temCartoes],
+    [temCartoes, seCouber],
   );
 
   const carregando = real && (espaco.carregando || (Boolean(espacoId) && livro.carregando && !livro.dados));
@@ -410,8 +462,10 @@ export default function VisaoGeral() {
 
   return (
     <div className="of-visao">
+      {/* O banner das boas-vindas: do "Olá" ao "+ Novo" numa área com moldura
+          (que acende com o foco dentro), com moedas e cédulas flutuando por
+          trás, como o céu da landing. */}
       <header className="of-cabecalho com-folhas">
-        {/* As folhas ao vento da landing, em miniatura, atrás das boas-vindas. */}
         <FolhasEmVolta arranjo="cabecalho" />
         <div>
           <h1>{dados ? `Olá, ${dados.nome}!` : 'Olá!'}</h1>
@@ -442,7 +496,7 @@ export default function VisaoGeral() {
           <p aria-live="polite">
             {filtroDePessoa === TODOS
               ? 'A casa toda.'
-              : `Receitas, despesas e últimas transações de ${filtroDePessoa === TITULAR ? 'você' : pessoasDaCasa.find((alvo) => alvo.id === filtroDePessoa)?.nome}; o saldo é da casa toda.`}
+              : `Receitas e despesas do mês e últimas transações de ${filtroDePessoa === TITULAR ? 'você' : pessoasDaCasa.find((alvo) => alvo.id === filtroDePessoa)?.nome}; o disponível e o saldo são da casa toda.`}
           </p>
         </div>
       )}
@@ -511,25 +565,37 @@ export default function VisaoGeral() {
 
         {/* Cada card tem sempre as mesmas linhas, com ou sem números: a
             altura fixa do CSS não precisa esconder nada que chegue depois. */}
-        <article className="of-kpi">
+        {/* Liquidez: o dinheiro que dá para usar agora, somado de todas as
+            contas correntes, carteiras e poupanças, sem o investido
+            (regras/saldos.ts, liquidezDisponivel). As receitas do mês ficam
+            no rodapé, para a informação de antes não sumir. */}
+        <article className="of-kpi of-kpi-disponivel">
           <div className="of-kpi-topo">
             <p className="of-kpi-rotulo">
               <span className="of-kpi-icone entrada" aria-hidden="true">
-                <Icone nome="entrada" tamanho={18} />
+                <Icone nome="contas" tamanho={18} />
               </span>
-              Receitas
+              Disponível
             </p>
-            <Dica titulo="Receitas">
+            <Dica titulo="Disponível em conta">
               <p>
-                Todo o dinheiro que entrou no mês: salário, vendas, rendimentos. Transferência entre as suas próprias
-                contas não conta, porque o dinheiro só mudou de lugar.
+                Todo o dinheiro que está agora nas suas contas correntes, carteiras e poupanças, somado. O investido fica
+                de fora: é uma posição aplicada, não dinheiro à mão. O cartão de crédito também: ele é dívida.
               </p>
             </Dica>
           </div>
-          <p className="of-kpi-valor">{comNumeros ? formatarBRL(visao.totais.entradas) : 'R$ —'}</p>
-          <p className="of-kpi-origem">O que entrou em {NOME_DO_MES.format(comoData(hoje))}</p>
+          <p className={`of-kpi-valor${disponivel !== null && disponivel < 0 ? ' negativo' : ''}`}>
+            {disponivel === null ? 'R$ —' : formatarBRL(disponivel)}
+          </p>
+          <p className="of-kpi-origem">Em contas e carteiras, sem o investido</p>
           {comNumeros ? (
-            <SeloDeTendencia variacao={visao.variacao.receitas} referencia={mesAnterior} />
+            <p className="of-kpi-rodape">
+              <span className={`of-tendencia${visao.totais.entradas > 0 ? ' bom' : ''}`}>
+                {visao.totais.entradas > 0 ? '+' : ''}
+                {formatarBRL(visao.totais.entradas)}
+              </span>
+              <span className="of-kpi-rodape-texto">de receitas em {NOME_DO_MES.format(comoData(hoje))}</span>
+            </p>
           ) : (
             <p className="of-kpi-rodape">
               <span className="of-kpi-rodape-texto">Sem números ainda</span>
@@ -549,6 +615,10 @@ export default function VisaoGeral() {
               <p>
                 O que pesa no mês: o que saiu das contas à vista (PIX, débito, dinheiro) mais o total das faturas dos
                 cartões que vencem neste mês, com todas as compras delas. O pagamento da fatura não conta de novo.
+              </p>
+              <p>
+                Num gasto dividido, só a sua parte entra: a de cada pessoa fica a receber, em Gastos por pessoa. Se o
+                prazo passar sem pagamento, ela volta para cá.
               </p>
             </Dica>
           </div>
@@ -684,6 +754,16 @@ export default function VisaoGeral() {
         {comNumeros && pessoasDaCasa.length > 0 && filtroDePessoa === TODOS && !exemplo && (
           <GastoPorPessoa gastos={visao.gastoPorPessoa} mes={NOME_DO_MES.format(comoData(hoje))} />
         )}
+
+        {/* O racha a receber, no espaço pessoal: com o Plano Família, quem te
+            deve e quem já pagou; no Free, o convite do plano. */}
+        {real && livro.dados && espaco.dados?.tipo === 'PF' &&
+          (divisaoPorPessoa ? (
+            <RachaPorPessoa espacoId={espacoId} devedores={racha.devedores} totais={racha.totais} contas={contasAtivas}
+              aoMudar={recarregar} />
+          ) : (
+            <ConviteDoRacha aoConhecer={conhecerRacha} />
+          ))}
 
         <section className="cartao of-painel" aria-labelledby="titulo-ultimas">
           <div className="of-painel-cabecalho">

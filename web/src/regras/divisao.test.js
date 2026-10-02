@@ -5,6 +5,7 @@ import {
   corpoDaDivisao,
   dividirIgualmente,
   erroDoDivididoEntre,
+  erroDoPrazo,
   lerDivididoEntre,
   MAXIMO_DE_PESSOAS,
   parteDeCada,
@@ -120,9 +121,22 @@ describe('corpo e campos', () => {
     expect(corpoDaDivisao([{ pessoa: '  Ana ', valor: '100' }])).toEqual([{ pessoa: 'Ana', valor_centavos: 10000 }]);
   });
 
+  it('leva o prazo do racha a cada parte', () => {
+    expect(corpoDaDivisao([{ pessoa: 'Ana', valor: '100' }], '2026-11-01')).toEqual([
+      { pessoa: 'Ana', valor_centavos: 10000, vencimento: '2026-11-01' },
+    ]);
+  });
+
+  it('confere o prazo: vazio vale, antes da data não', () => {
+    expect(erroDoPrazo('', '2026-10-02')).toBe('');
+    expect(erroDoPrazo('2026-10-02', '2026-10-02')).toBe('');
+    expect(erroDoPrazo('2026-10-01', '2026-10-02')).toBe('O prazo vem antes da data do lançamento.');
+    expect(erroDoPrazo('02/10/2026', '2026-10-02')).toBe('Data inválida.');
+  });
+
   it('lista os campos na ordem da tela', () => {
     expect(camposDaDivisao([parteVazia(), parteVazia()])).toEqual([
-      'divisao.0.pessoa', 'divisao.0.valor', 'divisao.1.pessoa', 'divisao.1.valor', 'divisao',
+      'divisao.0.pessoa', 'divisao.0.valor', 'divisao.1.pessoa', 'divisao.1.valor', 'prazo_da_divisao', 'divisao',
     ]);
   });
 

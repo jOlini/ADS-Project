@@ -1,7 +1,7 @@
 // Testes das folhas em volta (o 3D da landing dentro do app): quantidade por
 // arranjo, determinismo e os limites de cada um.
 import { describe, expect, it } from 'vitest';
-import { gerarFolhasEmVolta, QUANTIDADES } from './folhasEmVolta';
+import { gerarFolhasEmVolta, PARTES_DO_CABECALHO, QUANTIDADES } from './folhasEmVolta';
 
 describe('gerarFolhasEmVolta', () => {
   it('é determinístico pela semente', () => {
@@ -28,6 +28,21 @@ describe('gerarFolhasEmVolta', () => {
       expect(folha.atraso).toBeLessThanOrEqual(0);
       expect(-folha.atraso).toBeLessThanOrEqual(folha.duracao);
     }
+  });
+
+  it('no banner, moedas e cédulas meio a meio, com poucas folhas', () => {
+    const pecas = gerarFolhasEmVolta('cabecalho', 2026, 1000);
+    const parte = (tipo: string) => pecas.filter((peca) => peca.tipo === tipo).length / pecas.length;
+
+    expect(Math.abs(parte('moeda') - PARTES_DO_CABECALHO.moeda)).toBeLessThan(0.05);
+    expect(Math.abs(parte('nota') - PARTES_DO_CABECALHO.nota)).toBeLessThan(0.05);
+    expect(Math.abs(parte('folha') - PARTES_DO_CABECALHO.folha)).toBeLessThan(0.05);
+    // A cédula flutua mais devagar que a moeda.
+    const media = (tipo: string) => {
+      const doTipo = pecas.filter((peca) => peca.tipo === tipo);
+      return doTipo.reduce((soma, peca) => soma + peca.duracao, 0) / doTipo.length;
+    };
+    expect(media('nota')).toBeGreaterThan(media('moeda'));
   });
 
   it('na órbita do estado vazio, os ângulos cobrem a volta inteira', () => {

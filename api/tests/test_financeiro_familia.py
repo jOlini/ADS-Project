@@ -198,7 +198,9 @@ def test_filtro_de_pessoa_desconhecida_e_recusado(ana):
     assert resposta.json()["campos"]["membro"] == "Pessoa da família não encontrada."
 
 
-def test_familia_e_so_do_espaco_pessoal(ana):
+def test_familia_e_so_do_espaco_pessoal(ana, assinar):
+    # A empresa pede o Empresarial, que inclui o Família.
+    assinar("uid-ana", "EMPRESARIAL")
     empresa = ana.api.post("/espacos", headers=ana.cabecalho, json={"tipo": "PJ", "nome": "Oficina"}).json()["id"]
     base = f"/espacos/{empresa}"
 

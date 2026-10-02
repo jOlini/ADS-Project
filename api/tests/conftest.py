@@ -163,6 +163,20 @@ def assinar(api, cabecalho_de):
 
 
 @pytest.fixture
+def no_empresarial(api, cabecalho_do_cliente, assinar):
+    """no_empresarial("uid-ana") -> cabeçalho da cliente já no Plano
+    Empresarial, o plano que libera as empresas (ela entra no app antes)."""
+
+    def montar(uid):
+        cabecalho = cabecalho_do_cliente(uid)
+        api.get("/espacos", headers=cabecalho)
+        assinar(uid, "EMPRESARIAL")
+        return cabecalho
+
+    return montar
+
+
+@pytest.fixture
 def cabecalho_de(config, repositorio):
     """cabecalho_de("id-admin") -> {"Authorization": "Bearer <jwt válido>"}"""
 

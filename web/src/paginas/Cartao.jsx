@@ -21,6 +21,7 @@ import { useToast } from '../componentes/toast/useToast';
 import { useAcoesDoExtrato } from '../componentes/useAcoesDoExtrato';
 import { useCarga } from '../componentes/useCarga';
 import { useSelecao } from '../componentes/useSelecao';
+import { useUsoDoPlano } from '../componentes/useUsoDoPlano';
 import { nomeDoMes } from '../regras/calendario';
 import { mesDaReferencia, referenciaDoMes, ROTULO_DA_SITUACAO, textoDoVencimento, ultimoDiaDaFatura } from '../regras/cartoes';
 import { formatarData } from '../regras/datas';
@@ -101,6 +102,8 @@ export default function Cartao() {
     [espacoId, cartaoId, referencia],
   );
   const fatura = useCarga(buscarDaFatura);
+  // Compra nova no teto do Free: o convite abre no lugar do formulário.
+  const plano = useUsoDoPlano(espacoId);
   // Responsável só com a família (Plano Família), com as pessoas dela.
   const familia = useMemo(() => pessoasDaFamilia(espaco.dados), [espaco.dados]);
   const acoes = useAcoesDoExtrato({
@@ -114,6 +117,7 @@ export default function Cartao() {
     cartao.recarregar();
     fatura.recarregar();
     faturas.recarregar();
+    plano.recarregar();
   }
 
   const dias = useMemo(() => {
@@ -239,20 +243,22 @@ export default function Cartao() {
             {!painel.ativa && <span className="etiqueta">Desativado</span>}
           </small>
         </div>
+        {/* Todas no verde da marca, o tom das ações utilitárias e positivas
+            do design system: nenhuma some ao lado da "Nova compra". */}
         <div className="acoes-do-extrato" role="toolbar" aria-label="Ações do cartão">
-          <button type="button" className="secundario" onClick={() => setModal('editar')}>
+          <button type="button" onClick={() => setModal('editar')}>
             <Icone nome="editar" tamanho={18} />
             Editar cartão
           </button>
-          <button type="button" className="secundario" onClick={() => setModal('importar')}>
+          <button type="button" onClick={() => setModal('importar')}>
             <Icone nome="importar" tamanho={18} />
             Importar fatura
           </button>
-          <button type="button" className="secundario" onClick={() => setModal('pagar')}>
+          <button type="button" onClick={() => setModal('pagar')}>
             <Icone nome="contas" tamanho={18} />
             Pagar fatura
           </button>
-          <button type="button" onClick={() => setModal('comprar')}>
+          <button type="button" onClick={() => plano.seCouber('lancamentos_do_mes', () => setModal('comprar'))}>
             <Icone nome="mais" tamanho={18} />
             Nova compra
           </button>

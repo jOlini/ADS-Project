@@ -6,8 +6,9 @@
 // folhasEmVolta.test.ts.
 //
 // Três arranjos:
-// - cabecalho: folhas subindo e virando no próprio eixo à direita do "Olá"
-//   da Visão geral, como as folhas ao vento da landing;
+// - cabecalho: moedas e cédulas flutuando no banner do "Olá" da Visão
+//   geral, como o céu da landing (moedas, cédulas e algumas folhas): as
+//   moedas sobem girando, as cédulas sobem balançando como papel;
 // - vazio: uma órbita em volta do símbolo do estado vazio;
 // - colheita: a explosão de folhas e moedas quando uma meta fica completa,
 //   uma vez só.
@@ -15,9 +16,10 @@
 import { gerador } from './arvore';
 
 export type ArranjoDasFolhas = 'cabecalho' | 'vazio' | 'colheita';
+export type TipoDaPeca = 'folha' | 'moeda' | 'nota';
 
 export interface FolhaEmVolta {
-  tipo: 'folha' | 'moeda';
+  tipo: TipoDaPeca;
   // cabecalho: posição de partida (0 a 1 da largura e da altura);
   // vazio: ângulo na órbita (graus) e altura (px);
   // colheita: para onde voa (px a partir do centro).
@@ -25,7 +27,8 @@ export interface FolhaEmVolta {
   y: number;
   // Profundidade (px): positivo vem para a frente.
   z: number;
-  // Lado da folha (px).
+  // Lado da folha e da moeda (px); na cédula, a altura (ela é deitada, quase
+  // duas vezes mais larga, no CSS).
   tamanho: number;
   // Segundos. No cabecalho e no vazio o atraso é negativo: a folha já
   // aparece no meio do caminho, sem todas nascerem juntas.
@@ -37,26 +40,43 @@ export interface FolhaEmVolta {
 
 // Quantas peças por arranjo: fundo discreto, não espetáculo (a colheita é o
 // momento de festa, e dura pouco).
-export const QUANTIDADES: Record<ArranjoDasFolhas, number> = { cabecalho: 12, vazio: 6, colheita: 28 };
+export const QUANTIDADES: Record<ArranjoDasFolhas, number> = { cabecalho: 14, vazio: 6, colheita: 28 };
 
 // Parte de moedas: o dinheiro que voa junto com as folhas.
-const PARTE_DE_MOEDAS: Record<ArranjoDasFolhas, number> = { cabecalho: 0.2, vazio: 0.17, colheita: 0.4 };
+const PARTE_DE_MOEDAS: Record<ArranjoDasFolhas, number> = { cabecalho: 0.45, vazio: 0.17, colheita: 0.4 };
+
+// No banner, o dinheiro manda: moedas e cédulas meio a meio, com poucas
+// folhas da marca (o resto). Um sorteio só por peça, como no céu da landing.
+export const PARTES_DO_CABECALHO: Record<TipoDaPeca, number> = { moeda: 0.45, nota: 0.45, folha: 0.1 };
 
 const entre = (sorte: () => number, menor: number, maior: number) => menor + (maior - menor) * sorte();
 const arredondar = (valor: number) => Math.round(valor * 100) / 100;
 
+function tipoNoCabecalho(sorteio: number): TipoDaPeca {
+  if (sorteio < PARTES_DO_CABECALHO.moeda) {
+    return 'moeda';
+  }
+  return sorteio < PARTES_DO_CABECALHO.moeda + PARTES_DO_CABECALHO.nota ? 'nota' : 'folha';
+}
+
+const TAMANHOS_NO_CABECALHO: Record<TipoDaPeca, [number, number]> = { moeda: [10, 16], nota: [11, 16], folha: [11, 20] };
+
 function peca(arranjo: ArranjoDasFolhas, indice: number, total: number, sorte: () => number): FolhaEmVolta {
-  const moeda = sorte() < PARTE_DE_MOEDAS[arranjo];
+  const sorteio = sorte();
+  const moeda = sorteio < PARTE_DE_MOEDAS[arranjo];
   const giro = entre(sorte, 0, 360);
   if (arranjo === 'cabecalho') {
-    const duracao = entre(sorte, 9, 16);
+    const tipo = tipoNoCabecalho(sorteio);
+    // As cédulas são mais lentas: papel flutua, metal cai.
+    const duracao = tipo === 'nota' ? entre(sorte, 12, 19) : entre(sorte, 9, 15);
+    const [menor, maior] = TAMANHOS_NO_CABECALHO[tipo];
     return {
-      tipo: moeda ? 'moeda' : 'folha',
-      // Quase todas à direita do título, onde o cabeçalho tem respiro.
-      x: sorte() < 0.8 ? entre(sorte, 0.42, 0.98) : entre(sorte, 0.02, 0.42),
+      tipo,
+      // Quase todas à direita do título, onde o banner tem respiro.
+      x: sorte() < 0.8 ? entre(sorte, 0.42, 0.96) : entre(sorte, 0.02, 0.42),
       y: entre(sorte, 0.1, 1),
       z: entre(sorte, -90, 40),
-      tamanho: moeda ? entre(sorte, 9, 14) : entre(sorte, 11, 22),
+      tamanho: entre(sorte, menor, maior),
       atraso: -entre(sorte, 0, duracao),
       duracao,
       giro,

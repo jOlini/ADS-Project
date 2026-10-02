@@ -682,10 +682,13 @@ export default function Landing() {
             Comece de graça. Quando a casa ou a empresa entrarem na conta, o plano cresce junto.
           </p>
           {/* Da entrada ao principal, da esquerda para a direita: o Free
-              (entrada), o Família (intermediário, com um toque de menta) e o
-              Empresarial, o mais completo, em esmeralda, com o selo e a borda
-              viva. Os três têm a mesma altura e o mesmo respiro: o nome, o
-              preço, a lista curta de benefícios e, embaixo, a ação. */}
+              (entrada), o Família (intermediário, com um toque de menta e o
+              selo "Mais popular", em degradê vivo) e o Empresarial, em
+              esmeralda, com o selo "Mais completo" (contorno sóbrio) e a borda
+              viva. Os selos ficam no mesmo lugar e na mesma medida: um puxa a
+              adesão, o outro marca a hierarquia, sem um apagar o outro. Os três
+              cartões têm a mesma altura e o mesmo respiro: o nome, o preço, a
+              lista curta de benefícios e, embaixo, a ação. */}
           <div className="lp-planos-grade">
             {PLANOS.map((plano, indice) => (
               <article
@@ -696,9 +699,9 @@ export default function Landing() {
                 style={{ '--ordem': indice + 1 }}
               >
                 {plano.selo && (
-                  <span className="lp-plano-selo">
-                    <Icone nome="estrela" tamanho={14} />
-                    {plano.selo}
+                  <span className={`lp-plano-selo ${plano.selo.tom}`}>
+                    <Icone nome={plano.selo.tom === 'popular' ? 'coracao' : 'estrela'} tamanho={14} />
+                    {plano.selo.texto}
                   </span>
                 )}
                 <h3>{plano.nome}</h3>

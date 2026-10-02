@@ -46,6 +46,10 @@ export interface EntradaDoSaldoLivre {
   // Parte do saldo em contas de investimento: conta no total, mas não é
   // dinheiro para as contas do mês.
   investido?: number;
+  // O racha a receber com prazo até o fim do mês (regras/aReceber.ts): o
+  // dinheiro que outras pessoas vão devolver. A parte vencida sem pagamento
+  // não entra (é inadimplência).
+  aReceberDoRacha?: number;
   hoje: string;
 }
 
@@ -56,7 +60,10 @@ export type SaudeDoMes = 'folga' | 'atencao' | 'negativo';
 export interface SaldoLivre {
   fimDoMes: string;
   saldoDeHoje: number;
+  // Tudo o que ainda entra até o fim do mês, com o racha.
   aReceber: number;
+  // A parte do aReceber que vem do racha.
+  doRacha: number;
   // O que ainda sai das contas até o fim do mês (lançado com data futura).
   aPagarNasContas: number;
   // O que já se deve nas faturas até a atual.
@@ -107,11 +114,13 @@ export function calcularSaldoLivre({
   linhasDasContas,
   cartoes = [],
   investido = 0,
+  aReceberDoRacha = 0,
   hoje,
 }: EntradaDoSaldoLivre): SaldoLivre {
   const fim = fimDoMes(hoje);
+  const doRacha = Math.max(0, aReceberDoRacha);
   let depoisDeHoje = 0;
-  let aReceber = 0;
+  let aReceber = doRacha;
   let aPagarNasContas = 0;
   for (const linha of linhasDasContas) {
     if (linha.tipo === 'transferencia' || linha.data <= hoje) {
@@ -138,6 +147,7 @@ export function calcularSaldoLivre({
     fimDoMes: fim,
     saldoDeHoje,
     aReceber,
+    doRacha,
     aPagarNasContas,
     faturas,
     aPagar,
@@ -146,6 +156,34 @@ export function calcularSaldoLivre({
     comprometido: dinheiroDoMes > 0 ? Math.min(1, Math.max(0, aPagar / dinheiroDoMes)) : 1,
     saude: saudeDoMes(livre, livreSemInvestido, dinheiroDoMes),
     folgaAparente: saldoDeHoje > 0 && livre < 0,
+  };
+}
+
+// O nome do número principal, que muda com o sinal (nudging): com sobra, ele
+// é o "Saldo livre", dinheiro que dá para usar; no vermelho, vira "Déficit de
+// caixa", a necessidade de caixa até o fim do mês. Nomear a falta, em vez de
+// mostrar um saldo livre negativo, deixa claro que é hora de economizar.
+export interface RotuloDoSaldo {
+  titulo: string;
+  // A explicação do "i", que acompanha o nome.
+  explicacao: string;
+  deficit: boolean;
+}
+
+export function rotuloDoSaldo(livreSemInvestido: number | null | undefined): RotuloDoSaldo {
+  if (livreSemInvestido !== null && livreSemInvestido !== undefined && livreSemInvestido < 0) {
+    return {
+      titulo: 'Déficit de caixa',
+      explicacao:
+        'Quanto falta para pagar as contas até o fim do mês com o dinheiro do dia a dia. É a necessidade de caixa: o valor que precisa entrar, ou deixar de sair, para o mês fechar sem mexer no investido.',
+      deficit: true,
+    };
+  }
+  return {
+    titulo: 'Saldo livre',
+    explicacao:
+      'Quanto dá para gastar até o fim do mês sem faltar dinheiro para as contas que ainda vão chegar. O dinheiro investido fica de fora: ele é para não mexer.',
+    deficit: false,
   };
 }
 

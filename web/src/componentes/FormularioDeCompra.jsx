@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import AvisoComAtalho from './AvisoComAtalho';
 import Campo from './Campo';
 import CampoDeResponsavel from './CampoDeResponsavel';
+import { useConviteDoPlano } from './convite/useConviteDoPlano';
 import DivididoEntre from './DivididoEntre';
 import DivisaoEntrePessoas from './DivisaoEntrePessoas';
 import Seletor from './Seletor';
@@ -36,6 +37,7 @@ export default function FormularioDeCompra({
   aoMudarOcupado,
 }) {
   const toast = useToast();
+  const convite = useConviteDoPlano();
   const formularioRef = useRef(null);
   const [formulario, setFormulario] = useState(compraVazia);
   const [erros, setErros] = useState({});
@@ -64,7 +66,7 @@ export default function FormularioDeCompra({
     setFormulario((atual) => ({
       ...atual,
       [campo]: valor,
-      ...(campo === 'parcelas' && valor !== '1' ? { divisao: [], dividido_entre: '' } : {}),
+      ...(campo === 'parcelas' && valor !== '1' ? { divisao: [], dividido_entre: '', prazo_da_divisao: '' } : {}),
     }));
     setErros((atuais) => ({ ...atuais, [campoDoErro]: undefined, ...(campo === 'valor' || campo === 'divisao' ? { divisao: undefined } : {}) }));
   }
@@ -97,6 +99,11 @@ export default function FormularioDeCompra({
       aoComprar(criadas);
       requestAnimationFrame(() => formularioRef.current?.elements.descricao?.focus());
     } catch (erro) {
+      // Teto do Free: no lugar do erro, o convite do plano (o modal fecha).
+      if (convite.abrirSeForLimite(erro)) {
+        aoCancelar();
+        return;
+      }
       const campos = errosDaApi(erro.campos);
       setErros(campos);
       toast.erro(erro.message, { titulo: 'Compra não lançada' });
@@ -149,6 +156,9 @@ export default function FormularioDeCompra({
           erros={erros}
           pessoasConhecidas={pessoasConhecidas}
           aoMudar={(partes, campo) => mudar('divisao', partes, campo)}
+          data={formulario.data}
+          prazo={formulario.prazo_da_divisao}
+          aoMudarPrazo={(prazo) => mudar('prazo_da_divisao', prazo)}
         />
       ) : (
         <DivididoEntre valor={formulario.dividido_entre} total={total || null} erro={erros.dividido_entre}

@@ -14,10 +14,12 @@ nenhum saldo fica "descolado" do histórico que o explica.
 
 import unicodedata
 from dataclasses import replace
+from datetime import date
 
 from app.financeiro.importacao import normalizar
 from app.financeiro.modelos import (
     AtualizacaoConta,
+    AtualizacaoDaParte,
     AtualizacaoLancamento,
     Categoria,
     ClasseDeCusto,
@@ -28,7 +30,9 @@ from app.financeiro.modelos import (
     NovaCompra,
     NovaConta,
     NovoLancamento,
+    Parte,
     Partida,
+    SituacaoDaParte,
     TipoCategoria,
     TipoConta,
     TipoEspaco,
@@ -132,6 +136,9 @@ ESTORNADO_SO_RENOMEIA = (
 )
 TRANSFERENCIA_SEM_RESPONSAVEL = "Transferência entre contas próprias não tem responsável."
 PARCELA_SO_RENOMEIA = "Parcela de compra no cartão não muda data nem valor. Para isso, exclua a compra e lance de novo."
+REEMBOLSO_SO_RENOMEIA = (
+    "O reembolso do racha só muda a descrição. Para desfazer, volte a cobrar a parte em Gastos por pessoa."
+)
 
 
 def conferir_conta(dados: NovaConta | AtualizacaoConta, atual: Conta | None = None) -> dict[str, str]:
@@ -215,10 +222,13 @@ def conferir_divisao(dados: NovoLancamento) -> dict[str, str]:
         return {}
     if dados.tipo == TipoLancamento.TRANSFERENCIA:
         return {"divisao": TRANSFERENCIA_SEM_DIVISAO}
-    return _conferir_partes(dados.divisao, dados.valor_centavos)
+    return _conferir_partes(dados.divisao, dados.valor_centavos, dados.data)
 
 
-def _conferir_partes(divisao: list, valor_centavos: int) -> dict[str, str]:
+PRAZO_ANTES_DA_DATA = "O prazo para receber vem antes da data do lançamento."
+
+
+def _conferir_partes(divisao: list, valor_centavos: int, data: date) -> dict[str, str]:
     erros: dict[str, str] = {}
     vistas: set[str] = set()
     for indice, parte in enumerate(divisao):
@@ -226,6 +236,8 @@ def _conferir_partes(divisao: list, valor_centavos: int) -> dict[str, str]:
         if nome in vistas:
             erros[f"divisao.{indice}.pessoa"] = "Esta pessoa já está na divisão."
         vistas.add(nome)
+        if parte.vencimento is not None and parte.vencimento < data:
+            erros[f"divisao.{indice}.vencimento"] = PRAZO_ANTES_DA_DATA
     if sum(parte.valor_centavos for parte in divisao) > valor_centavos:
         erros["divisao"] = "As partes somam mais que o valor do lançamento."
     return erros
@@ -299,7 +311,7 @@ def conferir_compra(dados: NovaCompra, cartao: Conta | None, categoria: Categori
     if dados.divisao and dados.parcelas > 1:
         erros["divisao"] = SO_A_VISTA
     elif dados.divisao:
-        erros.update(_conferir_partes(dados.divisao, dados.valor_centavos))
+        erros.update(_conferir_partes(dados.divisao, dados.valor_centavos, dados.data))
     if dados.dividido_entre is not None:
         if dados.parcelas > 1:
             erros["dividido_entre"] = SO_A_VISTA
@@ -379,7 +391,10 @@ def conferir_edicao(
     for campo in ("descricao", "data", "valor_centavos"):
         if campo in enviados and getattr(dados, campo) is None:
             erros[campo] = OBRIGATORIO
-    if lancamento.estorno_de or lancamento.estornado_por:
+    if lancamento.reembolso_de:
+        for campo in enviados - {"descricao"}:
+            erros[campo] = REEMBOLSO_SO_RENOMEIA
+    elif lancamento.estorno_de or lancamento.estornado_por:
         for campo in enviados & {"data", "valor_centavos", "categoria_id"}:
             erros[campo] = ESTORNADO_SO_RENOMEIA
     elif lancamento.compra_id:
@@ -408,6 +423,83 @@ def aplicar_edicao(lancamento: Lancamento, dados: AtualizacaoLancamento) -> Lanc
     if {"valor_centavos", "categoria_id"} & campos.keys():
         editado.partidas = montar_partidas(editado)
     return editado
+
+
+# --- Racha a receber -------------------------------------------------------------
+#
+# Numa despesa dividida, a parte de cada pessoa é dinheiro de quem lançou nas
+# mãos de outra pessoa: um valor a receber, fora das despesas dela. Quando a
+# pessoa paga, o reembolso entra numa conta como um estorno parcial da despesa
+#
+#     racha de R$ 60 recebido:  conta corrente +6000 · categoria Lazer −6000
+#
+# e a categoria fica só com a parte de quem lançou (não vira receita). Quando a
+# pessoa não paga, a parte volta a ser despesa de quem lançou.
+
+PARTE_NAO_ENCONTRADA = "Parte do racha não encontrada."
+SO_DESPESA_A_RECEBER = "Só a parte de uma despesa dividida é um valor a receber."
+RACHA_DESFEITO = "Lançamento estornado (ou estorno): o racha dele foi desfeito."
+JA_RECEBIDA = "Esta parte já foi recebida."
+CONTA_DO_RECEBIMENTO = "Escolha a conta em que o dinheiro entrou."
+RECEBE_EM_CONTA = "O dinheiro do racha entra numa conta, não num cartão de crédito."
+RECEBIDO_ANTES = "O recebimento vem antes da data da despesa."
+SO_NO_RECEBIMENTO = "Conta e data só valem para marcar a parte como recebida."
+
+
+def motivo_sem_racha(lancamento: Lancamento) -> str | None:
+    """Por que as partes deste lançamento não são valores a receber (None:
+    são). Receita dividida é dinheiro que entrou para mais gente, não dívida
+    de ninguém; o estorno desfaz o racha junto com o lançamento."""
+    if lancamento.tipo != TipoLancamento.DESPESA or lancamento.reembolso_de:
+        return SO_DESPESA_A_RECEBER
+    if lancamento.estorno_de or lancamento.estornado_por:
+        return RACHA_DESFEITO
+    return None
+
+
+def conferir_parte(lancamento: Lancamento, parte: Parte, dados: AtualizacaoDaParte, conta: Conta | None) -> dict[str, str]:
+    """Erros por campo de uma mudança numa parte (vazio = pode mudar). conta
+    é a do corpo, já filtrada pelo espaço (None quando não existe)."""
+    erros: dict[str, str] = {}
+    if dados.situacao == SituacaoDaParte.RECEBIDO:
+        if parte.situacao == SituacaoDaParte.RECEBIDO:
+            erros["situacao"] = JA_RECEBIDA
+        if dados.conta_id is None:
+            erros["conta_id"] = CONTA_DO_RECEBIMENTO
+        elif erro := _erro_da_conta(conta):
+            erros["conta_id"] = erro
+        elif conta.cartao:
+            erros["conta_id"] = RECEBE_EM_CONTA
+        if dados.data is not None and dados.data < lancamento.data:
+            erros["data"] = RECEBIDO_ANTES
+    else:
+        for campo in ("conta_id", "data"):
+            if getattr(dados, campo) is not None:
+                erros[campo] = SO_NO_RECEBIMENTO
+    if dados.vencimento is not None and dados.vencimento < lancamento.data:
+        erros["vencimento"] = PRAZO_ANTES_DA_DATA
+    return erros
+
+
+def mudar_parte(
+    parte: Parte, dados: AtualizacaoDaParte, recebido_em: date | None = None, reembolso_id: str | None = None
+) -> Parte:
+    """A parte com a situação nova. O prazo só muda quando vem no corpo (null
+    tira o prazo); a data e o reembolso só ficam na parte recebida."""
+    recebida = dados.situacao == SituacaoDaParte.RECEBIDO
+    vencimento = dados.vencimento if "vencimento" in dados.model_fields_set else parte.vencimento
+    return replace(
+        parte,
+        situacao=dados.situacao,
+        vencimento=vencimento,
+        recebido_em=recebido_em if recebida else None,
+        reembolso_id=reembolso_id if recebida else None,
+    )
+
+
+def partidas_do_reembolso(valor_centavos: int, conta_id: str, categoria_id: str | None) -> list[Partida]:
+    """O dinheiro da parte entra na conta e sai da categoria da despesa."""
+    return [Partida(valor_centavos, conta_id=conta_id), Partida(-valor_centavos, categoria_id=categoria_id)]
 
 
 def montar_partidas(dados: NovoLancamento | Lancamento) -> list[Partida]:

@@ -1,6 +1,6 @@
 // Lançamentos em sequência, sem interface. Depois de lançar, o modal fica
 // aberto para o próximo gasto, até a pessoa fechar: some o que é de cada gasto
-// (descrição, valor, divisão) e fica o que costuma se repetir numa sequência
+// (descrição, valor, divisão e o prazo dela) e fica o que costuma se repetir numa sequência
 // (tipo, data, conta, categoria, meio e responsável), para lançar a semana do
 // mercado ou a fatura de papel sem preencher tudo de novo. Testado em
 // lancamentoEmSequencia.test.ts.
@@ -16,7 +16,7 @@ interface CamposDeCadaGasto {
 
 // O formulário à vista (FormularioDeLancamento) pronto para o próximo.
 export function proximoLancamento<T extends CamposDeCadaGasto>(formulario: T): T {
-  return { ...formulario, descricao: '', valor: '', divisao: [], dividido_entre: '' };
+  return { ...formulario, descricao: '', valor: '', divisao: [], dividido_entre: '', prazo_da_divisao: '' };
 }
 
 // O formulário da compra no cartão (FormularioDeCompra): as parcelas também

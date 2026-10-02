@@ -73,12 +73,30 @@ export function validarDivisao(partes, total) {
 
 // Nomes dos campos da divisão na ordem da tela (para focar o primeiro erro).
 export function camposDaDivisao(partes) {
-  return [...partes.flatMap((_, indice) => [`divisao.${indice}.pessoa`, `divisao.${indice}.valor`]), 'divisao'];
+  return [...partes.flatMap((_, indice) => [`divisao.${indice}.pessoa`, `divisao.${indice}.valor`]), 'prazo_da_divisao', 'divisao'];
 }
 
-// Corpo da divisão para a API, de partes já validadas.
-export function corpoDaDivisao(partes) {
-  return partes.map((parte) => ({ pessoa: parte.pessoa.trim(), valor_centavos: lerValor(parte.valor) }));
+// O prazo do racha ("Receber até", o mesmo para todas as pessoas), em ISO:
+// depois dele, a parte que não foi paga vira inadimplência (regras/aReceber.ts).
+// Vazio é sem prazo. Mensagem do campo, ou '' quando pode enviar.
+export function erroDoPrazo(prazo, data) {
+  if (!prazo) {
+    return '';
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(prazo)) {
+    return 'Data inválida.';
+  }
+  return data && prazo < data ? 'O prazo vem antes da data do lançamento.' : '';
+}
+
+// Corpo da divisão para a API, de partes já validadas, com o prazo em cada
+// parte (a API guarda o prazo por pessoa).
+export function corpoDaDivisao(partes, prazo = '') {
+  return partes.map((parte) => ({
+    pessoa: parte.pessoa.trim(),
+    valor_centavos: lerValor(parte.valor),
+    ...(prazo ? { vencimento: prazo } : {}),
+  }));
 }
 
 // ------------------------------------------------- A divisão do Free

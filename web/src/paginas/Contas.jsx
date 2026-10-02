@@ -9,11 +9,13 @@ import Esqueleto from '../componentes/Esqueleto';
 import FormularioDeCartao from '../componentes/FormularioDeCartao';
 import FormularioDeConta from '../componentes/FormularioDeConta';
 import Icone from '../componentes/Icone';
+import MedidorDoPlano from '../componentes/MedidorDoPlano';
 import SimboloDoVazio from '../olifine/componentes/SimboloDoVazio';
 import Modal from '../componentes/Modal';
 import { useToast } from '../componentes/toast/useToast';
 import { useCarga } from '../componentes/useCarga';
 import { useSelecao } from '../componentes/useSelecao';
+import { useUsoDoPlano } from '../componentes/useUsoDoPlano';
 import { formatarBRL } from '../regras/dinheiro';
 import { cartoesDe, contasBancarias, saldoTotal } from '../regras/livroCaixa';
 import { apiConfigurada, excluirConta, listarCartoes, listarContas } from '../servicos/livroCaixa';
@@ -75,6 +77,8 @@ export default function Contas() {
   const espacoId = espaco.dados?.id;
   const buscarCadastros = useMemo(() => (espacoId ? () => carregarCadastros(espacoId) : null), [espacoId]);
   const cadastros = useCarga(buscarCadastros);
+  // Contas e cartões no teto do Free (o convite abre no lugar do formulário).
+  const plano = useUsoDoPlano(espacoId);
   const todas = useMemo(() => cadastros.dados?.contas ?? [], [cadastros.dados]);
   const contas = useMemo(() => contasBancarias(todas), [todas]);
   const cartoes = useMemo(() => cartoesDe(todas), [todas]);
@@ -126,7 +130,13 @@ export default function Contas() {
   const disponivel = cartoes.reduce((soma, cartao) => soma + (paineis.get(cartao.id)?.disponivel_centavos ?? 0), 0);
 
   function abrir(tipo, emEdicao = null) {
-    setModal({ tipo, emEdicao });
+    if (emEdicao) {
+      setModal({ tipo, emEdicao });
+      return;
+    }
+    // Conta ou cartão novo: no teto do Free, o convite do plano no lugar do
+    // formulário (a API confere de novo).
+    plano.seCouber('contas', () => setModal({ tipo, emEdicao: null }));
   }
 
   function fecharModal() {
@@ -141,6 +151,7 @@ export default function Contas() {
   function aposSalvar() {
     fecharModal();
     cadastros.recarregar();
+    plano.recarregar();
   }
 
   function pedirRemocao(tipo, ids) {
@@ -172,6 +183,7 @@ export default function Contas() {
       setARemover(null);
       (tipo === 'conta' ? selecaoDeContas : selecaoDeCartoes).limpar();
       cadastros.recarregar();
+      plano.recarregar();
     }
   }
 
@@ -183,6 +195,7 @@ export default function Contas() {
       <header className="cabecalho-da-pagina">
         <h1>Contas & Cartões</h1>
         <div className="acoes-da-pagina">
+          <MedidorDoPlano uso={plano.uso} recurso="contas" />
           {/* As duas ações principais da tela, no verde da marca. */}
           <button type="button" onClick={() => abrir('conta')}>
             <Icone nome="contas" tamanho={18} />

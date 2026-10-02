@@ -8,7 +8,7 @@ Toda consulta leva o espaco_id. Um id de conta, categoria ou lançamento de
 outro espaço simplesmente não é encontrado.
 """
 
-from datetime import date
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Protocol
 
@@ -40,6 +40,7 @@ from app.financeiro.modelos import (
     PessoaDaFamilia,
     Plano,
     RegimeTributario,
+    SituacaoDaParte,
     TipoCategoria,
     TipoConta,
     TipoDeOrigem,
@@ -138,6 +139,12 @@ class RepositorioLivroCaixa(Protocol):
     def inserir_lancamento(self, lancamento: Lancamento) -> Lancamento: ...
 
     def atualizar_lancamento(self, lancamento: Lancamento) -> Lancamento: ...
+
+    def atualizar_divisao(self, lancamento: Lancamento) -> Lancamento: ...
+
+    def listar_rachas(self, espaco_id: str, limite: int) -> list[Lancamento]: ...
+
+    def contar_lancamentos_manuais(self, espaco_id: str, desde: datetime, cartoes: list[str]) -> int: ...
 
     def listar_compra(self, espaco_id: str, compra_id: str) -> list[Lancamento]: ...
 
@@ -409,9 +416,9 @@ class LivroCaixaMongo:
         if lancamento.chave_importacao:
             documento["chave_importacao"] = lancamento.chave_importacao
         if lancamento.divisao:
-            documento["divisao"] = [
-                {"pessoa": parte.pessoa, "valor_centavos": parte.valor_centavos} for parte in lancamento.divisao
-            ]
+            documento["divisao"] = _documento_da_divisao(lancamento.divisao)
+        if lancamento.reembolso_de:
+            documento["reembolso_de"] = lancamento.reembolso_de
         if lancamento.dividido_entre:
             documento["dividido_entre"] = lancamento.dividido_entre
         if lancamento.responsavel:
@@ -464,6 +471,51 @@ class LivroCaixaMongo:
         except DuplicateKeyError as erro:
             raise LancamentoJaImportado() from erro
         return lancamento
+
+    def atualizar_divisao(self, lancamento: Lancamento) -> Lancamento:
+        """Grava as partes do racha (a situação, o prazo e o reembolso de
+        cada uma). Quem é cada pessoa e quanto ela deve não mudam aqui."""
+        self._lancamentos.update_one(
+            {"_id": ObjectId(lancamento.id), "espaco_id": lancamento.espaco_id},
+            {"$set": {"divisao": _documento_da_divisao(lancamento.divisao)}},
+        )
+        return lancamento
+
+    def listar_rachas(self, espaco_id: str, limite: int) -> list[Lancamento]:
+        """As despesas divididas com nome (a primeira parte existe), sem os
+        estornos, da mais nova para a mais antiga."""
+        documentos = (
+            self._lancamentos.find(
+                {
+                    "espaco_id": espaco_id,
+                    "tipo": TipoLancamento.DESPESA.value,
+                    "divisao.0": {"$exists": True},
+                    "estorno_de": {"$exists": False},
+                }
+            )
+            .sort([("data", DESCENDING), ("criado_em", DESCENDING)])
+            .limit(limite)
+        )
+        return [_para_lancamento(documento) for documento in documentos]
+
+    def contar_lancamentos_manuais(self, espaco_id: str, desde: datetime, cartoes: list[str]) -> int:
+        """Lançamentos feitos à mão desde um instante (limites_do_plano.py): a
+        compra parcelada conta uma vez (parcela ausente ou 1, e $in com None
+        pega o campo ausente), e ficam de fora o extrato importado, o estorno,
+        o reembolso do racha, a gestão da empresa e o pagamento de fatura (a
+        transferência para um dos cartões)."""
+        return self._lancamentos.count_documents(
+            {
+                "espaco_id": espaco_id,
+                "criado_em": {"$gte": desde},
+                "estorno_de": {"$exists": False},
+                "chave_importacao": {"$exists": False},
+                "origem": {"$exists": False},
+                "reembolso_de": {"$exists": False},
+                "parcela": {"$in": [None, 1]},
+                "conta_destino_id": {"$nin": cartoes},
+            }
+        )
 
     def listar_compra(self, espaco_id: str, compra_id: str) -> list[Lancamento]:
         """As parcelas de uma compra no cartão, da primeira à última."""
@@ -761,7 +813,8 @@ def _para_lancamento(documento: dict) -> Lancamento:
         criado_por=documento["criado_por"],
         estorno_de=documento.get("estorno_de"),
         chave_importacao=documento.get("chave_importacao"),
-        divisao=[Parte(p["pessoa"], p["valor_centavos"]) for p in documento.get("divisao", [])],
+        divisao=[_para_parte(parte) for parte in documento.get("divisao", [])],
+        reembolso_de=documento.get("reembolso_de"),
         dividido_entre=documento.get("dividido_entre"),
         responsavel=documento.get("responsavel"),
         compra_id=documento.get("compra_id"),
@@ -770,6 +823,35 @@ def _para_lancamento(documento: dict) -> Lancamento:
         chave_parcelamento=documento.get("chave_parcelamento"),
         meio=MeioDePagamento(documento["meio"]) if documento.get("meio") else None,
         origem=_para_origem(documento.get("origem")),
+    )
+
+
+def _documento_da_divisao(divisao: list[Parte]) -> list[dict]:
+    """As partes como ficam no banco. Datas em texto ISO, como a do
+    lançamento; a parte de antes do racha a receber só tinha pessoa e valor."""
+    documentos = []
+    for parte in divisao:
+        documento = {"pessoa": parte.pessoa, "valor_centavos": parte.valor_centavos, "situacao": parte.situacao.value}
+        if parte.vencimento:
+            documento["vencimento"] = parte.vencimento.isoformat()
+        if parte.recebido_em:
+            documento["recebido_em"] = parte.recebido_em.isoformat()
+        if parte.reembolso_id:
+            documento["reembolso_id"] = parte.reembolso_id
+        documentos.append(documento)
+    return documentos
+
+
+def _para_parte(documento: dict) -> Parte:
+    # Parte gravada antes do racha a receber: pendente e sem prazo.
+    vencimento, recebido_em = documento.get("vencimento"), documento.get("recebido_em")
+    return Parte(
+        documento["pessoa"],
+        documento["valor_centavos"],
+        vencimento=date.fromisoformat(vencimento) if vencimento else None,
+        situacao=SituacaoDaParte(documento.get("situacao", SituacaoDaParte.PENDENTE.value)),
+        recebido_em=date.fromisoformat(recebido_em) if recebido_em else None,
+        reembolso_id=documento.get("reembolso_id"),
     )
 
 

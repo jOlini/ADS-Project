@@ -11,7 +11,7 @@ from dataclasses import replace
 from bson import ObjectId
 
 from app.erros import ErroConflito
-from app.financeiro.modelos import Parte
+from app.financeiro.modelos import TipoLancamento
 from app.financeiro.regras import chave_da_pessoa
 from app.financeiro.repositorio import (
     MENSAGEM_JA_ESTORNADO,
@@ -192,6 +192,31 @@ class LivroCaixaMemoria:
         self.lancamentos[lancamento.id] = replace(lancamento, estornado_por=None)
         return lancamento
 
+    def atualizar_divisao(self, lancamento):
+        guardado = self.lancamentos[lancamento.id]
+        self.lancamentos[lancamento.id] = replace(guardado, divisao=list(lancamento.divisao))
+        return lancamento
+
+    def listar_rachas(self, espaco_id, limite):
+        rachas = [
+            l
+            for l in self.lancamentos.values()
+            if l.espaco_id == espaco_id and l.tipo == TipoLancamento.DESPESA and l.divisao and not l.estorno_de
+        ]
+        rachas.sort(key=lambda l: (l.data, l.criado_em, l.id), reverse=True)
+        return [replace(l) for l in rachas[:limite]]
+
+    def contar_lancamentos_manuais(self, espaco_id, desde, cartoes):
+        return sum(
+            1
+            for l in self.lancamentos.values()
+            if l.espaco_id == espaco_id
+            and l.criado_em >= desde
+            and not (l.estorno_de or l.chave_importacao or l.origem or l.reembolso_de)
+            and l.parcela in (None, 1)
+            and l.conta_destino_id not in cartoes
+        )
+
     def listar_compra(self, espaco_id, compra_id):
         parcelas = [l for l in self.lancamentos.values() if l.espaco_id == espaco_id and l.compra_id == compra_id]
         return [replace(l) for l in sorted(parcelas, key=lambda l: l.parcela)]
@@ -271,7 +296,7 @@ class LivroCaixaMemoria:
                 continue
             responsavel = novo if lancamento.responsavel and chave_da_pessoa(lancamento.responsavel) == chave else None
             divisao = [
-                Parte(novo, parte.valor_centavos) if chave_da_pessoa(parte.pessoa) == chave else parte
+                replace(parte, pessoa=novo) if chave_da_pessoa(parte.pessoa) == chave else parte
                 for parte in lancamento.divisao
             ]
             if responsavel or divisao != lancamento.divisao:

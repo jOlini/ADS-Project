@@ -38,6 +38,13 @@ describe('somarMes', () => {
     expect(somarMes([...LANCAMENTOS, ESTORNO_DO_POSTO])).toEqual({ entradas: 680000, saidas: 207000, sobra: 473000 });
   });
 
+  it('o reembolso do racha também diminui as saídas e a categoria, sem virar receita', () => {
+    const reembolso = { data: '2026-09-21', descricao: 'Reembolso de Bia: Mercado', categoria: 'Mercado', valor: 11000, reembolso: true };
+
+    expect(somarMes([...LANCAMENTOS, reembolso])).toEqual({ entradas: 680000, saidas: 214000, sobra: 466000 });
+    expect(gastoPorCategoria([LANCAMENTOS[4], reembolso])).toEqual([{ categoria: 'Mercado', valor: 11000, fatia: 100 }]);
+  });
+
   it('estorno de receita diminui as entradas', () => {
     const estornoDoSalario = { data: '2026-09-06', categoria: 'Salário', valor: -680000, estorno: true };
 

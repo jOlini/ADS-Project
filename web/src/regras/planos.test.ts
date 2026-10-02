@@ -47,6 +47,14 @@ describe('tabela da landing', () => {
     expect(PLANOS.map((plano) => plano.preco)).toEqual(['R$ 0', null, null]);
   });
 
+  it('marca o Família como o mais popular e o Empresarial como o mais completo, cada um com o seu tom', () => {
+    expect(Object.fromEntries(PLANOS.map((plano) => [plano.id, plano.selo ?? null]))).toEqual({
+      FREE: null,
+      FAMILIA: { texto: 'Mais popular', tom: 'popular' },
+      EMPRESARIAL: { texto: 'Mais completo', tom: 'completo' },
+    });
+  });
+
   it('sobe de nível da esquerda para a direita, com o Empresarial como o único destaque', () => {
     expect(PLANOS.map((plano) => plano.nivel)).toEqual(['entrada', 'intermediario', 'principal']);
     expect(PLANOS.filter((plano) => plano.destaque).map((plano) => plano.id)).toEqual(['EMPRESARIAL']);

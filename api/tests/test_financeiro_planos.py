@@ -256,6 +256,8 @@ def test_familia_divide_com_nome_mas_nao_com_os_dois(api, ana, cabecalho_de):
 
 
 def test_na_empresa_vale_o_plano_do_pessoal_de_quem_lanca(api, ana, cabecalho_de):
+    admin = cabecalho_de("id-admin")
+    trocar_plano(api, admin, plano="EMPRESARIAL")
     empresa = api.post("/espacos", headers=ana.cabecalho, json={"tipo": "PJ", "nome": "Ateliê", "regime": "MEI"}).json()
     base = f"/espacos/{empresa['id']}"
     categorias = api.get(f"{base}/categorias", headers=ana.cabecalho).json()
@@ -272,6 +274,8 @@ def test_na_empresa_vale_o_plano_do_pessoal_de_quem_lanca(api, ana, cabecalho_de
         "divisao": racha(),
     }
 
+    # Plano rebaixado depois de criar a empresa: lá dentro, vale o do pessoal.
+    trocar_plano(api, admin, plano="FREE")
     assert na_empresa.post("/lancamentos", corpo).status_code == 403
-    trocar_plano(api, cabecalho_de("id-admin"), plano="EMPRESARIAL")
+    trocar_plano(api, admin, plano="EMPRESARIAL")
     assert na_empresa.post("/lancamentos", corpo).status_code == 201

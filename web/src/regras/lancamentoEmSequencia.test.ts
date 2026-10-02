@@ -21,6 +21,7 @@ describe('lançamentos em sequência', () => {
       valor: '',
       divisao: [],
       dividido_entre: '',
+      prazo_da_divisao: '',
     });
   });
 
