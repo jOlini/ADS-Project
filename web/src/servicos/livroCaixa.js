@@ -25,12 +25,15 @@ export const MENSAGEM_SESSAO_ENCERRADA = 'Sua sessão terminou. Entre de novo.';
 const MENSAGEM_GENERICA = 'O servidor não conseguiu concluir a operação. Tente de novo.';
 
 // Falha que a tela sabe mostrar: status HTTP (0 = sem resposta), a mensagem
-// da API (Problem Details "detail") e o erro de cada campo ("campos", no 400).
+// da API (Problem Details "detail"), o erro de cada campo ("campos", no 400)
+// e o corpo inteiro (detalhes), para os membros extras de alguns erros, como
+// a quantidade de lançamentos no 409 da categoria em uso.
 export class ErroDaApi extends Error {
-  constructor(status, mensagem, campos = {}) {
+  constructor(status, mensagem, campos = {}, detalhes = null) {
     super(mensagem);
     this.status = status;
     this.campos = campos;
+    this.detalhes = detalhes;
   }
 }
 
@@ -73,7 +76,7 @@ async function chamar(caminho, { metodo = 'GET', corpo } = {}) {
   const dados = await resposta.json().catch(() => null);
   if (!resposta.ok) {
     const mensagem = resposta.status === 401 ? MENSAGEM_SESSAO_ENCERRADA : (dados?.detail ?? MENSAGEM_GENERICA);
-    throw new ErroDaApi(resposta.status, mensagem, dados?.campos ?? {});
+    throw new ErroDaApi(resposta.status, mensagem, dados?.campos ?? {}, dados);
   }
   return dados;
 }
@@ -209,8 +212,12 @@ export function atualizarCategoria(espacoId, categoriaId, categoria) {
 
 // Só categoria sem lançamentos: com lançamentos, a API responde 409 (o caminho
 // é desativar). 204.
-export function excluirCategoria(espacoId, categoriaId) {
-  return chamar(doEspaco(espacoId, `/categorias/${encodeURIComponent(categoriaId)}`), { metodo: 'DELETE' });
+// Com moverPara, os lançamentos da categoria passam para essa outra antes de
+// ela sair: a resposta diz quantos ({ lancamentos_movidos }). Sem ele, a
+// categoria em uso volta 409 com a quantidade (erro.detalhes.lancamentos).
+export function excluirCategoria(espacoId, categoriaId, moverPara = null) {
+  const destino = moverPara ? `?${new URLSearchParams({ mover_para: moverPara })}` : '';
+  return chamar(doEspaco(espacoId, `/categorias/${encodeURIComponent(categoriaId)}${destino}`), { metodo: 'DELETE' });
 }
 
 // Limite da API para uma consulta.
