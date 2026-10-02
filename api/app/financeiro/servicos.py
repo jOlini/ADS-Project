@@ -667,8 +667,9 @@ class ServicoLivroCaixa:
         categoria do arquivo, do histórico do mesmo estabelecimento, das regras
         pela descrição ou, sem pista, da categoria padrão do tipo
         (categorizacao.py). dados.ajustes troca a descrição e a categoria de
-        uma linha, como a pessoa editou na conferência; a chave da linha
-        continua a do arquivo (importar de novo não duplica).
+        uma linha, como a pessoa editou na conferência, ou a descarta (não
+        entra, nem gera parcelas); a chave da linha continua a do arquivo
+        (importar de novo não duplica).
 
         Na fatura de um cartão, a linha parcelada ("LOJA 03/12") vira a parcela
         da compra e gera as parcelas vincendas nas próximas faturas; a parcela
@@ -729,6 +730,9 @@ class ServicoLivroCaixa:
             observacao = None
             if chave in ja_importadas:
                 situacao, lancamento_id = SituacaoDaLinha.JA_IMPORTADA, None
+            elif ajuste and ajuste.descartar:
+                # Fora da importação: nada é gravado e nenhuma parcela nasce dela.
+                situacao, lancamento_id = SituacaoDaLinha.DESCARTADA, None
             elif parcela and parcelamentos:
                 situacao, lancamento_id, observacao, geradas = self._importar_parcela(
                     espaco, item, parcela, parcelamentos, dados, uid

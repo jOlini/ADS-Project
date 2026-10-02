@@ -656,7 +656,8 @@ def importar_extrato(
     valem as colunas indicadas (ver `/importacoes/estrutura`). Cada linha vira uma receita
     ou despesa na conta escolhida, na categoria da coluna do arquivo, do histórico do mesmo
     estabelecimento, da regra pela descrição ou na padrão (`origem_da_categoria`).
-    `ajustes` troca a descrição e a categoria de linhas, pelo número da linha. Linha já
+    `ajustes` troca a descrição e a categoria de linhas, pelo número da linha, ou as tira com
+    `descartar: true` (`DESCARTADA`, sem gravar nem gerar parcelas). Linha já
     importada antes é pulada (`JA_IMPORTADA`), e linha ilegível volta com o motivo
     (`INVALIDA`), sem barrar as outras. Com `simular: true`, nada é gravado e as linhas que
     entrariam voltam como `NOVA`. Arquivo que não é CSV (planilha, PDF, binário) é `400`;

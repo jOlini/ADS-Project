@@ -160,6 +160,10 @@ class SituacaoDaLinha(StrEnum):
     IMPORTADA = "IMPORTADA"
     JA_IMPORTADA = "JA_IMPORTADA"  # a chave da linha já existe no espaço
     INVALIDA = "INVALIDA"  # a linha não virou lançamento (motivo em "erro")
+    # A pessoa tirou a linha na conferência (o pagamento da fatura anterior, que
+    # viraria uma receita em dobro): não entra. Nada é guardado dela: numa nova
+    # importação do mesmo arquivo, a linha volta para ser conferida.
+    DESCARTADA = "DESCARTADA"
 
 
 class ClasseDeCusto(StrEnum):
@@ -731,10 +735,13 @@ class MapeamentoDoExtrato(Entrada):
 
 
 class AjusteDaLinha(Entrada):
-    """O que a pessoa editou numa linha na conferência da importação."""
+    """O que a pessoa editou numa linha na conferência da importação. descartar
+    tira a linha da importação (ex.: o pagamento da fatura anterior, que
+    apareceria como entrada e dobraria a receita)."""
 
     descricao: Descricao | None = None
     categoria_id: Identificador | None = None
+    descartar: Booleano = False
 
 
 # Número da linha no arquivo (1 = primeira), como a simulação devolve.
@@ -1104,6 +1111,8 @@ class ImportacaoResposta(BaseModel):
     importadas: int
     ja_importadas: int
     invalidas: int
+    # Linhas tiradas pela pessoa na conferência (ajustes com descartar).
+    descartadas: int = 0
     # Parcelas das próximas faturas geradas a partir das compras parceladas
     # da fatura (na simulação, as que seriam geradas).
     parcelas_futuras: int
@@ -1120,6 +1129,7 @@ class ImportacaoResposta(BaseModel):
             importadas=contagem[SituacaoDaLinha.IMPORTADA],
             ja_importadas=contagem[SituacaoDaLinha.JA_IMPORTADA],
             invalidas=contagem[SituacaoDaLinha.INVALIDA],
+            descartadas=contagem[SituacaoDaLinha.DESCARTADA],
             parcelas_futuras=parcelas_futuras,
             linhas=[
                 LinhaImportadaResposta(
