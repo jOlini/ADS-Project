@@ -19,14 +19,14 @@ import { comAFamilia, filtrarPorPessoa, gastoPorPessoa, pessoasDaFamilia, TITULA
 import { familiaLiberada, planoDoCliente } from '../../regras/planos';
 import { normalizarTexto } from '../../regras/texto';
 import {
+  cartoesDe,
   contasBancarias,
-  estaNoMes,
   lancamentosDasContas,
-  mesDe,
   paraExtrato,
   rotuloDoTipoDeConta,
   saldoTotal,
 } from '../../regras/livroCaixa';
+import { somarPorOrigem } from '../../regras/resumo';
 import {
   apiConfigurada,
   listarCartoes,
@@ -54,6 +54,7 @@ import {
   SALDO_DE_EXEMPLO,
 } from '../dados/exemplo';
 import { iconeDaLinha } from '../regras/icones';
+import { inicioDaCarga, linhasDoMes, mesAnterior as mesQueVeioAntes } from '../regras/despesasDoMes';
 import { calcularSaldoLivre } from '../regras/saldoLivre';
 import { parteInvestida, separarSaldos, sobreOTipo, textoDaFatia } from '../regras/saldos';
 import { guardado, porcentagem, progresso, proximaFase, resumoDasMetas, sementeDaMeta } from '../regras/metas';
@@ -88,18 +89,17 @@ function rotuloDoDia(data, hoje) {
   return DIA_DA_LISTA.format(comoData(data));
 }
 
-// Contas, categorias, os lançamentos dos últimos 30 dias (ou do mês, se ele
-// começou antes) em diante, e o relatório de 12 meses. Sem o relatório (API
-// antiga, erro), a tela abre do mesmo jeito, só sem a comparação. Os cartões
-// trazem as faturas (sem eles, a tela abre do mesmo jeito); as pessoas dos
-// rachas são só sugestão no formulário do "+ Novo".
+// Contas, categorias, os lançamentos desde o primeiro dia de três meses
+// atrás (o bastante para as compras das faturas que vencem neste mês e no
+// anterior, despesasDoMes.ts) e o relatório de 12 meses. Sem o relatório (API
+// antiga, erro), a tela abre do mesmo jeito, só sem a comparação das receitas.
+// Os cartões trazem as faturas (sem eles, a tela abre do mesmo jeito); as
+// pessoas dos rachas são só sugestão no formulário do "+ Novo".
 async function carregarVisao(espacoId, hoje) {
-  const inicioDoMes = `${hoje.slice(0, 7)}-01`;
-  const trintaDias = somarDias(hoje, -29);
   const [contas, categorias, lancamentos, relatorio, cartoes, pessoas] = await Promise.all([
     listarContas(espacoId),
     listarCategorias(espacoId),
-    listarLancamentos(espacoId, { de: inicioDoMes < trintaDias ? inicioDoMes : trintaDias }),
+    listarLancamentos(espacoId, { de: inicioDaCarga(hoje.slice(0, 7)) }),
     relatorioMensal(espacoId).catch(() => null),
     listarCartoes(espacoId).catch(() => []),
     listarPessoas(espacoId).catch(() => []),
@@ -229,10 +229,13 @@ export default function VisaoGeral() {
       return null;
     }
     const { contas, categorias, lancamentos, relatorio, cartoes } = livro.dados;
-    const mes = mesDe(comoData(hojeReal));
+    const mes = hojeReal.slice(0, 7);
     const dasContas = paraExtrato(lancamentosDasContas(lancamentos, contas), contas, categorias);
     const comCartoes = paraExtrato(lancamentos, contas, categorias);
-    const doMes = comCartoes.filter((linha) => estaNoMes(linha.data, mes) && linha.tipo !== 'pagamento');
+    // O mês: o à vista com data nele e as faturas dos cartões que vencem nele
+    // (todas as compras delas, de qualquer data), sem o pagamento da fatura.
+    const ciclos = cartoesDe(contas);
+    const doMes = linhasDoMes(comCartoes, ciclos, mes);
     // Com uma pessoa escolhida, os números do mês, as categorias e as últimas
     // transações são só dela; o saldo e o gráfico continuam os das contas,
     // que são da casa toda.
@@ -245,13 +248,17 @@ export default function VisaoGeral() {
       meses: relatorio?.meses ?? null,
       hoje: hojeReal,
     });
+    // As despesas do mês anterior pela mesma regra (à vista + faturas que
+    // venceram nele), para a comparação não misturar duas contas diferentes.
+    const anteriores = somarPorOrigem(daPessoa(linhasDoMes(comCartoes, ciclos, mesQueVeioAntes(mes))));
+    const despesasAntes = anteriores.aVista + anteriores.noCredito;
+    base.variacao = { ...base.variacao, despesas: despesasAntes > 0 ? variacaoPercentual(base.totais.saidas, despesasAntes) : null };
     if (filtroDePessoa !== TODOS) {
       const meses = relatorioDaPessoa.dados?.meses;
       const anterior = meses && meses.length >= 2 ? meses[meses.length - 2] : null;
       base.variacao = {
         ...base.variacao,
         receitas: anterior ? variacaoPercentual(base.totais.entradas, anterior.receitas_centavos) : null,
-        despesas: anterior ? variacaoPercentual(base.totais.saidas, anterior.despesas_centavos) : null,
       };
     }
     return {
@@ -506,17 +513,17 @@ export default function VisaoGeral() {
             </p>
             <Dica titulo="Despesas">
               <p>
-                Todo o dinheiro que saiu no mês, à vista (PIX, débito, dinheiro) e no crédito. A compra no cartão conta
-                no mês da parcela, e o pagamento da fatura não conta de novo.
+                O que pesa no mês: o que saiu das contas à vista (PIX, débito, dinheiro) mais o total das faturas dos
+                cartões que vencem neste mês, com todas as compras delas. O pagamento da fatura não conta de novo.
               </p>
             </Dica>
           </div>
           <p className="of-kpi-valor">{comNumeros ? formatarBRL(visao.totais.saidas) : 'R$ —'}</p>
-          {/* O que saiu das contas e o que foi para as faturas (o pagamento
-              da fatura não conta de novo). */}
+          {/* O que saiu das contas e as faturas que vencem no mês (o
+              pagamento da fatura não conta de novo). */}
           <p className="of-kpi-origem">
             <span>{comNumeros ? formatarBRL(visao.totais.aVista) : 'R$ —'} à vista ·</span>{' '}
-            <span>{comNumeros ? formatarBRL(visao.totais.noCredito) : 'R$ —'} no crédito</span>
+            <span>{comNumeros ? formatarBRL(visao.totais.noCredito) : 'R$ —'} nas faturas</span>
           </p>
           {comNumeros ? (
             <SeloDeTendencia variacao={visao.variacao.despesas} maiorEhMelhor={false} referencia={mesAnterior} />
@@ -634,7 +641,7 @@ export default function VisaoGeral() {
         <section className="cartao of-painel" aria-labelledby="titulo-categorias">
           <div className="of-painel-cabecalho">
             <h2 id="titulo-categorias">Despesas por categoria</h2>
-            {comNumeros && <small>{NOME_DO_MES.format(comoData(hoje))}</small>}
+            {comNumeros && <small>{NOME_DO_MES.format(comoData(hoje))}, com as faturas do mês</small>}
           </div>
           {comNumeros && visao.categorias.length > 0 ? (
             <Rosca fatias={fatiasDaRosca(visao.categorias, 6)} total={visao.totais.saidas} rotuloDoTotal="gasto neste mês" />
