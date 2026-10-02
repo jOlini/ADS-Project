@@ -107,7 +107,8 @@ relatórios (0.3) estão em construção:
 - uma **área do cliente** em React, com a identidade visual **OliFine**: página de apresentação com simulador de
   orçamento, cadastro com confirmação do e-mail, login e Visão geral com Firebase Authentication e Cloud
   Firestore, publicada no GitHub Pages; com a API local, ganha lançamentos, contas e cartões de crédito,
-  categorias, importação do extrato em CSV, relatórios e **dois espaços**, trocados no topo da tela: o
+  categorias, importação do extrato em CSV e da fatura em PDF (lida no navegador), busca em tudo pelo topo,
+  relatórios e **dois espaços**, trocados no topo da tela: o
   **pessoal**, com o **Modo Família** (as pessoas da casa, cada uma com a sua cor, e os números da casa toda ou de
   uma pessoa), e o **empresarial**, com uma ou mais empresas, cada uma com o próprio livro-caixa, **fluxo de
   caixa**, **DRE**, **custos**, **sociedade e aportes**, **impostos** e **pessoal (RH)**; as metas funcionam nos
@@ -130,7 +131,7 @@ disciplinas. Cada uma avalia uma parte do mesmo sistema:
 | Release | Conteúdo | Estado |
 |---|---|---|
 | 0.1 — Identidade e acesso | Cadastro, login, perfis de acesso e administração de usuários | Concluída (tags `v0.1.0`, `v0.1.1` e `v0.1.2`) |
-| 0.2 — Lançamentos | Receitas, despesas e transferências, contas, cartões de crédito, categorias e importação de extrato (CSV) | Em construção: API e telas prontas |
+| 0.2 — Lançamentos | Receitas, despesas e transferências, contas, cartões de crédito, categorias e importação de extrato (CSV e PDF) | Em construção: API e telas prontas |
 | 0.3 — Dashboard | Saldo, totais do mês, receita × despesa e gasto por categoria | Em construção: API de relatórios e tela Relatórios prontas |
 | 0.4 — Comprovantes | Anexo de arquivo ao lançamento | Planejada |
 
@@ -191,7 +192,7 @@ Diagrama completo, camadas da API e do front-end, modelo de dados, segurança em
 | Sessão no navegador | Sessão por aba (`sessionStorage`): fechar o navegador sai da conta. O logout apaga do navegador as metas, a contagem de tentativas e a sessão do Firebase; só a preferência de tema fica |
 | Login do back-office | Senha só como hash BCrypt; `401` com `tentativas_restantes`; `429` depois de 5 senhas erradas (por e-mail e endereço) ou 20 (por endereço) em 15 minutos; mesmo tempo de resposta com e sem conta |
 | Token do back-office | JWT HS256 de 15 minutos com `jti`; `POST /auth/logout` revoga o token na hora (lista no MongoDB com TTL); perfil lido do banco a cada requisição |
-| Borda da API | CSP, `X-Frame-Options`, `nosniff`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, HSTS em HTTPS, `no-store` nos dados; corpo acima de 2 MB → `413`; erros sem stack trace; texto livre limpo (sem tag, fórmula de planilha nem caractere invisível); CSV conferido (planilha, PDF ou binário recusado, célula de até 5 mil caracteres, no máximo 4 importações ao mesmo tempo) |
+| Borda da API | CSP, `X-Frame-Options`, `nosniff`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, HSTS em HTTPS, `no-store` nos dados; corpo acima de 2 MB → `413`; erros sem stack trace; texto livre limpo (sem tag, fórmula de planilha nem caractere invisível); CSV conferido (planilha ou binário recusado, célula de até 5 mil caracteres, no máximo 4 importações ao mesmo tempo); o PDF do banco é lido no navegador e só as linhas de lançamento vão à API; cor só da paleta ou `#rrggbb` |
 | Formulários | Máscaras por tipo de dado: valor em reais (letra e símbolo nem entram, pontos de milhar sozinhos, dois decimais), data e texto sem `<` e `>`; a linha da mensagem de erro fica reservada embaixo de cada campo, e o erro não empurra nem desalinha nada |
 | Documentação (`/docs`) | Swagger UI de versão fixa com Subresource Integrity e CSP própria, sem script inline; ReDoc desligado |
 | Borda do front-end | CSP em `<meta>` no build (script só do próprio site e do login do Google), recusa de moldura (clickjacking); no container, cabeçalhos do nginx |
@@ -279,6 +280,10 @@ Abra o `api/.env` e troque duas linhas:
 
 Para usar o livro-caixa do cliente (`/espacos`), preencha também `FIREBASE_PROJECT_ID` com o ID do projeto
 Firebase da área do cliente. Sem ele, só essas rotas respondem `503`; o painel e `/usuarios` funcionam.
+
+Para testar o app com cada plano (Free, Família e Empresarial) sem trocar o plano gravado, ponha o e-mail da sua
+conta do Firebase em `SUPER_ADMINS` (vários, separados por vírgula). Essa conta vê a chave **Plano em teste** no
+topo da área do cliente; a API aplica as travas do plano escolhido.
 
 O administrador inicial (`ADMIN_EMAIL`, padrão `admin@pessoalfinance.com`) é criado na primeira subida, com o
 banco vazio. Os valores do modelo são públicos: troque antes de qualquer uso real.
@@ -541,6 +546,7 @@ poucos.
 | API | `api/tests/test_producao.py` | `AMBIENTE=producao`: recusa exemplo, CORS inseguro, MongoDB sem senha e `APP_URL` sem HTTPS; segredos em arquivo; Swagger fora do ar; `/saude` |
 | API | `api/tests/test_monitoramento.py` | Alertas no Discord: canal certo, repetição a cada 15 minutos, sem menção, falha do Discord que não afeta a API, força bruta e rajada de `401` sem o e-mail nem o token, `500` sem a mensagem da exceção, e-mail que não saiu, cota de e-mails, resumo por rota e webhook fora do Discord recusado sem aparecer no erro |
 | API | `api/tests/test_financeiro_*.py` | Livro-caixa: partidas dobradas, estorno, edição, rotas e isolamento entre clientes, importação de CSV de vários bancos (colunas pelo cabeçalho e pelo conteúdo, arquivo que não é CSV, teto de importações), categoria automática (arquivo, histórico, regras) e edição na conferência, racha, exclusão (uma e em lote), cartão de crédito (fatura, parcelas, pagamento, parcelas geradas da fatura importada), relatórios, os dois espaços (empresa com CNPJ e regime, livro-caixa separado, excluir só a sem movimento, limite por pessoa, família que não é mais um tipo), o Modo Família (pessoas, limite da assinatura, nome novo em cascata, relatórios por pessoa), os planos (só o administrador troca; no Free, `403` na família, no filtro por pessoa e na divisão com nome, e a anotação do número de pessoas) e a gestão da empresa (classes de custo, sócios e movimentos, tributos pagos uma vez por competência, folha sem duplicar) |
+| API | `api/tests/test_financeiro_simulacao.py`, `test_financeiro_cores.py`, `test_financeiro_exclusao_de_categoria.py`, `test_financeiro_importacao_descarte.py` e `test_financeiro_responsavel.py` | Modo de teste dos planos (só o super admin simula, o plano gravado não muda, CORS do cabeçalho), cores da paleta ou `#rrggbb`, categoria excluída levando os lançamentos (relatório somando no destino, destino inválido), descarte na importação e o responsável só da família (403 no Free, 400 fora da família) |
 | API | `api/tests/test_sanitizacao.py` | Texto livre limpo na entrada (XSS, fórmula de planilha, caracteres invisíveis) e operador do MongoDB (`$ne`, `$where`) recusado pelo tipo do campo |
 | Front-end | `web/src/regras/tentativas.test.js` | Tentativas de login: contagem por e-mail, bloqueio na quinta, janela de 15 minutos, o que conta como senha errada e a chave sem o e-mail em texto |
 | Front-end | `web/src/regras/dadosLocais.test.js` e `servicos/dadosLocais.test.js` | O que o logout apaga do navegador (metas, tentativas, sessão) e o que fica (tema e dados de outros sites) |
@@ -548,8 +554,10 @@ poucos.
 | Front-end | `web/src/regras/acaoDaConta.test.js` e `servicos/emailsDaConta.test.js` | Links dos e-mails: código no fragmento ou na consulta, modo do Firebase para cada página, senha nova repetida, e quando a API manda o e-mail ou o Firebase assume |
 | Front-end | `web/src/regras/tema.test.js` | Tema salvo ou do sistema e alternância |
 | Front-end | `web/src/regras/voltar.test.ts` | Destino do "← Voltar" de cada tela (sem botão na Visão geral; o cartão volta à carteira) |
-| Front-end | `web/src/regras/mascaras.test.ts` e `sanitizacao.test.ts` | Máscara de valor (milhar, vírgula, dois decimais, sinal, cursor, colar) e de inteiro, teclas barradas por tipo de campo, e a limpeza do texto antes de ir à API |
-| Front-end | `web/src/regras/arquivoDoExtrato.test.ts` e `conferenciaDaImportacao.test.ts` | Arquivo do extrato (extensão, tipo, planilha ou PDF renomeado, binário, UTF-8, Windows-1252 e UTF-16) e a edição de descrição e categoria na conferência |
+| Front-end | `web/src/regras/mascaras.test.ts` e `sanitizacao.test.ts` | Máscara de valor "centavos primeiro" (10000 vira 100,00, apagar, colar com vírgula ou ponto, sinal) e a de antes, de inteiro, teclas barradas por tipo de campo, e a limpeza do texto antes de ir à API |
+| Front-end | `web/src/regras/arquivoDoExtrato.test.ts`, `conferenciaDaImportacao.test.ts` e `descarteDaImportacao.test.ts` | Arquivo do extrato (CSV ou PDF, extensão, tipo, planilha renomeada, binário, UTF-8, Windows-1252 e UTF-16), a edição de descrição e categoria na conferência e o descarte (pagamento de fatura já descartado, desfazer, o que vai à API) |
+| Front-end | `web/src/regras/extratos/*.test.ts` | Leitores de extrato: a fatura do Bradesco em PDF (fictícia, no mesmo desenho: duas colunas, ano pelo vencimento, crédito com "-", parcelamento sem data, totais conferidos), o leitor genérico de PDF, o CSV para a API e a escolha automática |
+| Front-end | `web/src/regras/cores.test.ts`, `faturas.test.ts`, `buscaGlobal.test.ts`, `exclusaoDeCategoria.test.ts`, `lancamentoEmSequencia.test.ts` e `servicos/planoEmTeste.test.ts` | Cor hexadecimal (formato, HSV, contraste do texto, CSS seguro), ciclo da fatura (o mesmo da API), busca do topo por aba e o destino de cada resultado, destino dos lançamentos da categoria excluída, lançar em sequência e o plano em teste guardado na aba |
 | Front-end | `web/src/regras/*.test.js` e `responsavel.test.ts` | Validação do cadastro e dos formulários do livro-caixa, mensagens de erro (sem revelar quem tem conta), datas, dinheiro em centavos, extrato, resumo por origem (à vista e no crédito), importação, responsável e racha, busca, calendário, seletor, cartões, edição, seleção em lote e relatórios |
 | Front-end | `web/src/regras/espacos.test.ts`, `familia.test.ts`, `planos.test.ts`, `servicos/espacoAtivo.test.ts` e `servicos/lateral.test.ts` | Planos (o plano de cada espaço, o que libera a família, o limite de 4 convidados, a lista curta de cada cartão e a tabela da landing com dica e oferta nos três); espaços: só pessoal e empresarial, qual livro abre em cada um, a última empresa usada, o CNPJ (numérico e alfanumérico), o formulário da empresa, a seção depois da troca e as metas de cada espaço; o Modo Família (de quem é cada lançamento, o filtro, o gasto por pessoa, o cadastro); a barra lateral recolhida (fica depois do logout, como o tema) |
 | Front-end | `web/src/servicos/livroCaixa.test.js` e `enderecoDaApi.test.js` | Chamadas à API com o ID token, erros em Problem Details, API fora do ar, token que não renova e endereço pela rede local |
@@ -661,8 +669,10 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
    total.
 3. Lance uma despesa `Churrasco` de `300,00` e, em **Dividir com pessoas**, adicione Ana, Bruno e Carla com
    `100,00`, `150,00` e `50,00`. Com as partes passando de `300,00`, o formulário não deixa lançar (e nenhum
-   campo pula de lugar com os avisos). Para só dizer de quem é um gasto, sem racha, use **Responsável**: o nome
-   aparece na linha do extrato, a busca acha por ele e as pessoas já usadas viram atalhos.
+   campo pula de lugar com os avisos). No valor, digite só os números: `30000` vira `300,00`. Depois de **Lançar**,
+   o modal fica aberto para o próximo gasto (descrição e valor limpos, conta e categoria mantidas) até
+   **Concluir**. Com o Plano Família e as pessoas da casa cadastradas, **Responsável** escolhe de quem é o gasto
+   entre elas; no Free, o campo nem aparece (e a API recusa).
 4. Na busca do extrato, digite `bruno` ou `300`: ficam só os lançamentos com a pessoa ou o valor.
 5. No menu **⋯** da despesa `Mercado`, **Estorne**: entra um lançamento de `+ R$ 214,37` com a data de hoje e o
    original fica marcado como "Estornado". Lance algo errado e, no mesmo menu, **Exclua**: ele some do extrato e
@@ -673,14 +683,18 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
    mês embaixo; o **i** do card abre a conta (saldo de hoje + a receber − a pagar = fechamento; − investido = saldo
    livre): lance uma despesa grande com a data de amanhã (antes do fim do mês) e o card fica **vermelho**, com a
    frase de quanto falta e o que fazer. O card não muda de altura com isso. No gráfico **Evolução do saldo**, o valor aparece só com o mouse (ou o
-   dedo, ou as setas) em cima. As despesas do mês aparecem separadas em à vista e no crédito, e o
-   **+ Novo** do topo escolhe entre lançamento, compra no crédito, conta e cartão, cada um no seu modal. Em **Categorias**, crie,
-   renomeie, desative ou remova uma categoria (a que já tem lançamentos não sai: o aviso manda desativar).
-7. Em **Importar CSV**, escolha um CSV com as colunas Data, Descrição e Valor (exemplo fictício abaixo) e a conta,
-   e clique em **Continuar**: as colunas são reconhecidas sozinhas e a conferência já abre, com a categoria de cada
-   linha sugerida ("Salário" vai para Salário, "Padaria" para Mercado). Troque a descrição ou a categoria de uma
-   linha ali mesmo, **importe** e depois confira o mesmo arquivo de novo: nenhum lançamento é novo, todos aparecem
-   como "Já importada". Um PDF ou uma planilha renomeada para `.csv` é recusado antes de sair do navegador.
+   dedo, ou as setas) em cima. As despesas do mês somam o que saiu à vista e as faturas dos cartões que vencem no
+   mês (a rosca por categoria também), e o **+ Novo** do topo escolhe entre lançamento, compra no crédito, conta e
+   cartão, cada um no seu modal. Em **Categorias**, crie, renomeie, recolora (sugestões da paleta, código
+   `#rrggbb` ou conta-gotas), desative ou remova uma categoria: a que já tem lançamentos pede para qual categoria
+   eles vão antes de sair. Na busca do topo, digite `mercado`: os resultados aparecem em abas (lançamentos,
+   compras nos cartões, contas e categorias), e a compra no cartão abre a fatura dela.
+7. Em **Importar extrato**, escolha um CSV com as colunas Data, Descrição e Valor (exemplo fictício abaixo) e a
+   conta, e clique em **Continuar**: as colunas são reconhecidas sozinhas e a conferência já abre, com a categoria
+   de cada linha sugerida ("Salário" vai para Salário, "Padaria" para Mercado). Troque a descrição ou a categoria
+   de uma linha ali mesmo (ou crie uma em **+ Nova categoria**, sem sair), descarte uma linha pela lixeira,
+   **importe** e depois confira o mesmo arquivo de novo: nenhum lançamento é novo, todos aparecem como "Já
+   importada". Uma planilha renomeada para `.csv` é recusada antes de sair do navegador.
 
    ```text
    Data;Descrição;Valor
@@ -694,9 +708,11 @@ Na versão publicada (https://jolini.github.io/ADS-Project/) ou local:
    dia 3, vencimento no dia 10 e a cor roxa: ele aparece na carteira desenhado como o plástico. Na tela dele,
    lance `Geladeira` de `3.000,00` em 10x: a primeira parcela entra na fatura atual, as outras em **Parcelamentos
    futuros**. Em **Pagar fatura**, escolha a conta corrente: depois de pagar, o limite volta.
-9. **Importar fatura**, na tela do cartão, traz a fatura do banco em CSV: uma linha `LOJA X 01/03` gera as
+9. **Importar fatura**, na tela do cartão, traz a fatura do banco em CSV ou em PDF (a fatura do Bradesco tem
+   leitor próprio; outros bancos passam pela leitura genérica): o PDF é lido no navegador, a soma lida é conferida
+   com o resumo da fatura e o pagamento da fatura anterior já vem descartado. Uma linha `LOJA X 01/03` gera as
    parcelas 2 e 3 nas próximas faturas, e a fatura seguinte, com `LOJA X 02/03`, reconhece a parcela que já
-   estava lá e não duplica.
+   estava lá e não duplica. Em **Contas & Cartões**, as contas aparecem como cartões, cada uma com a sua cor.
 10. Em **Relatórios**, veja receitas e despesas por mês e o gasto por categoria em 3, 6 ou 12 meses.
 
 ---
