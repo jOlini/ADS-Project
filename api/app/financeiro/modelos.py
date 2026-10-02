@@ -10,7 +10,7 @@ from datetime import date, datetime
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, BeforeValidator, Field, StringConstraints
+from pydantic import BaseModel, BeforeValidator, Field, PlainValidator, StringConstraints, WithJsonSchema
 
 from app.modelos import Entrada
 from app.sanitizacao import texto_limpo
@@ -211,6 +211,64 @@ class CorCategoria(StrEnum):
     NEUTRO = "neutro"
 
 
+# Cor livre em hexadecimal (#rrggbb), do seletor de cor da tela (os nomes acima
+# continuam como sugestões prontas). Só o formato exato passa, gravado em
+# minúsculas: o valor vai para o CSS da tela (style), e nada além de seis
+# algarismos hexadecimais chega lá.
+PADRAO_DA_COR_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _validador_de_cor(paleta: type[StrEnum]):
+    nomes = ", ".join(cor.value for cor in paleta)
+
+    def validar(valor: object) -> StrEnum | str:
+        if isinstance(valor, str):
+            if valor in paleta._value2member_map_:
+                return paleta(valor)
+            if PADRAO_DA_COR_HEX.match(valor):
+                return valor.lower()
+        # Uma mensagem só para o campo (e não uma por tipo da união).
+        raise ValueError(f"Cor inválida. Use {nomes} ou uma cor no formato #rrggbb.")
+
+    return validar
+
+
+def _cor_aceita(paleta: type[StrEnum]):
+    return Annotated[
+        paleta | str,
+        PlainValidator(_validador_de_cor(paleta)),
+        WithJsonSchema(
+            {
+                "type": "string",
+                "description": f"Nome da paleta ({', '.join(cor.value for cor in paleta)}) ou #rrggbb.",
+                "examples": [next(iter(paleta)).value, "#2b7857"],
+            }
+        ),
+    ]
+
+
+# Categoria: um nome da paleta ou uma cor hexadecimal.
+CorDaCategoria = _cor_aceita(CorCategoria)
+# Conta e cartão: um nome da paleta dos cartões ou uma cor hexadecimal.
+CorDaConta = _cor_aceita(CorDoCartao)
+
+
+def ler_cor(valor: object, paleta: type[StrEnum], padrao: StrEnum | None) -> StrEnum | str | None:
+    """A cor gravada no banco: o nome da paleta, a hexadecimal ou, se não for
+    nenhuma das duas (gravada por engano, paleta que mudou), a padrão."""
+    if isinstance(valor, str):
+        if valor in paleta._value2member_map_:
+            return paleta(valor)
+        if PADRAO_DA_COR_HEX.match(valor):
+            return valor.lower()
+    return padrao
+
+
+def texto_da_cor(cor: StrEnum | str | None) -> str | None:
+    """A cor como é gravada: o nome da paleta ou a hexadecimal."""
+    return cor.value if isinstance(cor, StrEnum) else cor
+
+
 # --- Entidades (como ficam guardadas) ------------------------------------------
 
 
@@ -298,7 +356,9 @@ class Conta:
     limite_centavos: int | None = None
     dia_fechamento: int | None = None
     dia_vencimento: int | None = None
-    cor: CorDoCartao | None = None
+    # Nome da paleta ou hexadecimal. Cartão sem cor sai grafite; conta sem cor,
+    # a cor do tipo dela na tela.
+    cor: CorDoCartao | str | None = None
     id: str | None = None
 
     @property
@@ -311,7 +371,8 @@ class Categoria:
     espaco_id: str
     nome: str
     tipo: TipoCategoria
-    cor: CorCategoria
+    # Nome da paleta ou hexadecimal.
+    cor: CorCategoria | str
     ativa: bool
     criada_em: datetime
     # Só nas despesas da empresa: a classe na aba Custos (None = a tela
@@ -521,8 +582,9 @@ class AtualizacaoPlano(Entrada):
 
 class NovaConta(Entrada):
     """Cartão de crédito (tipo CARTAO_CREDITO) pede limite e os dias de
-    fechamento e vencimento da fatura, e aceita a cor; as outras contas não
-    têm nada disso (regras.conferir_conta)."""
+    fechamento e vencimento da fatura; as outras contas não têm nada disso
+    (regras.conferir_conta). Toda conta aceita a cor (nome da paleta ou
+    #rrggbb), que pinta o card dela na tela."""
 
     nome: Nome
     tipo: TipoConta
@@ -532,7 +594,7 @@ class NovaConta(Entrada):
     limite_centavos: CentavosPositivos | None = None
     dia_fechamento: DiaDoMes | None = None
     dia_vencimento: DiaDoMes | None = None
-    cor: CorDoCartao | None = None
+    cor: CorDaConta | None = None
 
 
 class AtualizacaoConta(Entrada):
@@ -546,13 +608,13 @@ class AtualizacaoConta(Entrada):
     limite_centavos: CentavosPositivos | None = None
     dia_fechamento: DiaDoMes | None = None
     dia_vencimento: DiaDoMes | None = None
-    cor: CorDoCartao | None = None
+    cor: CorDaConta | None = None
 
 
 class NovaCategoria(Entrada):
     nome: Nome
     tipo: TipoCategoria
-    cor: CorCategoria = CorCategoria.NEUTRO
+    cor: CorDaCategoria = CorCategoria.NEUTRO
 
 
 class AtualizacaoCategoria(Entrada):
@@ -560,7 +622,7 @@ class AtualizacaoCategoria(Entrada):
     de receita sem desfazer o sentido deles."""
 
     nome: Nome
-    cor: CorCategoria
+    cor: CorDaCategoria
     ativa: Booleano
 
 
@@ -792,7 +854,7 @@ class ContaResposta(BaseModel):
     limite_centavos: int | None
     dia_fechamento: int | None
     dia_vencimento: int | None
-    cor: CorDoCartao | None
+    cor: CorDoCartao | str | None
 
     @classmethod
     def de(cls, conta: Conta, saldo_centavos: int) -> "ContaResposta":
@@ -815,7 +877,7 @@ class CategoriaResposta(BaseModel):
     id: str
     nome: str
     tipo: TipoCategoria
-    cor: CorCategoria
+    cor: CorCategoria | str
     ativa: bool
     # Só na empresa (null no pessoal): a classe na aba Custos, se a pessoa
     # escolheu, e a função da categoria na gestão.
@@ -944,7 +1006,7 @@ class CartaoResposta(BaseModel):
     limite_centavos: int
     dia_fechamento: int
     dia_vencimento: int
-    cor: CorDoCartao
+    cor: CorDoCartao | str
     # Saldo do cartão no livro-caixa: negativo é o que se deve.
     saldo_centavos: int
     # Quanto do limite está ocupado (todas as faturas e parcelas futuras).
@@ -1121,7 +1183,7 @@ class RelatorioMensalResposta(BaseModel):
 class GastoDaCategoriaResposta(BaseModel):
     categoria_id: str
     nome: str
-    cor: CorCategoria
+    cor: CorCategoria | str
     valor_centavos: int
     # Porcentagem do total do período, arredondada.
     fatia: int

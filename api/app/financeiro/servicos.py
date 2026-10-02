@@ -246,9 +246,8 @@ class ServicoLivroCaixa:
         conta.limite_centavos = dados.limite_centavos
         conta.dia_fechamento = dados.dia_fechamento
         conta.dia_vencimento = dados.dia_vencimento
-        # Sem cor no corpo, o cartão fica com a que tinha.
-        if conta.cartao:
-            conta.cor = dados.cor or conta.cor
+        # Sem cor no corpo, a conta (ou o cartão) fica com a que tinha.
+        conta.cor = dados.cor or conta.cor
         return self.repositorio.atualizar_conta(conta)
 
     def excluir_conta(self, espaco: Espaco, id: str) -> int:

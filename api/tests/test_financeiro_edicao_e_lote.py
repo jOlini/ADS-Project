@@ -300,8 +300,12 @@ def test_cor_do_cartao_padrao_escolhida_e_mantida_no_put(ana):
     assert {cartao["cor"] for cartao in ana.get("/cartoes").json()} == {"grafite", "roxo"}
 
 
-def test_conta_comum_nao_tem_cor(ana):
-    resposta = ana.post("/contas", {"nome": "Banco", "tipo": "CORRENTE", "cor": "azul"})
+def test_conta_comum_tem_cor_opcional_e_mantida_no_put(ana):
+    # Desde o card das contas no estilo dos cartões, toda conta pode ter cor.
+    sem_cor = ana.post("/contas", {"nome": "Carteira", "tipo": "CARTEIRA"}).json()
+    azul = ana.post("/contas", {"nome": "Banco", "tipo": "CORRENTE", "cor": "azul"}).json()
 
-    assert resposta.status_code == 400
-    assert resposta.json()["campos"] == {"cor": "Só cartão de crédito tem cor."}
+    renomeada = ana.put(f"/contas/{azul['id']}", {"nome": "Banco azul", "tipo": "CORRENTE", "ativa": True}).json()
+
+    assert sem_cor["cor"] is None
+    assert (renomeada["nome"], renomeada["cor"]) == ("Banco azul", "azul")

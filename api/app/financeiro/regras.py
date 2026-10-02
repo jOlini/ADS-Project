@@ -158,8 +158,6 @@ def conferir_conta(dados: NovaConta | AtualizacaoConta, atual: Conta | None = No
     # inicial não teria fatura nem data.
     if cartao and isinstance(dados, NovaConta) and dados.saldo_inicial_centavos != 0:
         erros["saldo_inicial_centavos"] = "O cartão começa sem dívida: importe a fatura ou lance as compras."
-    if not cartao and dados.cor is not None:
-        erros["cor"] = "Só cartão de crédito tem cor."
     return erros
 
 

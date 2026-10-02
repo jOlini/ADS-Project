@@ -45,6 +45,8 @@ from app.financeiro.modelos import (
     TipoDeOrigem,
     TipoEspaco,
     TipoLancamento,
+    ler_cor,
+    texto_da_cor,
 )
 from app.financeiro.modelos_empresa import (
     BaseDoTributo,
@@ -670,7 +672,9 @@ def _documento_da_conta(conta: Conta) -> dict:
         documento["limite_centavos"] = conta.limite_centavos
         documento["dia_fechamento"] = conta.dia_fechamento
         documento["dia_vencimento"] = conta.dia_vencimento
-        documento["cor"] = (conta.cor or CorDoCartao.GRAFITE).value
+        documento["cor"] = texto_da_cor(conta.cor or CorDoCartao.GRAFITE)
+    elif conta.cor:
+        documento["cor"] = texto_da_cor(conta.cor)
     return documento
 
 
@@ -686,8 +690,12 @@ def _para_conta(documento: dict) -> Conta:
         limite_centavos=documento.get("limite_centavos"),
         dia_fechamento=documento.get("dia_fechamento"),
         dia_vencimento=documento.get("dia_vencimento"),
-        # Cartão gravado antes da cor existir sai grafite.
-        cor=CorDoCartao(documento.get("cor", CorDoCartao.GRAFITE)) if documento["tipo"] == TipoConta.CARTAO_CREDITO else None,
+        # Cartão gravado antes da cor existir sai grafite; conta sem cor, None.
+        cor=ler_cor(
+            documento.get("cor"),
+            CorDoCartao,
+            CorDoCartao.GRAFITE if documento["tipo"] == TipoConta.CARTAO_CREDITO else None,
+        ),
     )
 
 
@@ -696,7 +704,7 @@ def _documento_da_categoria(categoria: Categoria) -> dict:
         "espaco_id": categoria.espaco_id,
         "nome": categoria.nome,
         "tipo": categoria.tipo.value,
-        "cor": categoria.cor.value,
+        "cor": texto_da_cor(categoria.cor),
         "ativa": categoria.ativa,
         "criada_em": categoria.criada_em,
     }
@@ -713,7 +721,7 @@ def _para_categoria(documento: dict) -> Categoria:
         espaco_id=documento["espaco_id"],
         nome=documento["nome"],
         tipo=TipoCategoria(documento["tipo"]),
-        cor=CorCategoria(documento["cor"]),
+        cor=ler_cor(documento.get("cor"), CorCategoria, CorCategoria.NEUTRO),
         ativa=documento["ativa"],
         criada_em=documento["criada_em"],
         classe_de_custo=ClasseDeCusto(documento["classe_de_custo"]) if documento.get("classe_de_custo") else None,
