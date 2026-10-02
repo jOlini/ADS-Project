@@ -42,12 +42,15 @@ const opcoesDeConta = (contas) => contas.map((conta) => ({ valor: conta.id, rotu
 // cartões cadastrados, o formulário aponta a fatura (temCartoes).
 // divisaoPorPessoa (Plano Família ou Empresarial) mostra o racha com o nome e
 // a parte de cada pessoa; no Free, só o número de pessoas, como anotação.
+// familia (as pessoas da casa, no Plano Família) traz o campo "Responsável";
+// sem família, ele não aparece.
 export default function FormularioDeLancamento({
   espacoId,
   contas,
   temCartoes = false,
   categorias,
   pessoasConhecidas,
+  familia = [],
   divisaoPorPessoa = false,
   aoLancar,
   aoCancelar,
@@ -172,8 +175,8 @@ export default function FormularioDeLancamento({
 
       {!transferencia && (
         <CampoDeResponsavel valor={formulario.responsavel} aoMudar={(nome) => mudar('responsavel', nome)}
-          erro={erros.responsavel} pessoasConhecidas={pessoasConhecidas}
-          dica={formulario.tipo === 'RECEITA' ? 'De quem é a receita. Vazio, fica com você.' : 'Quem fez o gasto. Vazio, fica com você.'} />
+          erro={erros.responsavel} familia={familia}
+          dica={formulario.tipo === 'RECEITA' ? 'De quem da casa é a receita.' : 'Quem da casa fez o gasto.'} />
       )}
 
       <SeletorDeMeio valor={formulario.meio} aoMudar={(meio) => mudar('meio', meio)} erro={erros.meio} />

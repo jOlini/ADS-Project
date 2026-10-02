@@ -121,7 +121,7 @@ export default function Lancamentos() {
   const acoes = useAcoesDoExtrato({
     espacoId,
     categorias,
-    pessoasConhecidas: comAFamilia(cadastros.dados?.pessoas ?? [], pessoasDaCasa),
+    familia: pessoasDaCasa,
     aoMudar: () => {
       cadastros.recarregar();
       extrato.recarregar();
@@ -339,6 +339,7 @@ export default function Lancamentos() {
           temCartoes={temCartoes}
           categorias={categorias}
           pessoasConhecidas={pessoasConhecidas}
+          familia={pessoasDaCasa}
           divisaoPorPessoa={familiaLiberada(planoDoCliente(espacos))}
           aoLancar={aposLancar}
           aoCancelar={fecharModal}

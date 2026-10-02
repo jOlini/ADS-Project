@@ -27,6 +27,7 @@ import { formatarData } from '../regras/datas';
 import { formatarBRL } from '../regras/dinheiro';
 import { destinoDaImportacao } from '../regras/importacao';
 import { contasBancarias, paraExtrato } from '../regras/livroCaixa';
+import { pessoasDaFamilia } from '../regras/familia';
 import { familiaLiberada, planoDoCliente } from '../regras/planos';
 import { agruparPorDia } from '../regras/resumo';
 import {
@@ -88,10 +89,12 @@ export default function Cartao() {
     [espacoId, cartaoId, referencia],
   );
   const fatura = useCarga(buscarDaFatura);
+  // Responsável só com a família (Plano Família), com as pessoas dela.
+  const familia = useMemo(() => pessoasDaFamilia(espaco.dados), [espaco.dados]);
   const acoes = useAcoesDoExtrato({
     espacoId,
     categorias: cartao.dados?.categorias ?? [],
-    pessoasConhecidas: cartao.dados?.pessoas,
+    familia,
     aoMudar: recarregar,
   });
 
@@ -386,6 +389,7 @@ export default function Cartao() {
           cartao={painel}
           categorias={categorias}
           pessoasConhecidas={pessoas}
+          familia={familia}
           divisaoPorPessoa={familiaLiberada(planoDoCliente(espacos))}
           aoComprar={aposMudar}
           aoCancelar={fecharModal}

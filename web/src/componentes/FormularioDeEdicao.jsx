@@ -30,7 +30,9 @@ function avisoDoLancamento(lancamento) {
 // lançamento deixa mudar (regras/edicao.js), e só o que mudou vai à API.
 // linha é a linha do extrato (paraExtrato), com o lançamento em original.
 // aoSalvar recebe o lançamento salvo (ou null quando nada mudou).
-export default function FormularioDeEdicao({ espacoId, linha, categorias, pessoasConhecidas = [], aoSalvar, aoCancelar, aoMudarOcupado }) {
+// familia: as pessoas da casa (Plano Família); sem elas, o responsável não
+// aparece e não muda.
+export default function FormularioDeEdicao({ espacoId, linha, categorias, familia = [], aoSalvar, aoCancelar, aoMudarOcupado }) {
   const toast = useToast();
   const lancamento = linha.original;
   const campos = camposEditaveis(lancamento, { noCartao: linha.noCartao });
@@ -105,8 +107,8 @@ export default function FormularioDeEdicao({ espacoId, linha, categorias, pessoa
 
       {campos.responsavel && (
         <CampoDeResponsavel valor={formulario.responsavel} aoMudar={(nome) => mudar('responsavel', nome)}
-          erro={erros.responsavel} pessoasConhecidas={pessoasConhecidas}
-          dica={lancamento.compra_id ? `Vale para as ${lancamento.parcelas} parcelas. Vazio, fica com você.` : undefined} />
+          erro={erros.responsavel} familia={familia}
+          dica={lancamento.compra_id ? `Vale para as ${lancamento.parcelas} parcelas.` : undefined} />
       )}
 
       {campos.meio && (

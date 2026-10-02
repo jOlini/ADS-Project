@@ -19,12 +19,14 @@ import { comprarNoCartao } from '../servicos/livroCaixa';
 // cada uma numa fatura, e o total ocupa o limite desde já. O responsável vale
 // para todas as parcelas; racha entre pessoas só na compra à vista (com o
 // nome e a parte de cada um no Plano Família, divisaoPorPessoa; no Free, só o
-// número de pessoas). aoComprar recebe as parcelas criadas.
+// número de pessoas). aoComprar recebe as parcelas criadas. O responsável só
+// aparece com a família (Plano Família), com as pessoas dela.
 export default function FormularioDeCompra({
   espacoId,
   cartao,
   categorias,
   pessoasConhecidas,
+  familia = [],
   divisaoPorPessoa = false,
   aoComprar,
   aoCancelar,
@@ -117,8 +119,7 @@ export default function FormularioDeCompra({
       </div>
 
       <CampoDeResponsavel valor={formulario.responsavel} aoMudar={(nome) => mudar('responsavel', nome)}
-        erro={erros.responsavel} pessoasConhecidas={pessoasConhecidas}
-        dica="Quem fez a compra, em todas as parcelas. Vazio, fica com você." />
+        erro={erros.responsavel} familia={familia} dica="Quem da casa fez a compra, em todas as parcelas." />
 
       {categoriasDeDespesa.length === 0 && (
         <AvisoComAtalho compacto atalho={{ para: '/categorias?cadastrar=DESPESA', rotulo: 'Criar categoria', icone: 'categorias' }}>

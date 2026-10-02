@@ -851,13 +851,13 @@ export default function VisaoGeral() {
           {modal === 'lancamento' && (
             <FormularioDeLancamento espacoId={espacoId} contas={contasAtivas} temCartoes={cartoes.length > 0}
               categorias={cadastros.categorias} pessoasConhecidas={comAFamilia(cadastros.pessoas, pessoasDaCasa)}
-              divisaoPorPessoa={divisaoPorPessoa} aoLancar={aposCriar}
+              familia={pessoasDaCasa} divisaoPorPessoa={divisaoPorPessoa} aoLancar={aposCriar}
               aoCancelar={fecharModal} aoMudarOcupado={setModalOcupado} />
           )}
           {modal === 'compra' && (
             <CompraNoCartao espacoId={espacoId} cartoes={cartoes} categorias={cadastros.categorias}
-              pessoasConhecidas={comAFamilia(cadastros.pessoas, pessoasDaCasa)} divisaoPorPessoa={divisaoPorPessoa}
-              aoComprar={aposCriar} aoCancelar={fecharModal}
+              pessoasConhecidas={comAFamilia(cadastros.pessoas, pessoasDaCasa)} familia={pessoasDaCasa}
+              divisaoPorPessoa={divisaoPorPessoa} aoComprar={aposCriar} aoCancelar={fecharModal}
               aoMudarOcupado={setModalOcupado} />
           )}
           {modal === 'conta' && (

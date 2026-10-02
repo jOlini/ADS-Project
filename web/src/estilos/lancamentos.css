@@ -336,30 +336,10 @@ button.sugestao:hover:not(:disabled) {
 
 /* ------------------------------------------- Responsável do lançamento */
 
-/* Campo com os atalhos de pessoas já usadas embaixo. A lista de atalhos não
-   muda enquanto a pessoa digita (componentes/CampoDeResponsavel.tsx): só o
-   atalho escolhido troca de cor, sem mexer no tamanho de nada. */
-.campo-de-responsavel {
-  display: grid;
-  gap: var(--espaco-4);
-  min-width: 0;
-}
-
+/* "(opcional)" no rótulo do responsável (componentes/CampoDeResponsavel.tsx). */
 .rotulo-opcional {
   color: var(--suave);
   font-weight: var(--peso-regular);
-}
-
-.atalhos-de-pessoa {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espaco-3);
-}
-
-button.sugestao[aria-pressed='true'] {
-  color: var(--marca-forte);
-  background: var(--marca-suave);
-  border-color: var(--marca);
 }
 
 button.sugestao > .icone {

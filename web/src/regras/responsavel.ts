@@ -1,16 +1,16 @@
 // Pessoa responsável por um lançamento (quem gastou, ou de quem é a receita),
 // sem interface. Só o nome, com o valor inteiro: é o que antes exigia usar a
-// divisão entre pessoas como contorno. Vazio = quem lançou. A API confere o
-// mesmo (api/app/financeiro/regras.py) e limpa o texto de novo. Testado em
-// responsavel.test.ts.
+// divisão entre pessoas como contorno. Vazio = quem lançou. Só no Plano
+// Família, e só uma pessoa cadastrada na família: a API confere o mesmo
+// (api/app/financeiro/servicos.py, _responsavel_da_familia) e limpa o texto
+// de novo. Testado em responsavel.test.ts.
 
+import type { PessoaDaFamilia } from './espacos';
 import { limparTexto } from './sanitizacao';
 import { normalizarTexto } from './texto';
 
 // Mesmo limite do nome de pessoa na API (modelos.Nome).
 export const TAMANHO_DO_RESPONSAVEL = 60;
-// Pessoas já usadas que aparecem como atalho embaixo do campo.
-export const SUGESTOES_DO_RESPONSAVEL = 6;
 
 // Mensagem do campo, ou '' quando pode enviar. Vazio vale: é quem lançou.
 export function erroDoResponsavel(nome: string | null | undefined, tipo?: string): string {
@@ -37,18 +37,24 @@ export function mesmaPessoa(a: string | null | undefined, b: string | null | und
   return normalizarTexto(a) === normalizarTexto(b);
 }
 
-// Atalhos embaixo do campo: as pessoas já usadas no espaço, sem repetir a
-// mesma pessoa escrita de outro jeito. A lista não muda enquanto a pessoa
-// digita: um atalho sumindo a cada letra empurraria o formulário.
-export function sugestoesDeResponsavel(conhecidas: readonly string[], limite = SUGESTOES_DO_RESPONSAVEL): string[] {
-  const vistas = new Set<string>();
-  const sugestoes: string[] = [];
-  for (const nome of conhecidas) {
-    const chave = normalizarTexto(nome);
-    if (chave && !vistas.has(chave)) {
-      vistas.add(chave);
-      sugestoes.push(limparTexto(nome));
-    }
+export interface OpcaoDeResponsavel {
+  valor: string;
+  rotulo: string;
+  descricao?: string;
+}
+
+// As opções do campo: "Você" (vazio, o titular) e as pessoas da família, na
+// ordem do cadastro. Um responsável antigo que não é da família (gravado antes
+// da regra) aparece como a opção atual, para a edição não trocá-lo sem a
+// pessoa ver; a API só confere quando ele muda.
+export function opcoesDeResponsavel(familia: readonly PessoaDaFamilia[], atual = ''): OpcaoDeResponsavel[] {
+  const opcoes: OpcaoDeResponsavel[] = [
+    { valor: '', rotulo: 'Você', descricao: 'O lançamento fica com o titular' },
+    ...familia.map((pessoa) => ({ valor: pessoa.nome, rotulo: pessoa.nome })),
+  ];
+  const limpo = limparTexto(atual);
+  if (limpo && !familia.some((pessoa) => mesmaPessoa(pessoa.nome, limpo))) {
+    opcoes.push({ valor: atual, rotulo: limpo, descricao: 'Não está na família' });
   }
-  return sugestoes.slice(0, limite);
+  return opcoes;
 }
