@@ -68,6 +68,12 @@ DIVISAO_SO_NO_FAMILIA = (
     "No Free, anote só em quantas pessoas o gasto foi dividido."
 )
 CLIENTE_SEM_ESPACO = "Cliente sem espaço pessoal: ele precisa entrar no app uma vez antes de mudar de plano."
+RESPONSAVEL_SO_NO_FAMILIA = (
+    "Escolher o responsável pelo lançamento faz parte do Plano Família: ele separa o gasto de cada pessoa da casa. "
+    "No Free, o lançamento é de quem lançou."
+)
+RESPONSAVEL_FORA_DA_FAMILIA = "Escolha uma pessoa da família (Pessoas da casa)."
+RESPONSAVEL_NA_EMPRESA = "Na empresa, o lançamento não tem responsável."
 LIMITE_DE_EMPRESAS = (
     f"Você já cadastrou {MAXIMO_DE_EMPRESAS} empresas. Exclua uma empresa sem movimento para cadastrar outra."
 )
@@ -112,6 +118,27 @@ class ServicoLivroCaixa:
             raise ErroNaoEncontrado(CLIENTE_SEM_ESPACO)
         pessoal.plano = plano
         return self.repositorio.atualizar_plano(pessoal)
+
+    def _responsavel_da_familia(self, espaco: Espaco, responsavel: str | None) -> str | None:
+        """O responsável de um lançamento é uma pessoa da família do espaço
+        pessoal, no Plano Família (ou no Empresarial, que o inclui). Devolve o
+        nome como está cadastrado ("leo " vira "Léo"); vazio é de quem lançou.
+
+        Um nome qualquer separaria o gasto por pessoa sem o plano, que é o Modo
+        Família por outro caminho: no Free, 403, mesmo que a tela seja burlada;
+        um nome de fora da família, 400. A tela mostra o campo só no Família,
+        com a lista das pessoas da casa."""
+        if not responsavel:
+            return None
+        if espaco.tipo != TipoEspaco.PF:
+            raise ErroValidacao({"responsavel": RESPONSAVEL_NA_EMPRESA})
+        if not libera_familia(espaco.plano_em_vigor):
+            raise ErroPermissao(RESPONSAVEL_SO_NO_FAMILIA)
+        chave = regras.chave_da_pessoa(responsavel)
+        pessoa = next((p for p in espaco.familia.pessoas if regras.chave_da_pessoa(p.nome) == chave), None)
+        if pessoa is None:
+            raise ErroValidacao({"responsavel": RESPONSAVEL_FORA_DA_FAMILIA})
+        return pessoa.nome
 
     def _conferir_divisao_do_plano(self, espaco: Espaco, uid: str, divisao: list) -> None:
         # A divisão com nome e valor separa o gasto de cada pessoa, que é o
@@ -335,6 +362,7 @@ class ServicoLivroCaixa:
         categoria = self.repositorio.buscar_categoria(espaco.id, dados.categoria_id)
         if erros := regras.conferir_compra(dados, cartao, categoria):
             raise ErroValidacao(erros)
+        responsavel = self._responsavel_da_familia(espaco, dados.responsavel)
 
         parcelada = dados.parcelas > 1
         compra_id = uuid4().hex if parcelada else None
@@ -364,7 +392,7 @@ class ServicoLivroCaixa:
                 criado_por=uid,
                 divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
                 dividido_entre=dados.dividido_entre,
-                responsavel=dados.responsavel,
+                responsavel=responsavel,
                 compra_id=compra_id,
                 parcela=numero if parcelada else None,
                 parcelas=dados.parcelas if parcelada else None,
@@ -506,6 +534,7 @@ class ServicoLivroCaixa:
         erros = regras.conferir_lancamento(dados, conta, categoria, destino)
         if erros:
             raise ErroValidacao(erros)
+        responsavel = self._responsavel_da_familia(espaco, dados.responsavel)
 
         lancamento = Lancamento(
             espaco_id=espaco.id,
@@ -521,7 +550,7 @@ class ServicoLivroCaixa:
             criado_por=uid,
             divisao=[Parte(parte.pessoa, parte.valor_centavos) for parte in dados.divisao],
             dividido_entre=dados.dividido_entre,
-            responsavel=dados.responsavel,
+            responsavel=responsavel,
             meio=dados.meio,
         )
         return self._gravar(lancamento)
@@ -536,6 +565,8 @@ class ServicoLivroCaixa:
         categoria = self.repositorio.buscar_categoria(espaco.id, dados.categoria_id) if dados.categoria_id else None
         if erros := regras.conferir_edicao(lancamento, dados, conta, categoria):
             raise ErroValidacao(erros)
+        if dados.responsavel:
+            dados = dados.model_copy(update={"responsavel": self._responsavel_da_familia(espaco, dados.responsavel)})
         alvos = self.repositorio.listar_compra(espaco.id, lancamento.compra_id) if lancamento.compra_id else [lancamento]
         for alvo in alvos:
             editado = regras.aplicar_edicao(alvo, dados)
